@@ -10,8 +10,29 @@
         /* Dark Mode Theme */
         body {
             background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
-            color: #ffffff;
+            color: #ffffff !important;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        /* Ensure all text is light on dark background */
+        .text-dark, .text-muted {
+            color: #b0b0b0 !important;
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            color: #ffffff !important;
+        }
+        
+        p, span, div {
+            color: #ffffff;
+        }
+        
+        .card-body {
+            color: #ffffff !important;
+        }
+        
+        .form-label {
+            color: #ffffff !important;
         }
         .sidebar {
             min-height: 100vh;
@@ -31,11 +52,39 @@
         }
         .metric-card {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            color: white !important;
         }
         .trending-card {
             background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
+            color: white !important;
+        }
+        
+        /* Alert styling for dark mode */
+        .alert {
+            background: rgba(255,255,255,0.1) !important;
+            border: 1px solid rgba(255,255,255,0.2) !important;
+            color: #ffffff !important;
+        }
+        
+        .alert-success {
+            background: rgba(80,200,120,0.2) !important;
+            border-color: #50C878 !important;
+            color: #ffffff !important;
+        }
+        
+        .alert-danger {
+            background: rgba(220,53,69,0.2) !important;
+            border-color: #dc3545 !important;
+            color: #ffffff !important;
+        }
+        
+        /* Modal text fixes */
+        .modal-body, .modal-header, .modal-footer {
+            color: #ffffff !important;
+        }
+        
+        .badge {
+            color: #ffffff !important;
         }
         .filter-builder {
             background: white;
@@ -91,17 +140,40 @@
             color: white;
         }
         .nav-link {
-            color: rgba(255, 255, 255, 0.8);
+            color: rgba(255, 255, 255, 0.8) !important;
             border-radius: 10px;
             margin-bottom: 5px;
         }
         .nav-link.active {
             background-color: rgba(255, 255, 255, 0.2);
-            color: white;
+            color: white !important;
         }
         .nav-link:hover {
             background-color: rgba(255, 255, 255, 0.1);
-            color: white;
+            color: white !important;
+        }
+        
+        /* Fix form controls on dark background */
+        .form-control, .form-select {
+            background: rgba(0,0,0,0.4) !important;
+            border: 1px solid rgba(255,255,255,0.2) !important;
+            color: #ffffff !important;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            background: rgba(0,0,0,0.6) !important;
+            border-color: #FFD700 !important;
+            color: #ffffff !important;
+            box-shadow: 0 0 0 0.2rem rgba(255, 215, 0, 0.25) !important;
+        }
+        
+        .form-control::placeholder {
+            color: rgba(255,255,255,0.5) !important;
+        }
+        
+        /* Button text fixes */
+        .btn-warning {
+            color: #000000 !important;
         }
         .chart-container {
             position: relative;
