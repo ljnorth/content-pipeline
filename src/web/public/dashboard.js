@@ -2720,6 +2720,9 @@ async function loadAccountsForSimpleGeneration() {
         const response = await fetch('/api/account-profiles');
         const accounts = await response.json();
         
+        console.log('Loaded accounts:', accounts); // Debug log
+        
+        // Load into dropdown
         const select = document.getElementById('simpleAccountSelect');
         if (select) {
             select.innerHTML = '<option value="">Select account...</option>';
@@ -2730,6 +2733,10 @@ async function loadAccountsForSimpleGeneration() {
                 select.appendChild(option);
             });
         }
+        
+        // Load into account cards
+        loadAccountCards(accounts);
+        
     } catch (error) {
         console.error('Error loading accounts:', error);
         const select = document.getElementById('simpleAccountSelect');
@@ -2737,6 +2744,64 @@ async function loadAccountsForSimpleGeneration() {
             select.innerHTML = '<option value="">Error loading accounts</option>';
         }
     }
+}
+
+function loadAccountCards(accounts) {
+    const container = document.getElementById('accountCardsContainer');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    accounts.forEach(account => {
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'col-md-6 col-lg-4 mb-4';
+        
+        cardDiv.innerHTML = `
+            <div class="card bg-dark text-white h-100" style="border: 1px solid rgba(255,255,255,0.2);">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">@${account.username}</h6>
+                    <span class="badge ${account.is_active ? 'bg-success' : 'bg-secondary'}">
+                        ${account.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-2">${account.display_name || 'No display name'}</p>
+                    <p class="small mb-3">${account.content_strategy?.aestheticFocus?.join(', ') || 'No aesthetic focus set'}</p>
+                    
+                    <div class="row text-center mb-3">
+                        <div class="col-4">
+                            <div class="small text-muted">Posts</div>
+                            <div class="fw-bold">${account.total_posts || 0}</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="small text-muted">Followers</div>
+                            <div class="fw-bold">${account.follower_count || 0}</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="small text-muted">Engagement</div>
+                            <div class="fw-bold">${(account.avg_engagement_rate * 100).toFixed(1)}%</div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-sm btn-primary" onclick="editAccount('${account.username}')">
+                            <i class="fas fa-edit me-1"></i>Edit Profile
+                        </button>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="auto_${account.username}" 
+                                   ${account.is_active ? 'checked' : ''} 
+                                   onchange="toggleAutoGeneration('${account.username}', this.checked)">
+                            <label class="form-check-label small" for="auto_${account.username}">
+                                Auto-generation (3 posts daily)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(cardDiv);
+    });
 }
 
 let currentGeneratedContent = null;
@@ -2912,6 +2977,21 @@ function showSimpleError(message) {
     alert.className = 'alert alert-danger mt-3';
     alert.innerHTML = `<i class="fas fa-exclamation-circle me-2"></i>${message}`;
     alert.classList.remove('d-none');
+}
+
+// Account management functions
+function editAccount(username) {
+    alert(`Edit account functionality for @${username} coming soon!`);
+}
+
+function toggleAutoGeneration(username, enabled) {
+    console.log(`Toggle auto-generation for @${username}: ${enabled}`);
+    // This would update the account's auto-generation settings
+    if (enabled) {
+        alert(`Auto-generation enabled for @${username} - 3 posts daily to Slack`);
+    } else {
+        alert(`Auto-generation disabled for @${username}`);
+    }
 }
 
 // Initialize OAuth message handling
