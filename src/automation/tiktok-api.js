@@ -211,67 +211,75 @@ export class TikTokAPI {
       }
     }
 
-    // Step 2: Initialize post with correct FILE_UPLOAD payload
-    const payload = {
-      post_info: {
-        title: caption, // Caption with hashtags (max 2200 characters)
-        privacy_level: "PRIVATE_TO_SELF" // Saves as draft, recommended for Sandbox/Unaudited apps
-      },
-      media_type: "PHOTO", // Must be "PHOTO" for carousels
-      post_mode: "DIRECT_POST", // Must be "DIRECT_POST" for publishing to drafts
-      source_info: {
-        source: "FILE_UPLOAD", // Use FILE_UPLOAD instead of PULL_FROM_URL
-        image_details: imageDetails
-      },
-      image_cover_index: 0 // Use first image as cover (0-indexed)
-    };
+    // Candidate post modes – we’ll try the preferred mode first, but fall back if TikTok rejects it
+    const preferredModes = this.sandboxMode
+      ? ["INBOX_POST"]
+      : ["DIRECT_POST", "INBOX_POST"]; // prod first, then sandbox-style draft
 
-    this.logger.info(`📤 Initializing TikTok post with ${images.length} images (FILE_UPLOAD method)...`);
-    this.logger.info(`📄 Caption length: ${caption.length}/2200 characters`);
+    let lastError = null;
+    let finalResult = null;
 
-    // Step 3: Call TikTok's initialization endpoint
-    const response = await fetch(`${this.contentPostingUrl}/content/init/`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accountCredentials.access_token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
+    for (const mode of preferredModes) {
+      // Build payload fresh for each attempt (TikTok rejects unknown fields)
+      const payload = {
+        post_info: {
+          title: caption,
+          privacy_level: "PRIVATE_TO_SELF"
+        },
+        media_type: "PHOTO",
+        post_mode: mode,
+        source_info: {
+          source: "FILE_UPLOAD",
+          image_details: imageDetails
+        },
+        image_cover_index: 0
+      };
 
-    const result = await response.json();
-    
-    // Step 4: Handle response and errors properly
-    if (!response.ok) {
-      const errorMsg = result.error?.message || result.error || `HTTP ${response.status}: ${response.statusText}`;
-      this.logger.error(`❌ TikTok API Error: ${errorMsg}`);
-      this.logger.error(`📋 Response: ${JSON.stringify(result, null, 2)}`);
-      throw new Error(`Photo post initialization failed: ${errorMsg}`);
+      this.logger.info(`📤 Attempting init with post_mode="${mode}" (${images.length} images)…`);
+
+      const initEndpoint = `${this.contentPostingUrl}/inbox/photo/init/`;
+
+      const response = await fetch(initEndpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accountCredentials.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (response.ok && result?.data?.publish_id) {
+        this.logger.info(`✅ Initialized with post_mode ${mode} – Publish ID: ${result.data.publish_id}`);
+        finalResult = result.data;
+        break;
+      }
+
+      const errMsg = result?.error?.message || result?.error || `HTTP ${response.status}`;
+      this.logger.warn(`⚠️ TikTok rejected post_mode ${mode}: ${errMsg}`);
+
+      // Detect specific invalid mode error to continue loop, else break immediately
+      const lowerMsg = String(errMsg).toLowerCase();
+      if (!lowerMsg.includes('media_type') && !lowerMsg.includes('post_mode')) {
+        // Different error – no point trying other modes
+        lastError = errMsg;
+        break;
+      }
+      lastError = errMsg; // Save and try next mode
     }
-    
-    if (result.error) {
-      const errorMsg = result.error.message || result.error;
-      this.logger.error(`❌ TikTok Error: ${errorMsg}`);
-      throw new Error(`Photo post initialization failed: ${errorMsg}`);
+
+    if (!finalResult) {
+      throw new Error(`Photo post initialization failed after trying all modes: ${lastError}`);
     }
 
-    if (!result.data || !result.data.publish_id) {
-      this.logger.error(`❌ Invalid response: Missing publish_id`);
-      this.logger.error(`📋 Response: ${JSON.stringify(result, null, 2)}`);
-      throw new Error('Invalid response: Missing publish_id');
+    // Upload images if URLs provided
+    if (finalResult.upload_urls && finalResult.upload_urls.length > 0) {
+      this.logger.info(`📤 Uploading ${imageBuffers.length} image files to TikTok…`);
+      await this.uploadImageFiles(imageBuffers, finalResult.upload_urls, images);
     }
 
-    this.logger.info(`✅ Photo post initialized - Publish ID: ${result.data.publish_id}`);
-    
-    // Step 5: Upload image files if upload URLs are provided
-    if (result.data.upload_urls && result.data.upload_urls.length > 0) {
-      this.logger.info(`📤 Uploading ${imageBuffers.length} image files to TikTok...`);
-      await this.uploadImageFiles(imageBuffers, result.data.upload_urls, images);
-    } else {
-      this.logger.warn(`⚠️ No upload URLs provided - images may not have been uploaded`);
-    }
-    
-    return result.data;
+    return finalResult;
   }
 
   /**
