@@ -1047,6 +1047,8 @@ app.post('/api/save-workflow-generation', async (req, res) => {
     
     console.log(`💾 Saving workflow generation: ${generation.id}`);
     
+    // Note: saved_generations table is optional for metadata tracking
+    
     // Save generation metadata to database
     const { data: savedGeneration, error: generationError } = await db.client
       .from('saved_generations')
@@ -1064,10 +1066,11 @@ app.post('/api/save-workflow-generation', async (req, res) => {
     
     if (generationError) {
       console.error('Failed to save generation metadata:', generationError);
-      return res.status(500).json({ error: 'Failed to save generation metadata' });
+      // Don't fail the whole request - just skip saving metadata
+      console.log('Continuing without saving generation metadata...');
     }
     
-    // Save individual posts to generated_posts table
+    // Save individual posts to generated_posts table (this should work)
     let savedPostsCount = 0;
     for (const post of generation.posts) {
       try {
@@ -1101,7 +1104,8 @@ app.post('/api/save-workflow-generation', async (req, res) => {
       success: true,
       savedId: generation.id,
       savedPosts: savedPostsCount,
-      totalPosts: generation.posts.length
+      totalPosts: generation.posts.length,
+      metadataSaved: !generationError
     });
     
   } catch (error) {
@@ -1298,4 +1302,4 @@ app.use((error, req, res, next) => {
   });
 });
 
-export default app; 
+export default app;
