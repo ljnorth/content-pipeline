@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Content Generator Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e1e1;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .btn:disabled {
+            background: #ccc;
+            transform: none;
+            cursor: not-allowed;
+        }
+        .results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+            display: none;
+        }
+        .success {
+            color: #28a745;
+        }
+        .error {
+            color: #dc3545;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            color: #666;
+        }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🎨 Simple Content Generator</h1>
+        <p style="text-align: center; color: #666; margin-bottom: 30px;">
+            Generate fashion content and send it directly to your Slack channel
+        </p>
+        
+        <form id="contentForm">
+            <div class="form-group">
+                <label for="accountUsername">Account Username</label>
+                <input type="text" id="accountUsername" value="fashion_demo" placeholder="e.g., fashion_demo">
+            </div>
+            
+            <div class="form-group">
+                <label for="postCount">Number of Posts</label>
+                <select id="postCount">
+                    <option value="1">1 Post</option>
+                    <option value="2">2 Posts</option>
+                    <option value="3" selected>3 Posts</option>
+                    <option value="5">5 Posts</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="imageCount">Images per Post</label>
+                <select id="imageCount">
+                    <option value="1">1 Image</option>
+                    <option value="2" selected>2 Images</option>
+                    <option value="3">3 Images</option>
+                </select>
+            </div>
+            
+            <button type="submit" class="btn" id="generateBtn">
+                🚀 Generate → Send to Slack
+            </button>
+        </form>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            Generating content and sending to Slack...
+        </div>
+        
+        <div class="results" id="results">
+            <!-- Results will appear here -->
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('contentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const accountUsername = document.getElementById('accountUsername').value;
+            const postCount = parseInt(document.getElementById('postCount').value);
+            const imageCount = parseInt(document.getElementById('imageCount').value);
+            
+            if (!accountUsername.trim()) {
+                alert('Please enter an account username');
+                return;
+            }
+            
+            // Show loading
+            document.getElementById('generateBtn').disabled = true;
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            
+            try {
+                console.log('Starting workflow...');
+                
+                const response = await fetch('/api/simple-complete-workflow', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        accountUsername,
+                        postCount,
+                        imageCount
+                    })
+                });
+                
+                const result = await response.json();
+                
+                // Hide loading
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('results').style.display = 'block';
+                
+                if (result.success) {
+                    document.getElementById('results').innerHTML = `
+                        <div class="success">
+                            <h3>✅ Success!</h3>
+                            <p><strong>${result.message}</strong></p>
+                            <p>Generated ${result.posts.length} posts for @${accountUsername}</p>
+                            <p>Check your #content-pipeline Slack channel! 📱</p>
+                            
+                            <h4>Generated Posts:</h4>
+                            ${result.posts.map(post => `
+                                <div style="margin: 10px 0; padding: 10px; background: white; border-radius: 5px;">
+                                    <strong>Post ${post.postNumber} (${post.aesthetic}):</strong><br>
+                                    ${post.caption}<br>
+                                    <small style="color: #666;">${post.hashtags.join(' ')}</small><br>
+                                    <small>${post.images.length} images included</small>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('results').innerHTML = `
+                        <div class="error">
+                            <h3>❌ Error</h3>
+                            <p>${result.error}</p>
+                            <p>Check the console for more details.</p>
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                console.error('Workflow error:', error);
+                
+                // Hide loading
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('results').style.display = 'block';
+                
+                document.getElementById('results').innerHTML = `
+                    <div class="error">
+                        <h3>❌ Connection Error</h3>
+                        <p>Could not connect to the server. Make sure it's running on port 3002.</p>
+                        <p>Error: ${error.message}</p>
+                    </div>
+                `;
+            } finally {
+                document.getElementById('generateBtn').disabled = false;
+            }
+        });
+    </script>
+</body>
+</html> 

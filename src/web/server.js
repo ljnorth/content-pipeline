@@ -1749,6 +1749,14 @@ app.post('/api/upload-workflow-to-tiktok', async (req, res) => {
   }
 });
 
+app.get('/tos', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'tos.html'));
+});
+
+app.get('/privacy', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
+});
+
 app.listen(PORT, () => {
   logger.success(`🌐 Web interface running on http://localhost:${PORT}`);
 }); 

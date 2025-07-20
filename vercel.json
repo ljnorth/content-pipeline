@@ -39,6 +39,10 @@
       "dest": "/api/upload-workflow-to-tiktok.js"
     },
     {
+      "src": "/api/upload-workflow-to-slack",
+      "dest": "/api/upload-workflow-to-slack.js"
+    },
+    {
       "src": "/auth/tiktok/callback",
       "dest": "api/index.js"
     },

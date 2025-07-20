@@ -2436,13 +2436,13 @@ async function runCompleteWorkflow() {
             throw new Error(`Failed to save generation: ${saveResult.error}`);
         }
         
-        updateWorkflowProgress(80, 'Generation saved! Uploading to TikTok...');
+        updateWorkflowProgress(80, 'Generation saved! Sending to Slack...');
         
-        // Step 3: Upload to TikTok drafts
-        const uploadResult = await uploadWorkflowToTikTok(account, generationResult.posts);
+        // Step 3: Upload to Slack
+        const uploadResult = await uploadWorkflowToSlack(account, generationResult.posts);
         
         if (!uploadResult.success) {
-            throw new Error(`TikTok upload failed: ${uploadResult.error}`);
+            throw new Error(`Slack upload failed: ${uploadResult.error}`);
         }
         
         updateWorkflowProgress(100, 'Workflow completed successfully!');
@@ -2452,9 +2452,9 @@ async function runCompleteWorkflow() {
         
         // Show detailed success message
         if (uploadResult.allSuccessful) {
-            showSuccess(`🎉 Complete workflow successful! Generated ${postCount} posts and uploaded ALL to TikTok drafts.`);
+            showSuccess(`🎉 Complete workflow successful! Generated ${postCount} posts and sent ALL to Slack channel.`);
         } else {
-            showError(`⚠️ Partial success: Generated ${postCount} posts but only ${uploadResult.successfulUploads}/${uploadResult.totalPosts} uploaded to TikTok. ${uploadResult.message}`);
+            showError(`⚠️ Partial success: Generated ${postCount} posts but only ${uploadResult.successfulUploads}/${uploadResult.totalPosts} sent to Slack. ${uploadResult.message}`);
         }
         
     } catch (error) {
@@ -2514,9 +2514,9 @@ async function saveWorkflowGeneration(generation) {
     }
 }
 
-async function uploadWorkflowToTikTok(account, posts) {
+async function uploadWorkflowToSlack(account, posts) {
     try {
-        const response = await fetch('/api/upload-workflow-to-tiktok', {
+        const response = await fetch('/api/upload-workflow-to-slack', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -2531,20 +2531,21 @@ async function uploadWorkflowToTikTok(account, posts) {
         
         if (response.ok) {
             // Check actual upload success
-            if (data.success && data.successfulUploads > 0) {
+            if (data.success) {
+                const successfulUploads = data.uploads.filter(u => u.success).length;
                 return { 
                     success: true, 
                     uploads: data.uploads,
-                    allSuccessful: data.allSuccessful,
-                    successfulUploads: data.successfulUploads,
-                    totalPosts: data.totalPosts,
-                    message: data.message
+                    allSuccessful: successfulUploads === data.uploads.length,
+                    successfulUploads: successfulUploads,
+                    totalPosts: data.uploads.length,
+                    message: `${successfulUploads}/${data.uploads.length} posts sent to Slack`
                 };
             } else {
                 return { 
                     success: false, 
-                    error: data.message || `No posts uploaded successfully (${data.successfulUploads}/${data.totalPosts})`,
-                    uploads: data.uploads
+                    error: data.error || 'Failed to send posts to Slack',
+                    uploads: data.uploads || []
                 };
             }
         } else {

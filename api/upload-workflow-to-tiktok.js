@@ -96,14 +96,19 @@ export default async function handler(req, res) {
       }
       
       const successfulUploads = uploads.filter(upload => upload.success).length;
-      
+
+      // Overall outcome helpers
+      const allSuccessful = successfulUploads === posts.length;
+      const overallSuccess = allSuccessful; // true only if every upload succeeded
+
       console.log(`✅ Uploaded ${successfulUploads}/${posts.length} posts to TikTok`);
-      
+
       res.status(200).json({
-        success: true,
+        success: overallSuccess,
         uploads,
         totalPosts: posts.length,
-        successfulUploads
+        successfulUploads,
+        allSuccessful
       });
       
     } else {
