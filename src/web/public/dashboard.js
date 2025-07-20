@@ -17,6 +17,7 @@ class ContentPipelineDashboard {
         this.initializeCharts();
         this.setupProcessingMethodSelection();
         this.setupThemeGeneration();
+        await this.setupSimpleGeneration();
     }
 
     async loadDashboardData() {
@@ -2687,8 +2688,235 @@ function handleOAuthMessages() {
     }
 }
 
+// Simple Generation Functions
+async function setupSimpleGeneration() {
+    try {
+        // Load accounts for dropdown
+        await loadAccountsForSimpleGeneration();
+        
+        // Setup generate button event
+        const generateBtn = document.getElementById('simpleGenerateBtn');
+        if (generateBtn) {
+            generateBtn.addEventListener('click', generateContentSimple);
+        }
+
+        // Setup modal buttons
+        const pushToSlackBtn = document.getElementById('pushToSlackBtn');
+        if (pushToSlackBtn) {
+            pushToSlackBtn.addEventListener('click', pushGeneratedContentToSlack);
+        }
+
+        const downloadBtn = document.getElementById('downloadContentBtn');
+        if (downloadBtn) {
+            downloadBtn.addEventListener('click', downloadGeneratedContent);
+        }
+    } catch (error) {
+        console.error('Error setting up simple generation:', error);
+    }
+}
+
+async function loadAccountsForSimpleGeneration() {
+    try {
+        const response = await fetch('/api/account-profiles');
+        const accounts = await response.json();
+        
+        const select = document.getElementById('simpleAccountSelect');
+        if (select) {
+            select.innerHTML = '<option value="">Select account...</option>';
+            accounts.forEach(account => {
+                const option = document.createElement('option');
+                option.value = account.username;
+                option.textContent = `@${account.username} ${account.display_name ? '(' + account.display_name + ')' : ''}`;
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading accounts:', error);
+        const select = document.getElementById('simpleAccountSelect');
+        if (select) {
+            select.innerHTML = '<option value="">Error loading accounts</option>';
+        }
+    }
+}
+
+let currentGeneratedContent = null;
+
+async function generateContentSimple() {
+    const accountSelect = document.getElementById('simpleAccountSelect');
+    const postCount = document.getElementById('simplePostCount');
+    const imageCount = document.getElementById('simpleImageCount');
+    const generateBtn = document.getElementById('simpleGenerateBtn');
+    const progressContainer = document.getElementById('simpleProgress');
+    const progressBar = document.getElementById('simpleProgressBar');
+    const statusAlert = document.getElementById('simpleStatus');
+
+    // Validate inputs
+    if (!accountSelect.value) {
+        showSimpleError('Please select an account');
+        return;
+    }
+
+    try {
+        // Show progress
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Generating...';
+        progressContainer.classList.remove('d-none');
+        statusAlert.classList.add('d-none');
+        
+        // Animate progress
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            progress += Math.random() * 15;
+            if (progress > 90) progress = 90;
+            progressBar.style.width = progress + '%';
+            progressBar.textContent = Math.round(progress) + '%';
+        }, 200);
+
+        // Call generation API
+        const response = await fetch('/api/generate-workflow-content', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                accountUsername: accountSelect.value,
+                postCount: parseInt(postCount.value),
+                imageCount: parseInt(imageCount.value)
+            })
+        });
+
+        clearInterval(progressInterval);
+        progressBar.style.width = '100%';
+        progressBar.textContent = '100%';
+
+        const result = await response.json();
+
+        if (result.success) {
+            showSimpleSuccess(`Generated ${result.posts.length} posts successfully!`);
+            showGeneratedContentModal(result.posts, accountSelect.value);
+        } else {
+            throw new Error(result.error || 'Generation failed');
+        }
+
+    } catch (error) {
+        console.error('Generation error:', error);
+        showSimpleError('Generation failed: ' + error.message);
+    } finally {
+        // Reset UI
+        generateBtn.disabled = false;
+        generateBtn.innerHTML = '<i class="fas fa-bolt me-1"></i> Generate';
+        setTimeout(() => {
+            progressContainer.classList.add('d-none');
+            progressBar.style.width = '0%';
+        }, 2000);
+    }
+}
+
+function showGeneratedContentModal(posts, accountUsername) {
+    const container = document.getElementById('generatedPostsContainer');
+    container.innerHTML = '';
+
+    posts.forEach((post, index) => {
+        const postDiv = document.createElement('div');
+        postDiv.className = 'col-md-6 col-lg-4';
+        
+        const imagesHtml = post.images.map(img => `
+            <img src="${img.imagePath}" class="img-fluid rounded mb-2" style="height: 120px; object-fit: cover; width: 100%;">
+        `).join('');
+
+        postDiv.innerHTML = `
+            <div class="card bg-dark text-white h-100" style="border: 1px solid rgba(255,255,255,0.2);">
+                <div class="card-header">
+                    <h6 class="mb-0">Post ${post.postNumber}</h6>
+                </div>
+                <div class="card-body">
+                    <div class="images-grid mb-3">
+                        ${imagesHtml}
+                    </div>
+                    <p class="small">${post.caption}</p>
+                    <div class="hashtags">
+                        ${post.hashtags.map(tag => `<span class="badge bg-primary me-1">${tag}</span>`).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(postDiv);
+    });
+
+    // Store generated content for actions
+    currentGeneratedContent = { posts, accountUsername };
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('contentPreviewModal'));
+    modal.show();
+}
+
+async function pushGeneratedContentToSlack() {
+    if (!currentGeneratedContent) {
+        showError('No content to push');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/upload-workflow-to-slack', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                accountUsername: currentGeneratedContent.accountUsername,
+                posts: currentGeneratedContent.posts
+            })
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('Content pushed to Slack successfully!');
+        } else {
+            throw new Error(result.error || 'Slack push failed');
+        }
+    } catch (error) {
+        console.error('Slack push error:', error);
+        showError('Failed to push to Slack: ' + error.message);
+    }
+}
+
+function downloadGeneratedContent() {
+    if (!currentGeneratedContent) {
+        showError('No content to download');
+        return;
+    }
+
+    // Create downloadable JSON
+    const dataStr = JSON.stringify(currentGeneratedContent, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = `generated-content-${currentGeneratedContent.accountUsername}-${Date.now()}.json`;
+    link.click();
+    
+    showSuccess('Content downloaded successfully!');
+}
+
+function showSimpleSuccess(message) {
+    const alert = document.getElementById('simpleStatus');
+    alert.className = 'alert alert-success mt-3';
+    alert.innerHTML = `<i class="fas fa-check-circle me-2"></i>${message}`;
+    alert.classList.remove('d-none');
+}
+
+function showSimpleError(message) {
+    const alert = document.getElementById('simpleStatus');
+    alert.className = 'alert alert-danger mt-3';
+    alert.innerHTML = `<i class="fas fa-exclamation-circle me-2"></i>${message}`;
+    alert.classList.remove('d-none');
+}
+
 // Initialize OAuth message handling
 document.addEventListener('DOMContentLoaded', () => {
     handleOAuthMessages();
     loadWorkflowAccounts();
+    setupSimpleGeneration();
 }); 
