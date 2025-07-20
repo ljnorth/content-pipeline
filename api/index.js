@@ -218,6 +218,75 @@ app.get('/api/debug', async (req, res) => {
   }
 });
 
+// Analytics endpoints
+app.get('/api/metrics', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+
+    // Use count queries for accurate totals
+    const { count: totalPosts } = await db.client.from('posts').select('*', { count: 'exact', head: true });
+    const { count: totalImages } = await db.client.from('images').select('*', { count: 'exact', head: true });
+    const { data: accounts } = await db.client.from('account_profiles').select('*');
+    
+    const activeAccounts = accounts?.length || 0;
+    
+    // Get posts for engagement calculation (limit to avoid memory issues)
+    const { data: posts } = await db.client.from('posts').select('engagement_rate').limit(5000);
+    
+    // Calculate average engagement rate
+    const avgEngagement = posts?.length > 0 
+      ? posts.reduce((sum, post) => sum + (post.engagement_rate || 0), 0) / posts.length 
+      : 0;
+    
+    res.json({
+      totalPosts: totalPosts || 0,
+      totalImages: totalImages || 0,
+      activeAccounts,
+      avgEngagement: Math.round(avgEngagement * 1000) / 10 // Convert to percentage and round
+    });
+  } catch (err) {
+    console.error('Error loading metrics:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/trending', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+
+    // Return empty data structure for now - can be enhanced later
+    res.json({ 
+      aesthetics: [], 
+      seasons: [], 
+      colors: [] 
+    });
+  } catch (err) {
+    console.error('Error loading trending data:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/engagement-trends', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+
+    // Return empty data for now - can be enhanced later
+    res.json({ 
+      labels: [], 
+      values: [] 
+    });
+  } catch (err) {
+    console.error('Error loading engagement trends:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Account profiles endpoints
 app.get('/api/account-profiles', async (req, res) => {
   try {
