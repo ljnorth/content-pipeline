@@ -116,6 +116,54 @@ app.post('/api/migrate/add-tiktok-columns', async (req, res) => {
   }
 });
 
+// Temporary migration endpoint to create saved_generations table
+app.post('/api/migrate/create-saved-generations', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+
+    console.log('Creating saved_generations table...');
+    
+    // Create the table with the schema the API expects
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS saved_generations (
+          id SERIAL PRIMARY KEY,
+          generation_id VARCHAR(255) UNIQUE NOT NULL,
+          account_username VARCHAR(255) NOT NULL,
+          post_count INTEGER DEFAULT 0,
+          image_count INTEGER DEFAULT 0,
+          strategy JSONB DEFAULT '{}',
+          generated_at TIMESTAMP WITH TIME ZONE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          
+          FOREIGN KEY (account_username) REFERENCES account_profiles(username) ON DELETE CASCADE
+      );
+      
+      CREATE INDEX IF NOT EXISTS idx_saved_generations_account ON saved_generations(account_username);
+      CREATE INDEX IF NOT EXISTS idx_saved_generations_generation_id ON saved_generations(generation_id);
+    `;
+    
+    // Execute the SQL
+    const { error } = await db.client.rpc('execute_sql', { query: createTableSQL });
+    
+    if (error) {
+      console.error('Error creating table:', error);
+      return res.status(500).json({ error: 'Failed to create table', details: error });
+    }
+    
+    console.log('✅ saved_generations table created successfully');
+    res.json({ 
+      success: true, 
+      message: 'saved_generations table created successfully'
+    });
+    
+  } catch (error) {
+    console.error('Migration error:', error);
+    res.status(500).json({ error: 'Migration failed', details: error.message });
+  }
+});
+
 // Debug endpoint to see all profiles (including inactive)
 app.get('/api/debug/all-profiles', async (req, res) => {
   try {
