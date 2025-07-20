@@ -121,16 +121,25 @@ export class ContentGenerator {
   }
 
   /**
-   * Get curated images based on account strategy
+   * Get curated images based on account strategy with deduplication rules
    */
   async getCuratedImages(username, strategy, count = 5) {
-    this.logger.info(`🔍 Curating ${count} images for ${username}...`);
+    this.logger.info(`🔍 Curating ${count} images for ${username} with deduplication rules...`);
+    
+    // Get recently used images for this account (within last 6 posts)
+    const recentlyUsedImages = await this.getRecentlyUsedImages(username);
+    this.logger.info(`🚫 Found ${recentlyUsedImages.length} recently used images to exclude`);
     
     // Build query based on account strategy
     let query = this.db.client
       .from('images')
       .select('id, image_path, aesthetic, colors, season, occasion, username, post_id, additional')
       .not('aesthetic', 'is', null); // Use direct aesthetic field instead of analysis
+
+    // Exclude recently used images
+    if (recentlyUsedImages.length > 0) {
+      query = query.not('id', 'in', recentlyUsedImages);
+    }
 
     // Apply aesthetic filters if specified
     if (strategy.content_strategy?.aestheticFocus?.length > 0) {
@@ -175,8 +184,43 @@ export class ContentGenerator {
 
     this.logger.info(`🎯 Scored ${scoredImages.length} images, top score: ${scoredImages[0]?.score || 0}`);
 
-    // Return top images, ensuring variety
+    // Return top images, ensuring variety and no duplicates within the post
     return this.selectVariedImages(scoredImages, count);
+  }
+
+  /**
+   * Get recently used images for an account (within last 6 posts worth)
+   */
+  async getRecentlyUsedImages(username) {
+    try {
+      // Get the last 6 generations for this account
+      const { data: recentGenerations, error: genError } = await this.db.client
+        .from('generated_posts')
+        .select('images')
+        .eq('account_username', username)
+        .order('created_at', { ascending: false })
+        .limit(6);
+
+      if (genError) {
+        this.logger.error(`Error fetching recent generations: ${genError.message}`);
+        return [];
+      }
+
+      // Extract all image IDs from recent posts
+      const usedImageIds = new Set();
+      recentGenerations?.forEach(generation => {
+        if (generation.images && Array.isArray(generation.images)) {
+          generation.images.forEach(img => {
+            if (img.id) usedImageIds.add(img.id);
+          });
+        }
+      });
+
+      return Array.from(usedImageIds);
+    } catch (error) {
+      this.logger.error(`Error getting recently used images: ${error.message}`);
+      return [];
+    }
   }
 
   /**
@@ -230,17 +274,21 @@ export class ContentGenerator {
   }
 
   /**
-   * Select varied images to avoid repetition
+   * Select varied images to avoid repetition - RULE: Never use same image twice in one post
    */
   selectVariedImages(scoredImages, count) {
     const selected = [];
+    const usedImageIds = new Set();
     const usedAesthetics = new Set();
     const usedAccounts = new Set();
 
     for (const image of scoredImages) {
       if (selected.length >= count) break;
 
-      // Avoid too many from same aesthetic or account
+      // RULE 1: Never use the same image twice in one post
+      if (usedImageIds.has(image.id)) continue;
+
+      // Avoid too many from same aesthetic or account for variety
       const aesthetic = image.aesthetic?.toLowerCase() || 'unknown';
       const account = image.username;
 
@@ -248,16 +296,18 @@ export class ContentGenerator {
       if (usedAccounts.has(account) && usedAccounts.size < 2) continue;
 
       selected.push(image);
+      usedImageIds.add(image.id);
       usedAesthetics.add(aesthetic);
       usedAccounts.add(account);
     }
 
-    // Fill remaining slots if needed
+    // Fill remaining slots if needed (still respecting no-duplicate rule)
     while (selected.length < count && selected.length < scoredImages.length) {
       for (const image of scoredImages) {
         if (selected.length >= count) break;
-        if (!selected.find(s => s.id === image.id)) {
+        if (!usedImageIds.has(image.id)) {
           selected.push(image);
+          usedImageIds.add(image.id);
         }
       }
     }
@@ -343,15 +393,19 @@ Make it authentic, engaging, and optimized for the target audience.`;
   }
 
   /**
-   * Save generated post to database
+   * Save generated post to database and track image usage
    */
   async saveGeneratedPost(post) {
+    const generationId = `daily_${Date.now()}_${post.postNumber}`;
+    
+    // Save the post
     const { error } = await this.db.client
       .from('generated_posts')
       .insert({
         account_username: post.accountUsername,
-        generation_id: `daily_${Date.now()}_${post.postNumber}`,
+        generation_id: generationId,
         image_paths: post.images.map(img => img.imagePath),
+        images: post.images, // Store full image data for tracking
         caption: post.caption,
         hashtags: post.hashtags,
         created_at: post.generatedAt
@@ -359,6 +413,39 @@ Make it authentic, engaging, and optimized for the target audience.`;
 
     if (error) {
       throw new Error(`Failed to save post: ${error.message}`);
+    }
+
+    // Track image usage for the 6-post cooldown rule
+    await this.trackImageUsage(post.accountUsername, generationId, post.images, post.postNumber);
+  }
+
+  /**
+   * Track image usage for cooldown enforcement - RULE: 6 post cooldown before reuse
+   */
+  async trackImageUsage(accountUsername, generationId, images, postNumber) {
+    try {
+      // Check if image_usage table exists, if not skip tracking for now
+      const usageRecords = images.map(img => ({
+        image_id: img.id,
+        account_username: accountUsername,
+        generation_id: generationId,
+        post_number: postNumber,
+        used_at: new Date().toISOString()
+      }));
+
+      // Try to insert usage records
+      const { error } = await this.db.client
+        .from('image_usage')
+        .insert(usageRecords);
+
+      if (error && !error.message.includes('relation "image_usage" does not exist')) {
+        this.logger.error(`Failed to track image usage: ${error.message}`);
+      } else if (!error) {
+        this.logger.info(`✅ Tracked usage of ${images.length} images for ${accountUsername}`);
+      }
+    } catch (error) {
+      // Don't fail the whole generation if tracking fails
+      this.logger.error(`Image usage tracking error: ${error.message}`);
     }
   }
 
