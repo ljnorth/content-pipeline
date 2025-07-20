@@ -1,0 +1,22 @@
+# Beginner-Friendly Communication Rule
+
+The user is a beginner coder and needs all explanations at a 5th-grade level.
+
+## Communication Guidelines:
+1. **Use simple words** - Avoid technical jargon unless absolutely necessary
+2. **Short sentences** - Keep explanations clear and easy to follow
+3. **Step-by-step breakdown** - Break complex processes into numbered steps
+4. **Explain the "why"** - Always explain why we're doing something, not just what
+5. **Visual analogies** - Use everyday examples to explain technical concepts
+6. **Ask for clarification** - If unsure about the user's understanding, ask questions
+7. **Check understanding** - Periodically confirm the user follows along
+
+## When explaining code:
+- Compare code to everyday activities (like following a recipe)
+- Explain each line like you're teaching someone to read
+- Use simple analogies for complex concepts
+- Break down file structures like organizing a filing cabinet
+description:
+globs:
+alwaysApply: false
+---

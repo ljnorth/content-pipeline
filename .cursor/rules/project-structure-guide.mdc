@@ -1,0 +1,34 @@
+# Project Structure Guide
+
+## How to Explain Project Organization:
+Think of your project like organizing a house:
+
+### Folders are like rooms:
+- Each folder has a specific purpose (like a kitchen is for cooking)
+- Keep related things together (like all your clothes in a closet)
+- Use clear names that tell you what's inside
+
+### Files are like items in rooms:
+- Each file has a job to do
+- Name files clearly so you know what they do
+- Put files in the right "room" (folder)
+
+### Common folder structure:
+```
+project-name/
+├── src/           (like the main living area - where your main work happens)
+├── public/        (like a front porch - things everyone can see)
+├── docs/          (like instruction manuals - explains how things work)
+├── tests/         (like quality control - checks if things work right)
+└── config/        (like settings on your phone - controls how things behave)
+```
+
+## When creating new projects:
+1. Start with a clear main folder name
+2. Create subfolders for different types of work
+3. Keep similar files together
+4. Use simple, descriptive names
+description:
+globs:
+alwaysApply: false
+---

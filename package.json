@@ -1,0 +1,50 @@
+{
+  "name": "fashion-data-pipeline",
+  "version": "1.0.0",
+  "description": "A data collection and analysis pipeline for fashion/aesthetic data from social media",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "setup": "node src/setup.js",
+    "web": "node src/web/server.js",
+    "pipeline": "node src/pipeline/fashion-pipeline.js",
+    "fast": "node run-fast-pipeline.js",
+    "batch": "node run-batch-pipeline.js",
+    "enhanced": "node run-enhanced-pipeline.js",
+    "cost-comparison": "node batch-cost-comparison.js",
+    "speed-comparison": "node speed-comparison.js",
+    "methods": "node speed-comparison.js",
+    "analyze": "node analyze-aesthetics.js",
+    "test-incremental": "node test-incremental-scraping.js",
+    "automation": "node run-automation.js",
+    "automation:test": "node run-automation.js --test",
+    "tiktok:setup": "node setup-tiktok-oauth.js",
+    "automation:dry-run": "node run-automation.js --dry-run"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "adm-zip": "^0.5.16",
+    "apify-client": "^2.12.6",
+    "axios": "^1.6.0",
+    "csv-parser": "^3.0.0",
+    "dotenv": "^16.6.1",
+    "express": "^4.18.2",
+    "fs-extra": "^11.3.0",
+    "openai": "^4.20.0",
+    "sharp": "^0.32.6"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "keywords": [
+    "fashion",
+    "data",
+    "pipeline",
+    "tiktok",
+    "analysis"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

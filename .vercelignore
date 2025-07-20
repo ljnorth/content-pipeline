@@ -1,0 +1,12 @@
+temp/
+node_modules/
+.env
+.git/
+*.log
+input/
+output/
+.DS_Store
+*.backup
+analysis/
+batch-hook-slides/
+update-local-hook-slides.js 

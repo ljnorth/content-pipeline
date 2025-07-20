@@ -1,0 +1,123 @@
+# Production-Ready Implementation Standards
+
+## 🎯 **TikTok API Integration Requirements**
+
+All TikTok-related code must use real API implementations from [src/automation/tiktok-api.js](mdc:src/automation/tiktok-api.js).
+
+### ✅ **Required Implementation Pattern:**
+
+```javascript
+// Import real TikTok API
+const { TikTokAPI } = await import('../src/automation/tiktok-api.js');
+const tiktokAPI = new TikTokAPI();
+
+// Use real upload method
+const uploadResult = await tiktokAPI.realUploadPost(accountUsername, post);
+
+// Handle real response
+if (uploadResult.success) {
+  console.log(`✅ Uploaded to TikTok: ${uploadResult.publishId}`);
+  
+  // Save to database with real data
+  await db.client.from('generated_posts').insert({
+    account_username: accountUsername,
+    platform_post_id: uploadResult.publishId,
+    status: uploadResult.status,
+    platform: 'tiktok'
+  });
+} else {
+  console.error(`❌ Upload failed: ${uploadResult.error}`);
+}
+```
+
+### 🚫 **Never Use These Patterns:**
+
+```javascript
+// ❌ WRONG - Placeholder logging
+console.log(`✅ Would upload ${posts.length} posts to TikTok`);
+
+// ❌ WRONG - Fake responses
+res.json({
+  success: true,
+  uploads: posts.map(() => ({ draftId: `fake_${Date.now()}` }))
+});
+
+// ❌ WRONG - Mock implementations in production endpoints
+const mockResult = await tiktokAPI.mockUploadPost(username, post);
+```
+
+## 📊 **Database Operations Standards**
+
+All database operations must save and retrieve real data using [src/database/supabase-client.js](mdc:src/database/supabase-client.js).
+
+### ✅ **Required Pattern:**
+
+```javascript
+// Real database save
+const { data, error } = await db.client
+  .from('generated_posts')
+  .insert({
+    account_username: realUsername,
+    platform_post_id: realPublishId,
+    caption: realCaption,
+    status: realStatus
+  });
+
+if (error) {
+  console.error('Database error:', error);
+  throw new Error(`Failed to save: ${error.message}`);
+}
+```
+
+### 🚫 **Never Skip Database Operations:**
+
+```javascript
+// ❌ WRONG - Commenting out database saves
+// const { error } = await db.client.from('table').insert(data);
+console.log('✅ Would save to database');
+```
+
+## 🔄 **Error Handling Requirements**
+
+All implementations must handle real errors from real services:
+
+```javascript
+try {
+  const result = await realAPICall();
+  return { success: true, data: result };
+} catch (error) {
+  console.error('Real API error:', error.message);
+  return { success: false, error: error.message };
+}
+```
+
+## 🎮 **Environment Configuration**
+
+Production code must check for real environment variables:
+
+```javascript
+// ✅ Proper environment check
+const clientKey = process.env.TIKTOK_CLIENT_KEY;
+if (!clientKey) {
+  throw new Error('TIKTOK_CLIENT_KEY environment variable required');
+}
+
+// ❌ WRONG - Hardcoded fallbacks in production
+const clientKey = process.env.TIKTOK_CLIENT_KEY || 'hardcoded_key';
+```
+
+## 📝 **Implementation Verification**
+
+Before deploying any code, verify:
+
+1. **Real API endpoints** are being called
+2. **Real credentials** are being used
+3. **Real data** is being saved to database
+4. **Real errors** are being handled
+5. **Real responses** are being returned to clients
+
+No placeholder, mock, or "would do" implementations are acceptable in production code.
+description:
+globs:
+alwaysApply: false
+---

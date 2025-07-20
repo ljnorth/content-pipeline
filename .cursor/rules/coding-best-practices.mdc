@@ -1,0 +1,33 @@
+# Coding Best Practices for Beginners
+
+## Writing Code Like Writing a Story:
+1. **Start with a plan** - Like writing an outline before writing a story
+2. **Use clear names** - Name things like you're naming characters in a book
+3. **Keep it simple** - One idea per line, like one sentence per thought
+4. **Add comments** - Like footnotes in a book to explain tricky parts
+
+## File Naming Rules:
+- Use lowercase letters and hyphens: `my-file.js`
+- No spaces in names (computers get confused by spaces)
+- Use descriptive names that tell you what the file does
+
+## Code Organization:
+- Put related code together (like chapters in a book)
+- Use indentation to show what belongs together
+- Keep functions small and focused (like paragraphs in a story)
+
+## When Writing Code:
+1. **Think first** - What do you want the computer to do?
+2. **Write it down** - Put your plan in comments
+3. **Build step by step** - Add one piece at a time
+4. **Test as you go** - Check if each piece works before adding more
+
+## Common Mistakes to Avoid:
+- Don't copy code without understanding it
+- Don't skip the planning step
+- Don't forget to test your work
+- Don't be afraid to ask questions
+description:
+globs:
+alwaysApply: false
+---

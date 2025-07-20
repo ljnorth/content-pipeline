@@ -1,0 +1,73 @@
+# No Placeholder Code Rule
+
+## 🚫 **NEVER Use Placeholder Code**
+
+This project requires **real, functional implementations** at all times. Placeholder code causes production issues and prevents features from working properly.
+
+### ❌ **Prohibited Patterns:**
+
+```javascript
+// For now, just return success without actually uploading
+// (since we need to implement the TikTok upload logic)
+console.log(`✅ Would upload ${posts.length} posts to TikTok for @${accountUsername}`);
+
+// TODO: Implement real functionality later
+return { success: true, mockData: true };
+
+// Mock implementation - replace with real API call
+const mockResult = { status: 'uploaded', draftId: `draft_${Date.now()}` };
+
+// Placeholder response
+res.json({ success: true, uploads: fakePosts });
+```
+
+### ✅ **Required Patterns:**
+
+```javascript
+// Import and use real implementation
+const { TikTokAPI } = await import('../src/automation/tiktok-api.js');
+const tiktokAPI = new TikTokAPI();
+
+// Call actual API
+const uploadResult = await tiktokAPI.realUploadPost(accountUsername, post);
+
+// Handle real responses
+if (uploadResult.success) {
+  // Save real data to database
+  const { error } = await db.client.from('table').insert(realData);
+}
+```
+
+### 🎯 **Enforcement Rules:**
+
+1. **Real API Calls Only**: Always call actual external APIs (TikTok, Supabase, OpenAI)
+2. **Real Database Operations**: Save and retrieve actual data, never mock responses
+3. **Real Error Handling**: Handle actual errors from real services
+4. **Real Validations**: Validate real data structures and responses
+5. **Real Testing**: Use real test data that matches production scenarios
+
+### 🔍 **Code Review Checklist:**
+
+- [ ] No comments containing "For now", "TODO", "Mock", or "Placeholder"
+- [ ] All API calls use real endpoints and credentials
+- [ ] All database operations save/retrieve real data
+- [ ] All responses contain real data from actual sources
+- [ ] All error handling addresses real failure scenarios
+- [ ] All implementations are production-ready
+
+### 🚨 **Red Flags to Reject:**
+
+- Functions that return hardcoded mock data
+- Endpoints that log "Would do X" instead of doing X
+- Database operations that skip actual saves
+- API calls that return fake responses
+- Error handling that catches but doesn't properly handle
+- Comments indicating temporary or incomplete implementations
+
+### 🎯 **Production-First Mindset:**
+
+Every line of code must be ready for production deployment. If a feature isn't ready for real implementation, it shouldn't be merged until it is.
+description:
+globs:
+alwaysApply: false
+---

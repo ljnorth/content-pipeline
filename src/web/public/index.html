@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Content Pipeline Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .main-content {
+            background-color: #f8f9fa;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .trending-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        .filter-builder {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .filter-group {
+            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .image-card {
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+        .image-card:hover {
+            transform: translateY(-2px);
+        }
+        .image-card img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        .image-info {
+            padding: 10px;
+            background: white;
+        }
+        .generation-preview {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .btn-custom {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            border-radius: 25px;
+            padding: 10px 25px;
+        }
+        .btn-custom:hover {
+            background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+            color: white;
+        }
+        .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+            margin-bottom: 5px;
+        }
+        .nav-link.active {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+        .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin: 20px 0;
+        }
+        .processing-method-card {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        .processing-method-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+        }
+        .processing-method-card.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .processing-method-card.selected .processing-icon {
+            transform: scale(1.2);
+        }
+        .processing-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            transition: transform 0.3s ease;
+        }
+        .processing-method-card h6 {
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .processing-method-card.selected .text-muted {
+            color: rgba(255, 255, 255, 0.8) !important;
+        }
+        .processing-method-card.selected .text-success {
+            color: rgba(255, 255, 255, 0.9) !important;
+        }
+        .trend-indicator {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .trend-up {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .trend-down {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .trend-neutral {
+            background-color: #e2e3e5;
+            color: #383d41;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 sidebar p-3">
+                <h4 class="text-white mb-4">
+                    <i class="fas fa-chart-line me-2"></i>
+                    Content Pipeline
+                </h4>
+                <nav class="nav flex-column">
+                    <a class="nav-link active" href="#trending" data-bs-toggle="tab">
+                        <i class="fas fa-trending-up me-2"></i>
+                        Trending Analytics
+                    </a>
+                    <a class="nav-link" href="#filtering" data-bs-toggle="tab">
+                        <i class="fas fa-filter me-2"></i>
+                        Advanced Filtering
+                    </a>
+                    <a class="nav-link" href="#generation" data-bs-toggle="tab">
+                        <i class="fas fa-magic me-2"></i>
+                        Content Generation
+                    </a>
+                    <a class="nav-link" href="#owned-accounts" data-bs-toggle="tab">
+                        <i class="fas fa-user-circle me-2"></i>
+                        Owned Accounts
+                    </a>
+                    <a class="nav-link" href="#scraped-accounts" data-bs-toggle="tab">
+                        <i class="fas fa-users me-2"></i>
+                        Scraped Accounts
+                    </a>
+                    <a class="nav-link" href="#pipeline" data-bs-toggle="tab">
+                        <i class="fas fa-cogs me-2"></i>
+                        Pipeline Monitoring
+                    </a>
+                    <a class="nav-link" href="#saved" data-bs-toggle="tab">
+                        <i class="fas fa-bookmark me-2"></i>
+                        Saved Generations
+                    </a>
+                </nav>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10 main-content p-4">
+                <div class="tab-content">
+                    <!-- Trending Analytics Tab -->
+                    <div class="tab-pane fade show active" id="trending">
+                        <h2 class="mb-4">
+                            <i class="fas fa-trending-up me-2"></i>
+                            Trending Analytics
+                        </h2>
+                        
+                        <!-- Metrics Overview -->
+                        <div class="row mb-4">
+                            <div class="col-md-3">
+                                <div class="card metric-card">
+                                    <div class="card-body text-center">
+                                        <h3 id="totalPosts">0</h3>
+                                        <p class="mb-0">Total Posts</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card metric-card">
+                                    <div class="card-body text-center">
+                                        <h3 id="totalImages">0</h3>
+                                        <p class="mb-0">Total Images</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card metric-card">
+                                    <div class="card-body text-center">
+                                        <h3 id="avgEngagement">0%</h3>
+                                        <p class="mb-0">Avg Engagement</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card metric-card">
+                                    <div class="card-body text-center">
+                                        <h3 id="activeAccounts">0</h3>
+                                        <p class="mb-0">Active Accounts</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Trending Styles -->
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5><i class="fas fa-palette me-2"></i>Trending Aesthetics</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="aestheticTrends"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5><i class="fas fa-calendar me-2"></i>Trending Seasons</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="seasonTrends"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5><i class="fas fa-paint-brush me-2"></i>Trending Colors</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="colorTrends"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Performance Analysis -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5><i class="fas fa-trophy me-2"></i>Top Performing Aesthetics</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="topPerformingAesthetics"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5><i class="fas fa-star me-2"></i>Top Performing Colors</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="topPerformingColors"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Engagement Trends -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-chart-line me-2"></i>Engagement Trends</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="engagementChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Advanced Filtering Tab -->
+                    <div class="tab-pane fade" id="filtering">
+                        <h2 class="mb-4">
+                            <i class="fas fa-filter me-2"></i>
+                            Advanced Filtering
+                        </h2>
+                        
+                        <div class="filter-builder">
+                            <div class="row">
+                                <div class="col-md-12 mb-3">
+                                    <button class="btn btn-custom" onclick="addFilterGroup()">
+                                        <i class="fas fa-plus me-2"></i>Add Filter Group
+                                    </button>
+                                    <button class="btn btn-outline-primary ms-2" onclick="clearFilters()">
+                                        <i class="fas fa-trash me-2"></i>Clear All
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div id="filterGroups">
+                                <!-- Filter groups will be added here -->
+                            </div>
+                            
+                            <div class="row mt-3">
+                                <div class="col-md-12">
+                                    <button class="btn btn-custom btn-lg" onclick="applyFilters()">
+                                        <i class="fas fa-search me-2"></i>Apply Filters
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Results -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-images me-2"></i>Filtered Results</h5>
+                                <span class="badge bg-primary" id="resultCount">0 results</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="image-grid" id="filteredResults">
+                                    <!-- Filtered images will appear here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Content Generation Tab -->
+                    <div class="tab-pane fade" id="generation">
+                        <h2 class="mb-4">
+                            <i class="fas fa-magic me-2"></i>
+                            Content Generation
+                        </h2>
+                        
+                        <!-- Theme-Based Generation Card -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5><i class="fas fa-sparkles me-2"></i>AI Theme-Based Generation</h5>
+                                <small class="text-muted">Generate content using hook slides and color-matched visuals</small>
+                            </div>
+                            <div class="card-body">
+                                <!-- Account Selection -->
+                                <div class="row mb-4">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Target Account</label>
+                                        <select class="form-select" id="targetAccount">
+                                            <option value="">Select account...</option>
+                                            <!-- Will be populated dynamically -->
+                                        </select>
+                                        <small class="text-muted">Choose which account to optimize content for</small>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Generation Mode</label>
+                                        <div class="btn-group w-100" role="group">
+                                            <input type="radio" class="btn-check" name="generationMode" id="autoTheme" value="auto" checked>
+                                            <label class="btn btn-outline-primary" for="autoTheme">🤖 Auto Theme</label>
+                                            
+                                            <input type="radio" class="btn-check" name="generationMode" id="specificTheme" value="specific">
+                                            <label class="btn btn-outline-primary" for="specificTheme">🎯 Specific Theme</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Theme Selection (only visible when specific theme selected) -->
+                                <div class="row mb-4" id="themeSelectionRow" style="display: none;">
+                                    <div class="col-md-12">
+                                        <label class="form-label">Choose Theme</label>
+                                        <select class="form-select" id="specificThemeSelect">
+                                            <option value="">Loading themes...</option>
+                                        </select>
+                                        <small class="text-muted">Select from available hook slide themes</small>
+                                    </div>
+                                </div>
+
+                                <!-- Generation Settings -->
+                                <div class="row mb-4">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Number of Images</label>
+                                        <select class="form-select" id="themeImageCount">
+                                            <option value="5">5 Images</option>
+                                            <option value="10" selected>10 Images</option>
+                                            <option value="15">15 Images</option>
+                                            <option value="20">20 Images</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Color Coordination</label>
+                                        <select class="form-select" id="colorCoordination">
+                                            <option value="auto" selected>Auto-Match Colors</option>
+                                            <option value="white">White Backgrounds</option>
+                                            <option value="light gray">Light Gray</option>
+                                            <option value="beige">Beige/Neutral</option>
+                                            <option value="mixed">Mixed Colors</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Aesthetic Override</label>
+                                        <select class="form-select" id="aestheticOverride">
+                                            <option value="">Use Account Profile</option>
+                                            <option value="streetwear">Streetwear</option>
+                                            <option value="glam">Glam</option>
+                                            <option value="casual">Casual</option>
+                                            <option value="preppy">Preppy</option>
+                                            <option value="vintage">Vintage</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Content Strategy</label>
+                                        <select class="form-select" id="contentStrategy">
+                                            <option value="balanced" selected>Balanced Mix</option>
+                                            <option value="trending">Trending Focus</option>
+                                            <option value="niche">Niche Appeal</option>
+                                            <option value="viral">Viral Potential</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Theme Stats Preview -->
+                                <div class="row mb-4" id="themeStatsPreview" style="display: none;">
+                                    <div class="col-md-12">
+                                        <div class="alert alert-info">
+                                            <div class="row">
+                                                <div class="col-md-3">
+                                                    <strong>Hook Slides Found:</strong> <span id="hookSlidesCount">-</span>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <strong>Available Themes:</strong> <span id="availableThemes">-</span>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <strong>Color-Matched Images:</strong> <span id="colorMatchedCount">-</span>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <strong>Account Compatibility:</strong> <span id="accountCompatibility">-</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Generate Button -->
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <button class="btn btn-success btn-lg" onclick="generateThemeContent()" id="generateThemeBtn" disabled>
+                                            <i class="fas fa-sparkles me-2"></i>Generate Theme-Based Content
+                                        </button>
+                                        <small class="text-muted ms-3">Select a target account first</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Traditional Generation Card -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5><i class="fas fa-magic me-2"></i>Traditional Style Generation</h5>
+                                <small class="text-muted">Generate content by style categories (no theme intelligence)</small>
+                            </div>
+                            <div class="card-body">
+                                <!-- Simple Style Selection -->
+                                <div class="row mb-4">
+                                    <div class="col-md-12">
+                                        <label class="form-label">Style Category</label>
+                                        <div class="d-flex flex-wrap gap-2">
+                                            <button type="button" class="btn btn-outline-primary style-btn" data-style="streetwear">
+                                                🏙️ Streetwear
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary style-btn" data-style="casual">
+                                                👕 Casual
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary style-btn" data-style="elegant">
+                                                ✨ Elegant
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary style-btn" data-style="vintage">
+                                                🕰️ Vintage
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary style-btn" data-style="y2k">
+                                                🌈 Y2K
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary style-btn" data-style="all">
+                                                🎲 All Styles (Random Mix)
+                                            </button>
+                                        </div>
+                                        <small class="text-muted mt-2 d-block">Selected: <span id="selectedStyle">None</span></small>
+                                    </div>
+                                </div>
+
+                                <!-- Basic Settings -->
+                                <div class="row mb-4">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Number of Images</label>
+                                        <select class="form-select" id="imageCount">
+                                            <option value="5">5 Images</option>
+                                            <option value="10" selected>10 Images</option>
+                                            <option value="15">15 Images</option>
+                                            <option value="20">20 Images</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Performance Priority</label>
+                                        <select class="form-select" id="performanceMetric">
+                                            <option value="engagement_rate" selected>Best Engagement</option>
+                                            <option value="like_count">Most Likes</option>
+                                            <option value="view_count">Most Views</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Variety Level</label>
+                                        <select class="form-select" id="diversityLevel">
+                                            <option value="low">Similar Styles</option>
+                                            <option value="medium" selected>Balanced Mix</option>
+                                            <option value="high">Maximum Variety</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Max per Post</label>
+                                        <select class="form-select" id="maxPerPost">
+                                            <option value="1">1 Image per Post</option>
+                                            <option value="2" selected>2 Images per Post</option>
+                                            <option value="3">3 Images per Post</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Generate Button -->
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <button class="btn btn-outline-primary btn-lg" onclick="generateSimpleContent()" id="generateBtn">
+                                            <i class="fas fa-magic me-2"></i>Generate Traditional Content
+                                        </button>
+                                        <small class="text-muted ms-3">Uses style categories without theme intelligence</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Generated Content Preview -->
+                        <div class="generation-preview" id="generationPreview" style="display: none;">
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h5><i class="fas fa-eye me-2"></i>Generated Content Preview</h5>
+                                        <div>
+                                            <button class="btn btn-outline-primary me-2" onclick="saveGeneration()">
+                                                <i class="fas fa-bookmark me-2"></i>Save Generation
+                                            </button>
+                                            <button class="btn btn-custom" onclick="exportGeneration()">
+                                                <i class="fas fa-download me-2"></i>Export Images
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="image-grid" id="generatedContent">
+                                        <!-- Generated images will appear here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Owned Accounts Tab -->
+                    <div class="tab-pane fade" id="owned-accounts">
+                        <h2 class="mb-4">
+                            <i class="fas fa-user-circle me-2"></i>
+                            Owned Accounts
+                        </h2>
+                        <p class="text-muted mb-4">Manage your social media accounts and create detailed profiles for targeted content generation.</p>
+                        
+                        <!-- TikTok Connection Status -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5><i class="fab fa-tiktok me-2"></i>TikTok API Status</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <div id="tiktokApiStatus">
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-check"></i> API Credentials Configured
+                                            </span>
+                                            <span class="badge bg-info ms-2">
+                                                <i class="fas fa-flask"></i> Sandbox Mode
+                                            </span>
+                                        </div>
+                                        <p class="text-muted mt-2 mb-0">
+                                            Connect your TikTok accounts to enable automated posting. 
+                                            Each account needs to authorize the app individually.
+                                        </p>
+                                    </div>
+                                    <div class="col-md-4 text-end">
+                                        <button class="btn btn-outline-info" onclick="window.open('https://developers.tiktok.com/doc/content-creation/', '_blank')">
+                                            <i class="fas fa-book"></i> API Docs
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Create New Profile -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5><i class="fas fa-plus me-2"></i>Create Account Profile</h5>
+                            </div>
+                            <div class="card-body">
+                                <form id="profileForm">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <label class="form-label">Username</label>
+                                            <input type="text" class="form-control" id="profileUsername" placeholder="e.g., fashionista_jane" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Display Name</label>
+                                            <input type="text" class="form-control" id="profileDisplayName" placeholder="e.g., Jane's Fashion">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mt-3">
+                                        <div class="col-md-12">
+                                            <h6>Target Audience</h6>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">Age Range</label>
+                                            <input type="text" class="form-control" id="targetAge" placeholder="e.g., 18-25">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">Location</label>
+                                            <input type="text" class="form-control" id="targetLocation" placeholder="e.g., US, Urban">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">Interests (comma-separated)</label>
+                                            <input type="text" class="form-control" id="targetInterests" placeholder="e.g., fashion, streetwear, trends">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mt-3">
+                                        <div class="col-md-12">
+                                            <h6>Content Strategy</h6>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Aesthetic Focus (comma-separated)</label>
+                                            <input type="text" class="form-control" id="aestheticFocus" placeholder="e.g., streetwear, minimalist, y2k">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Color Palette (comma-separated)</label>
+                                            <input type="text" class="form-control" id="colorPalette" placeholder="e.g., black, white, beige">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mt-3">
+                                        <div class="col-md-12">
+                                            <h6>Performance Goals</h6>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">Primary Metric</label>
+                                            <select class="form-select" id="primaryMetric">
+                                                <option value="engagement">Engagement Rate</option>
+                                                <option value="likes">Likes</option>
+                                                <option value="shares">Shares</option>
+                                                <option value="comments">Comments</option>
+                                                <option value="saves">Saves</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">Target Rate (%)</label>
+                                            <input type="number" class="form-control" id="targetRate" placeholder="e.g., 5.5" step="0.1">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">Secondary Metric</label>
+                                            <select class="form-select" id="secondaryMetric">
+                                                <option value="reach">Reach</option>
+                                                <option value="impressions">Impressions</option>
+                                                <option value="saves">Saves</option>
+                                                <option value="shares">Shares</option>
+                                                <option value="comments">Comments</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mt-3">
+                                        <div class="col-md-12">
+                                            <h6>Posting Schedule</h6>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Best Times (comma-separated)</label>
+                                            <input type="text" class="form-control" id="bestTimes" placeholder="e.g., 9:00 AM, 6:00 PM, 9:00 PM">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Posting Frequency</label>
+                                            <select class="form-select" id="postingFrequency">
+                                                <option value="daily">Daily</option>
+                                                <option value="twice-daily">Twice Daily</option>
+                                                <option value="every-other-day">Every Other Day</option>
+                                                <option value="3-times-week">3 Times Per Week</option>
+                                                <option value="weekly">Weekly</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mt-4">
+                                        <div class="col-md-12">
+                                            <button type="submit" class="btn btn-custom">
+                                                <i class="fas fa-save me-2"></i>Save Profile
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Account Profiles List -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5><i class="fas fa-list me-2"></i>Account Profiles</h5>
+                                <span class="badge bg-primary" id="profileCount">0 profiles</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Username</th>
+                                                <th>Display Name</th>
+                                                <th>Target Audience</th>
+                                                <th>Aesthetic Focus</th>
+                                                <th>Primary Goal</th>
+                                                <th>TikTok Status</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="profilesTable">
+                                            <!-- Profiles will be loaded here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Account-Specific Content Generation -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-magic me-2"></i>Account-Optimized Content Generation</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Select Account</label>
+                                        <select class="form-select" id="targetAccount">
+                                            <option value="">Select an account...</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Generation Type</label>
+                                        <select class="form-select" id="generationType">
+                                            <option value="optimized">AI Optimized</option>
+                                            <option value="custom">Custom</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Image Count</label>
+                                        <select class="form-select" id="imageCount">
+                                            <option value="5">5 Images</option>
+                                            <option value="10">10 Images</option>
+                                            <option value="15">15 Images</option>
+                                            <option value="20">20 Images</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <!-- Account Profile Preview -->
+                                <div class="row mt-3" id="accountProfile" style="display: none;">
+                                    <div class="col-md-12">
+                                        <div class="card bg-light">
+                                            <div class="card-body">
+                                                <h6>Account Profile Overview</h6>
+                                                <div class="row">
+                                                    <div class="col-md-3">
+                                                        <strong>Target Audience:</strong>
+                                                        <div id="targetAudience"></div>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <strong>Content Focus:</strong>
+                                                        <div id="contentFocus"></div>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <strong>Performance Goal:</strong>
+                                                        <div id="performanceGoal"></div>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <strong>Best Times:</strong>
+                                                        <div id="bestTimes"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+            
+                                <div class="row mt-3">
+                                    <div class="col-md-12">
+                                        <button class="btn btn-custom" id="generateForAccountBtn" onclick="generateForAccount()" disabled>
+                                            <i class="fas fa-magic me-2"></i>Generate for Account
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Complete Workflow: Generate → Save → Upload -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <h5><i class="fas fa-rocket me-2"></i>Complete Workflow: Generate → Save → Upload</h5>
+                                <small class="text-muted">Generate content, save it, and push to TikTok drafts in one workflow</small>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Account</label>
+                                        <select class="form-select" id="workflowAccount">
+                                            <option value="">Select an account...</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Posts to Generate</label>
+                                        <select class="form-select" id="workflowPostCount">
+                                            <option value="1">1 Post</option>
+                                            <option value="3" selected>3 Posts</option>
+                                            <option value="5">5 Posts</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Images per Post</label>
+                                        <select class="form-select" id="workflowImageCount">
+                                            <option value="3">3 Images</option>
+                                            <option value="5" selected>5 Images</option>
+                                            <option value="10">10 Images</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="row mt-3">
+                                    <div class="col-md-12">
+                                        <button class="btn btn-success btn-lg" id="completeWorkflowBtn" onclick="runCompleteWorkflow()" disabled>
+                                            <i class="fas fa-rocket me-2"></i>Generate → Save → Upload to TikTok
+                                        </button>
+                                        <small class="form-text text-muted d-block mt-2">
+                                            This will: 1) Generate AI-optimized content for your account, 2) Save the generation to your library, 3) Upload carousel posts to your TikTok drafts
+                                        </small>
+                                    </div>
+                                </div>
+                                
+                                <!-- Workflow Progress -->
+                                <div id="workflowProgress" style="display: none;" class="mt-4">
+                                    <h6>Workflow Progress:</h6>
+                                    <div class="progress mb-3">
+                                        <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                                    </div>
+                                    <div id="workflowStatus" class="text-muted"></div>
+                                </div>
+                                
+                                <!-- Workflow Results -->
+                                <div id="workflowResults" style="display: none;" class="mt-4">
+                                    <h6>Results:</h6>
+                                    <div id="workflowResultsContent"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Scraped Accounts Tab -->
+                    <div class="tab-pane fade" id="scraped-accounts">
+                        <h2 class="mb-4">
+                            <i class="fas fa-users me-2"></i>
+                            Scraped Accounts
+                        </h2>
+                        <p class="text-muted mb-4">Monitor and manage accounts that you scrape for content inspiration and trend analysis.</p>
+                        
+                        <!-- Add Scraped Accounts -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h5><i class="fas fa-plus me-2"></i>Add Scraped Accounts</h5>
+                                    <div class="btn-group" role="group">
+                                        <input type="radio" class="btn-check" name="addMode" id="singleMode" checked>
+                                        <label class="btn btn-outline-primary btn-sm" for="singleMode">Single</label>
+                                        
+                                        <input type="radio" class="btn-check" name="addMode" id="bulkMode">
+                                        <label class="btn btn-outline-primary btn-sm" for="bulkMode">Bulk</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <!-- Single Account Mode -->
+                                <div id="singleAccountForm">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <label class="form-label">Username</label>
+                                            <input type="text" class="form-control" id="newScrapedUsername" placeholder="Enter username">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Platform URL (optional)</label>
+                                            <input type="url" class="form-control" id="newScrapedAccountUrl" placeholder="Full URL to account">
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <button type="button" class="btn btn-custom" onclick="addScrapedAccount()">
+                                            <i class="fas fa-plus me-2"></i>Add Scraped Account
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Bulk Account Mode -->
+                                <div id="bulkAccountForm" style="display: none;">
+                                    <div class="row">
+                                        <div class="col-md-12">
+                                            <label class="form-label">Usernames</label>
+                                            <textarea class="form-control" id="bulkScrapedUsernames" rows="8" placeholder="Enter usernames, one per line:&#10;&#10;username1&#10;username2&#10;username3&#10;...&#10;&#10;Or paste full URLs and we'll extract the usernames:&#10;https://instagram.com/username1&#10;https://tiktok.com/@username2"></textarea>
+                                            <small class="form-text text-muted">
+                                                You can enter usernames (one per line) or paste full URLs from Instagram, TikTok, etc. We'll automatically extract the usernames.
+                                            </small>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <button type="button" class="btn btn-custom" onclick="addBulkScrapedAccounts()">
+                                            <i class="fas fa-upload me-2"></i>Add All Accounts
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary ms-2" onclick="clearBulkForm()">
+                                            <i class="fas fa-trash me-2"></i>Clear
+                                        </button>
+                                    </div>
+                                    <div id="bulkProgress" style="display: none;" class="mt-3">
+                                        <div class="progress">
+                                            <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                                        </div>
+                                        <small id="progressText" class="text-muted"></small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Current Scraped Accounts -->
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5><i class="fas fa-list me-2"></i>Current Scraped Accounts</h5>
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="refreshScrapedAccounts()">
+                                    <i class="fas fa-refresh me-2"></i>Refresh
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div id="scrapedAccountsList">
+                                    <div class="text-center text-muted py-4">
+                                        <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
+                                        <p>Loading scraped accounts...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pipeline Monitoring Tab -->
+                    <div class="tab-pane fade" id="pipeline">
+                        <h2 class="mb-4">
+                            <i class="fas fa-cogs me-2"></i>
+                            Pipeline Monitoring
+                        </h2>
+                        
+                        <!-- Enhanced Pipeline Controls -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5><i class="fas fa-sparkles me-2"></i>Enhanced Pipeline Features</h5>
+                                <small class="text-muted">Run hook slide detection and background color analysis</small>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card border-primary">
+                                            <div class="card-body text-center">
+                                                <h6><i class="fas fa-search me-2"></i>Hook Slide Detection</h6>
+                                                <p class="small text-muted">Find images with text overlays for theme generation</p>
+                                                <button class="btn btn-primary" onclick="runHookSlideDetection()">
+                                                    <i class="fas fa-sparkles me-2"></i>Detect Hook Slides
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card border-info">
+                                            <div class="card-body text-center">
+                                                <h6><i class="fas fa-palette me-2"></i>Background Color Analysis</h6>
+                                                <p class="small text-muted">Analyze background colors for uniform generation</p>
+                                                <button class="btn btn-info" onclick="runBackgroundColorAnalysis()">
+                                                    <i class="fas fa-palette me-2"></i>Analyze Colors
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row mt-3">
+                                    <div class="col-md-12">
+                                        <div class="card border-success">
+                                            <div class="card-body text-center">
+                                                <h6><i class="fas fa-magic me-2"></i>Full Enhanced Pipeline</h6>
+                                                <p class="small text-muted">Run complete pipeline with hook slides + color analysis + regular processing</p>
+                                                <button class="btn btn-success btn-lg" onclick="runFullEnhancedPipeline()">
+                                                    <i class="fas fa-magic me-2"></i>Run Full Enhanced Pipeline
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Traditional Pipeline Controls -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5><i class="fas fa-play me-2"></i>Traditional Pipeline Controls</h5>
+                                <small class="text-muted">Standard content scraping and analysis</small>
+                            </div>
+                            <div class="card-body">
+                                <!-- Processing Method Selection -->
+                                <div class="row mb-3">
+                                    <div class="col-md-12">
+                                        <label class="form-label">Select Processing Method</label>
+                                        <div class="row">
+                                            <div class="col-md-3">
+                                                <div class="card processing-method-card h-100" data-method="fast">
+                                                    <div class="card-body text-center">
+                                                        <div class="processing-icon">⚡</div>
+                                                        <h6>Fast</h6>
+                                                        <p class="small text-muted mb-2">~25 minutes</p>
+                                                        <p class="small"><strong>$0.20</strong></p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="card processing-method-card h-100" data-method="batch">
+                                                    <div class="card-body text-center">
+                                                        <div class="processing-icon">💰</div>
+                                                        <h6>Batch</h6>
+                                                        <p class="small text-muted mb-2">2-6 hours</p>
+                                                        <p class="small"><strong>$0.10</strong></p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="card processing-method-card h-100" data-method="sequential">
+                                                    <div class="card-body text-center">
+                                                        <div class="processing-icon">🐌</div>
+                                                        <h6>Sequential</h6>
+                                                        <p class="small text-muted mb-2">~3 hours</p>
+                                                        <p class="small"><strong>$0.20</strong></p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="card processing-method-card h-100" data-method="auto">
+                                                    <div class="card-body text-center">
+                                                        <div class="processing-icon">🤖</div>
+                                                        <h6>Smart</h6>
+                                                        <p class="small text-muted mb-2">Auto-choose</p>
+                                                        <p class="small"><strong>Optimized</strong></p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Pipeline Action Buttons -->
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <button class="btn btn-success btn-lg w-100" onclick="runPipeline()" id="runPipelineBtn" disabled>
+                                            <i class="fas fa-play me-2"></i>Run Full Pipeline
+                                        </button>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <button class="btn btn-info btn-lg w-100" onclick="runAnalysisOnly()" id="runAnalysisBtn" disabled>
+                                            <i class="fas fa-brain me-2"></i>Run Analysis Only
+                                        </button>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <button class="btn btn-warning btn-lg w-100" onclick="refreshAccounts()">
+                                            <i class="fas fa-sync me-2"></i>Refresh Account Data
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-md-12">
+                                        <small class="text-muted">Select a processing method first</small>
+                                        <div id="pipelineRecommendation" class="alert alert-info mt-2" style="display: none;">
+                                            <i class="fas fa-lightbulb me-2"></i>
+                                            <span id="pipelineRecommendationText"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recent Pipeline Runs -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5><i class="fas fa-history me-2"></i>Recent Pipeline Runs</h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="pipelineRuns">
+                                    <!-- Pipeline runs will be loaded here -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Live Logs -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-terminal me-2"></i>Live Pipeline Logs</h5>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="clearLogs()">
+                                    <i class="fas fa-trash me-1"></i>Clear
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div id="pipelineLogs" class="bg-dark text-light p-3 rounded" style="height: 300px; overflow-y: auto; font-family: monospace;">
+                                    <!-- Live logs will appear here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Saved Generations Tab -->
+                    <div class="tab-pane fade" id="saved">
+                        <h2 class="mb-4">
+                            <i class="fas fa-bookmark me-2"></i>
+                            Saved Generations
+                        </h2>
+                        
+                        <div class="card">
+                            <div class="card-body">
+                                <div id="savedGenerations">
+                                    <!-- Saved generations will appear here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="dashboard.js"></script>
+</body>
+</html> 

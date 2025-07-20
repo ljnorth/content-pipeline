@@ -1,0 +1,76 @@
+import { Logger } from '../utils/logger.js';
+import OpenAI from 'openai';
+import fs from 'fs-extra';
+
+export class AIAnalyzer {
+  constructor() {
+    this.logger = new Logger();
+    this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+
+  async process(images) {
+    // Group images by post
+    const postsMap = new Map();
+    
+    for (const item of images) {
+      // Validate required fields
+      if (!item.postId || !item.imagePath) {
+        this.logger.error(`❌ Skipping invalid image item: missing postId or imagePath`);
+        continue;
+      }
+      
+      this.logger.info(`🔍 Analyzing image from post ${item.postId}`);
+
+      // Read image file as buffer and convert to base64
+      const imageBuffer = await fs.readFile(item.imagePath);
+      const base64Image = imageBuffer.toString('base64');
+
+      let analysis;
+      try {
+        const response = await this.openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: `You are a fashion expert. Analyze the fashion aesthetics of the given image. Return ONLY valid JSON (no markdown) with keys: aesthetic, colors (array), season, occasion, additional (array).` },
+                { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Image}` } }
+              ]
+            }
+          ],
+          max_tokens: 200,
+          temperature: 0
+        });
+
+        const text = response.choices[0].message.content.trim();
+        analysis = JSON.parse(text);
+      } catch (err) {
+        this.logger.error(`OpenAI analysis failed for ${item.postId}: ${err.message}`);
+        continue;
+      }
+
+      // Group by post
+      if (!postsMap.has(item.postId)) {
+        const metadata = item.metadata || {};
+        // Ensure required fields are present
+        if (!metadata.post_id || !metadata.username) {
+          this.logger.error(`❌ Skipping post ${item.postId}: missing required metadata (post_id or username)`);
+          continue;
+        }
+        
+        postsMap.set(item.postId, {
+          ...metadata,
+          image_paths: [],
+          image_analyses: []
+        });
+      }
+      
+      const post = postsMap.get(item.postId);
+      post.image_paths.push(item.imagePath);
+      post.image_analyses.push(analysis);
+    }
+
+    // Convert map back to array
+    return Array.from(postsMap.values());
+  }
+} 

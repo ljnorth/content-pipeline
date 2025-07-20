@@ -1,0 +1,41 @@
+# Error Handling and Debugging Guide
+
+## Understanding Errors (Like Solving Puzzles):
+When code doesn't work, it's like a puzzle with missing pieces. Here's how to solve it:
+
+### Types of Errors:
+1. **Syntax Errors** - Like spelling mistakes in writing
+   - Missing punctuation (like forgetting a period)
+   - Wrong brackets or parentheses
+   - Typos in code words
+
+2. **Logic Errors** - Like following a recipe wrong
+   - Code runs but does the wrong thing
+   - Like adding salt instead of sugar
+
+3. **Runtime Errors** - Like trying to use a tool that's broken
+   - Code tries to do something impossible
+   - Like trying to open a file that doesn't exist
+
+## How to Fix Errors:
+1. **Read the error message** - It's like a clue in a mystery
+2. **Look at the line number** - That's where the problem is
+3. **Check the basics first** - Spelling, punctuation, brackets
+4. **Test small pieces** - Fix one thing at a time
+5. **Ask for help** - Don't get stuck for too long
+
+## Debugging Tips:
+- Use `console.log()` to see what's happening (like leaving breadcrumbs)
+- Comment out parts to isolate the problem
+- Work backwards from where the error happens
+- Take breaks when frustrated
+
+## When Helping with Errors:
+- Explain what the error means in simple terms
+- Show exactly where the problem is
+- Explain why it happened
+- Give step-by-step fix instructions
+description:
+globs:
+alwaysApply: false
+---

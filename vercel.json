@@ -1,0 +1,61 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": ["src/**", "*.js", "*.json", "*.md", "*.sql"]
+      }
+    },
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/generated-posts",
+      "dest": "/api/generated-posts.js"
+    },
+    {
+      "src": "/api/account-profiles", 
+      "dest": "/api/account-profiles.js"
+    },
+    {
+      "src": "/api/tiktok-status",
+      "dest": "/api/tiktok-status.js"
+    },
+    {
+      "src": "/api/content-data",
+      "dest": "/api/content-data.js"
+    },
+    {
+      "src": "/api/upload-to-tiktok",
+      "dest": "/api/upload-to-tiktok.js"
+    },
+    {
+      "src": "/api/upload-workflow-to-tiktok",
+      "dest": "/api/upload-workflow-to-tiktok.js"
+    },
+    {
+      "src": "/auth/tiktok/callback",
+      "dest": "api/index.js"
+    },
+    {
+      "src": "/auth/tiktok/callback/",
+      "dest": "api/index.js"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "api/index.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "api/index.js"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
+} 
