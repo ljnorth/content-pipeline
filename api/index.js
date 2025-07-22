@@ -1902,49 +1902,24 @@ app.post('/api/generate-ai-content', async (req, res) => {
         const usedIds = postImages.map(img => img.id);
         filteredImages = filteredImages.filter(img => !usedIds.includes(img.id));
         
-        // Use AI to analyze and group images thematically (with timeout protection)
+        // Use AI to analyze and group images thematically
         let imageAnalysis = null;
         try {
-          imageAnalysis = await Promise.race([
-            analyzeImagesWithAI(postImages, openai),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('AI analysis timeout')), 60000)
-            )
-          ]);
+          imageAnalysis = await analyzeImagesWithAI(postImages, openai);
           console.log(`🤖 AI analysis complete for post ${postIndex + 1}: ${imageAnalysis.theme}`);
         } catch (aiError) {
           console.error(`❌ AI analysis failed for post ${postIndex + 1}:`, aiError.message);
-          console.log(`🔄 FALLBACK TRIGGERED: Using fallback analysis for post ${postIndex + 1}`);
-          // Fallback to simple analysis
-          imageAnalysis = {
-            theme: 'Fashion Inspiration',
-            primaryAesthetic: postImages[0]?.aesthetic || 'casual',
-            colorPalette: postImages.flatMap(img => img.colors || []).slice(0, 5),
-            mood: 'casual',
-            targetAudience: 'fashion enthusiasts',
-            contentType: 'outfit-inspiration'
-          };
-          console.log(`🔄 Using fallback analysis for post ${postIndex + 1}`);
+          throw aiError; // Let it fail instead of using fallback
         }
         
-        // Generate themed caption and hashtags (with timeout protection)
+        // Generate themed caption and hashtags
         let content = null;
         try {
-          content = await Promise.race([
-            generateThemedContent(postImages, imageAnalysis, profile, postIndex + 1, openai),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('AI content generation timeout')), 60000)
-            )
-          ]);
+          content = await generateThemedContent(postImages, imageAnalysis, profile, postIndex + 1, openai);
           console.log(`✍️ AI content generated: "${content.caption.substring(0, 50)}..."`);
         } catch (contentError) {
           console.error(`❌ AI content generation failed for post ${postIndex + 1}:`, contentError.message);
-          console.log(`🔄 FALLBACK TRIGGERED: Using fallback content for post ${postIndex + 1}`);
-          // Fallback to template content with new format
-          content = {
-            caption: `Love this aesthetic! ✨ Perfect for ${imageAnalysis.theme.toLowerCase()}. #fashion #style #aesthetic #outfit #ootd #trending #viral #fyp #pinterest #aestheticmoodboard #fashionmoodboard`
-          };
-          console.log(`🔄 Using fallback content for post ${postIndex + 1}`);
+          throw contentError; // Let it fail instead of using fallback
         }
         
         // Create post object
