@@ -2469,8 +2469,8 @@ async function runCompleteWorkflow() {
 
 async function generateContentForWorkflow(account, postCount, imageCount) {
     try {
-        // Use the working simplified AI endpoint for intelligent content generation
-        const response = await fetch('/api/generate-ai-content-simple', {
+        // Use the main AI endpoint for intelligent content generation
+        const response = await fetch('/api/generate-ai-content', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -2487,27 +2487,7 @@ async function generateContentForWorkflow(account, postCount, imageCount) {
         if (response.ok && data.success) {
             return { success: true, generation: data.generation, posts: data.generation.posts };
         } else {
-            // Fallback to simplified endpoint if AI fails
-            console.log('AI endpoint failed, trying simplified endpoint...');
-            const fallbackResponse = await fetch('/api/generate-simple-content', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    accountUsername: account,
-                    postCount: postCount,
-                    imageCount: imageCount
-                })
-            });
-            
-            const fallbackData = await fallbackResponse.json();
-            
-            if (fallbackResponse.ok && fallbackData.success) {
-                return { success: true, generation: fallbackData.generation, posts: fallbackData.generation.posts };
-            } else {
-                return { success: false, error: fallbackData.error || data.error };
-            }
+            return { success: false, error: data.error || 'AI content generation failed' };
         }
     } catch (error) {
         return { success: false, error: error.message };
@@ -2858,8 +2838,8 @@ async function generateContentSimple() {
             progressBar.textContent = Math.round(progress) + '%';
         }, 200);
 
-        // Call generation API - use the working simplified AI endpoint
-        const response = await fetch('/api/generate-ai-content-simple', {
+        // Call generation API - use the main AI endpoint
+        const response = await fetch('/api/generate-ai-content', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
