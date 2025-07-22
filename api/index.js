@@ -1878,13 +1878,18 @@ app.post('/api/generate-ai-content', async (req, res) => {
       console.log(`🎨 Generating post ${postIndex + 1}/${postCount} with AI...`);
       
       try {
-        // Select random images for this post
-        const shuffled = [...filteredImages].sort(() => 0.5 - Math.random());
+        // Select random images for this post with timestamp-based randomization
+        const timestamp = Date.now() + postIndex;
+        const shuffled = [...filteredImages].sort(() => {
+          // Use timestamp to ensure different results each time
+          const seed = Math.sin(timestamp + Math.random()) * 10000;
+          return seed % 1 - 0.5;
+        });
         const postImages = shuffled.slice(0, imageCount);
         
-        // Remove these images from available pool
+        // Remove these specific images from available pool
         const usedIds = postImages.map(img => img.id);
-        filteredImages.splice(0, imageCount);
+        filteredImages = filteredImages.filter(img => !usedIds.includes(img.id));
         
         // Use AI to analyze and group images thematically (with timeout protection)
         let imageAnalysis = null;
