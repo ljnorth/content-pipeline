@@ -2030,7 +2030,8 @@ app.post('/api/generate-ai-content-simple', async (req, res) => {
     console.log(`✅ [SIMPLE] OpenAI initialized`);
     
     // Step 3: Select images for one post
-    const postImages = availableImages.slice(0, imageCount);
+    const shuffled = [...availableImages].sort(() => 0.5 - Math.random());
+    const postImages = shuffled.slice(0, imageCount);
     console.log(`📸 [SIMPLE] Selected ${postImages.length} images for post`);
     
     // Step 4: AI Analysis
