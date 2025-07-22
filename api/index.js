@@ -1908,12 +1908,13 @@ app.post('/api/generate-ai-content', async (req, res) => {
           imageAnalysis = await Promise.race([
             analyzeImagesWithAI(postImages, openai),
             new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('AI analysis timeout')), 25000)
+              setTimeout(() => reject(new Error('AI analysis timeout')), 60000)
             )
           ]);
           console.log(`🤖 AI analysis complete for post ${postIndex + 1}: ${imageAnalysis.theme}`);
         } catch (aiError) {
           console.error(`❌ AI analysis failed for post ${postIndex + 1}:`, aiError.message);
+          console.log(`🔄 FALLBACK TRIGGERED: Using fallback analysis for post ${postIndex + 1}`);
           // Fallback to simple analysis
           imageAnalysis = {
             theme: 'Fashion Inspiration',
@@ -1932,16 +1933,16 @@ app.post('/api/generate-ai-content', async (req, res) => {
           content = await Promise.race([
             generateThemedContent(postImages, imageAnalysis, profile, postIndex + 1, openai),
             new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('AI content generation timeout')), 25000)
+              setTimeout(() => reject(new Error('AI content generation timeout')), 60000)
             )
           ]);
           console.log(`✍️ AI content generated: "${content.caption.substring(0, 50)}..."`);
         } catch (contentError) {
           console.error(`❌ AI content generation failed for post ${postIndex + 1}:`, contentError.message);
-          // Fallback to template content
+          console.log(`🔄 FALLBACK TRIGGERED: Using fallback content for post ${postIndex + 1}`);
+          // Fallback to template content with new format
           content = {
-            caption: `Love this aesthetic! ✨ Perfect for ${imageAnalysis.theme.toLowerCase()}.`,
-            hashtags: ['#fashion', '#style', '#aesthetic', '#outfit', '#ootd', '#trending', '#viral', '#fyp']
+            caption: `Love this aesthetic! ✨ Perfect for ${imageAnalysis.theme.toLowerCase()}. #fashion #style #aesthetic #outfit #ootd #trending #viral #fyp #pinterest #aestheticmoodboard #fashionmoodboard`
           };
           console.log(`🔄 Using fallback content for post ${postIndex + 1}`);
         }
