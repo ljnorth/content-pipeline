@@ -1016,8 +1016,15 @@ app.post('/api/generate-simple-content', async (req, res) => {
       console.log(`🎨 Generating SEO post ${postIndex + 1}/${postCount}...`);
       
       // Select random images for this post
-      const shuffled = [...filteredImages].sort(() => 0.5 - Math.random());
+      const timestamp = Date.now() + postIndex;
+      console.log(`🎲 Post ${postIndex + 1} timestamp: ${timestamp}`);
+      const shuffled = [...filteredImages].sort(() => {
+        // Use timestamp to ensure different results each time
+        const seed = Math.sin(timestamp + Math.random()) * 10000;
+        return seed % 1 - 0.5;
+      });
       const postImages = shuffled.slice(0, imageCount);
+      console.log(`📸 Post ${postIndex + 1} selected images:`, postImages.map(img => img.id));
       
       // Remove these images from available pool
       filteredImages.splice(0, imageCount);
@@ -1791,6 +1798,8 @@ app.post('/api/generate-ai-content', async (req, res) => {
     const { accountUsername, postCount = 1, imageCount = 5 } = req.body;
     
     console.log(`🤖 Generating AI-powered content for @${accountUsername}: ${postCount} posts, ${imageCount} images each`);
+    console.log(`🕐 Request timestamp: ${new Date().toISOString()}`);
+    console.log(`🎲 Random seed: ${Date.now()}`);
     
     // Get account profile
     let profile = null;
@@ -1880,12 +1889,14 @@ app.post('/api/generate-ai-content', async (req, res) => {
       try {
         // Select random images for this post with timestamp-based randomization
         const timestamp = Date.now() + postIndex;
+        console.log(`🎲 Post ${postIndex + 1} timestamp: ${timestamp}`);
         const shuffled = [...filteredImages].sort(() => {
           // Use timestamp to ensure different results each time
           const seed = Math.sin(timestamp + Math.random()) * 10000;
           return seed % 1 - 0.5;
         });
         const postImages = shuffled.slice(0, imageCount);
+        console.log(`📸 Post ${postIndex + 1} selected images:`, postImages.map(img => img.id));
         
         // Remove these specific images from available pool
         const usedIds = postImages.map(img => img.id);

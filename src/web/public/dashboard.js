@@ -2838,8 +2838,8 @@ async function generateContentSimple() {
             progressBar.textContent = Math.round(progress) + '%';
         }, 200);
 
-        // Call generation API - use the main AI endpoint
-        const response = await fetch('/api/generate-ai-content', {
+        // Call generation API - use the main AI endpoint with cache busting
+        const response = await fetch(`/api/generate-ai-content?t=${Date.now()}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
