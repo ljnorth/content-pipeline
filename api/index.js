@@ -939,7 +939,7 @@ app.post('/api/generate-simple-content', async (req, res) => {
     
     console.log(`🎨 Generating SEO-focused content for @${accountUsername}: ${postCount} posts, ${imageCount} images each`);
     
-    // Get account profile for targeting
+    // Get account profile for targeting (optional - use defaults if not available)
     let profile = null;
     try {
       const { data: profileData } = await db.client
@@ -952,9 +952,21 @@ app.post('/api/generate-simple-content', async (req, res) => {
       console.log(`✅ Found account profile for targeting`);
     } catch (error) {
       console.log(`⚠️ No account profile found, using default targeting`);
+      // Create a default profile for targeting
+      profile = {
+        target_audience: {
+          age_range: '16-25',
+          style_preferences: ['streetwear'],
+          gender: 'female'
+        },
+        content_strategy: {
+          aestheticFocus: ['streetwear', 'casual'],
+          colorPalette: ['neutral', 'earth tones']
+        }
+      };
     }
 
-    // Get recently used images for deduplication
+    // Get recently used images for deduplication (optional - skip if table doesn't exist)
     let recentlyUsedImageIds = [];
     try {
       const { data: recentPosts } = await db.client
@@ -972,12 +984,13 @@ app.post('/api/generate-simple-content', async (req, res) => {
       }
     } catch (err) {
       console.log('Could not fetch recent posts, continuing without deduplication');
+      // This is normal if the generated_posts table doesn't exist yet
     }
     
-    // Get available images from database
+    // Get available images from database (use basic columns that exist)
     const { data: availableImages, error: imagesError } = await db.client
       .from('images')
-      .select('id, image_path, aesthetic, colors, season, occasion, username, post_id, additional')
+      .select('id, image_path, username, post_id')
       .not('image_path', 'is', null);
     
     if (imagesError) {
@@ -1057,7 +1070,7 @@ app.post('/api/generate-simple-content', async (req, res) => {
       console.log(`✅ Generated post ${postIndex + 1} with theme: ${theme.name}`);
     }
 
-    // Save to database (optional - for tracking)
+    // Save to database (optional - for tracking, skip if table doesn't exist)
     try {
       for (const post of posts) {
         await db.client
@@ -1076,7 +1089,8 @@ app.post('/api/generate-simple-content', async (req, res) => {
       }
       console.log(`💾 Saved ${posts.length} posts to database`);
     } catch (dbError) {
-      console.warn('⚠️ Could not save to database:', dbError.message);
+      console.log('ℹ️ Could not save to database (table may not exist):', dbError.message);
+      console.log('ℹ️ This is normal if the generated_posts table hasn\'t been created yet');
     }
 
     const generation = {
@@ -1201,14 +1215,9 @@ function generateSEOThemes(profile) {
     });
   }
   
-  // Fallback themes
+  // Fail fast if no themes are generated
   if (themes.length === 0) {
-    themes.push({
-      name: 'Fashion Inspiration',
-      keywords: ['fashion inspiration', 'style inspo', 'outfit ideas', 'fashion tips'],
-      hashtags: ['#fashioninspiration', '#styleinspo', '#outfitideas', '#fashiontips', '#fashioninspo'],
-      description: 'Fashion inspiration and style tips for every occasion'
-    });
+    throw new Error('No themes could be generated for this account profile. This indicates either: 1. The account profile is missing required data 2. The theme generation logic needs to be updated 3. The account strategy is too restrictive');
   }
   
   return themes;
@@ -1325,8 +1334,11 @@ function generateNaturalCaption(theme, targetAge, targetStyle, targetGender, ima
     ]
   };
   
-  // Get theme-specific captions or fallback
-  const availableCaptions = themeCaptions[theme.name] || themeCaptions['Weekday Style'];
+  // Get theme-specific captions (fail if theme not found)
+  if (!themeCaptions[theme.name]) {
+    throw new Error(`No captions found for theme "${theme.name}". This indicates either: 1. The theme is not properly configured 2. The caption generation logic needs to be updated 3. The theme name is invalid`);
+  }
+  const availableCaptions = themeCaptions[theme.name];
   
   // Add some variety based on image context
   let caption = availableCaptions[Math.floor(Math.random() * availableCaptions.length)];

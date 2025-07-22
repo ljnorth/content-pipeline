@@ -36,7 +36,7 @@ export default async function handler(req, res) {
     };
 
     // Create preview_batches table if it doesn't exist
-    await db.client.rpc('create_preview_batches_table_if_not_exists', {
+    const { error: createError } = await db.client.rpc('create_preview_batches_table_if_not_exists', {
       table_sql: `
         CREATE TABLE IF NOT EXISTS preview_batches (
           id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -47,9 +47,11 @@ export default async function handler(req, res) {
           created_at TIMESTAMPTZ DEFAULT now()
         );
       `
-    }).catch(() => {
-      // Fallback: try direct insert (table might already exist)
     });
+    
+    if (createError) {
+      throw new Error(`Failed to create preview_batches table: ${createError.message}`);
+    }
 
     // Insert or update batch data
     const { error } = await db.client

@@ -92,7 +92,13 @@ export class ContentGenerator {
       this.logger.info(`📊 Retrieved ${images.length} curated images`);
       
       if (images.length < 5) {
-        const errorMsg = `Not enough suitable images found for ${account.username}. Found ${images.length}, need 5.`;
+        const errorMsg = `Not enough suitable images found for ${account.username}. Found ${images.length}, need 5. This indicates either:
+1. Not enough content has been scraped and analyzed for this account's strategy
+2. The content strategy filters (aesthetic: ${strategy.content_strategy?.aestheticFocus?.join(', ') || 'none'}, colors: ${strategy.content_strategy?.colorPalette?.join(', ') || 'none'}) are too restrictive
+3. Images are missing required analysis data (aesthetic, colors, season)
+4. Too many images have been recently used (deduplication rules)
+
+Please run the content pipeline to scrape more content or adjust the account's content strategy.`;
         this.logger.error(`❌ ${errorMsg}`);
         throw new Error(errorMsg);
       }
@@ -201,57 +207,16 @@ export class ContentGenerator {
 
       this.logger.info(`📊 Found ${images?.length || 0} potential images for curation`);
 
-      // If we don't have enough images, try a fallback query without filters
+      // Fail fast if we don't have enough images with proper filters
       if (!images || images.length < count) {
-        this.logger.warn(`⚠️ Not enough images found with strategy filters (${images?.length || 0}/${count}). Trying fallback query...`);
-        
-        let fallbackQuery = this.db.client
-          .from('images')
-          .select('id, image_path, aesthetic, colors, season, occasion, username, post_id, additional')
-          .not('image_path', 'is', null);
-        
-        // Still exclude recently used images
-        if (recentlyUsedImages.length > 0) {
-          fallbackQuery = fallbackQuery.not('id', 'in', recentlyUsedImages);
-        }
-        
-        fallbackQuery = fallbackQuery
-          .order('created_at', { ascending: false });
-        
-        this.logger.info(`🔍 Executing fallback database query...`);
-        const { data: fallbackImages, error: fallbackError } = await fallbackQuery;
-        
-        if (fallbackError) {
-          this.logger.error(`❌ Fallback query failed: ${fallbackError.message}`);
-          throw new Error(`Fallback query failed: ${fallbackError.message}`);
-        }
-        
-        if (!fallbackImages || fallbackImages.length === 0) {
-          const errorMsg = `No images available in database. Please run the content pipeline to scrape and analyze images first.`;
-          this.logger.error(`❌ ${errorMsg}`);
-          throw new Error(errorMsg);
-        }
-        
-        this.logger.info(`📊 Fallback query found ${fallbackImages.length} images`);
-        
-        // Use fallback images
-        const finalImages = fallbackImages || [];
-        
-        // Process and score images
-        this.logger.info(`🎯 Scoring fallback images...`);
-        const scoredImages = finalImages.map(img => {
-          return {
-            ...img,
-            score: this.scoreImageForAccount(img, strategy)
-          };
-        }).sort((a, b) => b.score - a.score);
+        const errorMsg = `Not enough images found with strategy filters (${images?.length || 0}/${count}). This indicates either:
+1. Not enough content has been scraped and analyzed
+2. The content strategy filters are too restrictive
+3. Images don't match the account's aesthetic/color preferences
 
-        this.logger.info(`🎯 Using fallback: Scored ${scoredImages.length} images, top score: ${scoredImages[0]?.score || 0}`);
-
-        // Return top images, ensuring variety and no duplicates within the post
-        const selectedImages = this.selectVariedImages(scoredImages, count);
-        this.logger.info(`✅ Selected ${selectedImages.length} varied images from fallback`);
-        return selectedImages;
+Please run the content pipeline to scrape more content or adjust the account's content strategy.`;
+        this.logger.error(`❌ ${errorMsg}`);
+        throw new Error(errorMsg);
       }
 
       // Process and score images normally
@@ -333,50 +298,55 @@ export class ContentGenerator {
     // Base score for having a valid image
     score += 10;
 
-    // Aesthetic matching (with fallback if aesthetic is null)
+    // Aesthetic matching (require aesthetic data for proper scoring)
     if (strategy.content_strategy?.aestheticFocus?.length > 0) {
       const aesthetics = strategy.content_strategy.aestheticFocus.filter(a => a && a.trim() !== '');
-      if (aesthetics.length > 0 && image.aesthetic) {
+      if (aesthetics.length > 0) {
+        if (!image.aesthetic) {
+          // Fail fast - image missing required aesthetic data
+          throw new Error(`Image ${image.id} is missing aesthetic data, which is required for proper content strategy matching. Please re-analyze this image.`);
+        }
         if (aesthetics.some(a => image.aesthetic.toLowerCase().includes(a.toLowerCase()))) {
           score += 20;
         }
-      } else if (!image.aesthetic) {
-        // Give a small score for images without aesthetic data (they're still usable)
-        score += 5;
       }
     }
 
-    // Color matching (with fallback if colors is null)
+    // Color matching (require color data for proper scoring)
     if (strategy.content_strategy?.colorPalette?.length > 0) {
       const colors = strategy.content_strategy.colorPalette.filter(c => c && c.trim() !== '');
-      if (colors.length > 0 && image.colors && Array.isArray(image.colors)) {
+      if (colors.length > 0) {
+        if (!image.colors || !Array.isArray(image.colors)) {
+          // Fail fast - image missing required color data
+          throw new Error(`Image ${image.id} is missing color data, which is required for proper content strategy matching. Please re-analyze this image.`);
+        }
         if (colors.some(c => image.colors.some(imgColor => imgColor.toLowerCase().includes(c.toLowerCase())))) {
           score += 15;
         }
-      } else if (!image.colors || !Array.isArray(image.colors)) {
-        // Give a small score for images without color data
-        score += 3;
       }
     }
 
-    // Season relevance (current season gets bonus)
+    // Season relevance (require season data for proper scoring)
     const currentMonth = new Date().getMonth();
     const currentSeason = this.getCurrentSeason(currentMonth);
-    if (image.season && image.season.toLowerCase().includes(currentSeason.toLowerCase())) {
+    if (!image.season) {
+      // Fail fast - image missing required season data
+      throw new Error(`Image ${image.id} is missing season data, which is required for proper content strategy matching. Please re-analyze this image.`);
+    }
+    if (image.season.toLowerCase().includes(currentSeason.toLowerCase())) {
       score += 10;
-    } else if (!image.season) {
-      // Give a small score for images without season data
-      score += 2;
     }
 
-    // Additional traits matching (with fallback)
-    if (image.additional && Array.isArray(image.additional)) {
+    // Additional traits matching (require additional data for proper scoring)
+    if (strategy.content_strategy?.aestheticFocus?.length > 0) {
+      if (!image.additional || !Array.isArray(image.additional)) {
+        // Fail fast - image missing required additional traits data
+        throw new Error(`Image ${image.id} is missing additional traits data, which is required for proper content strategy matching. Please re-analyze this image.`);
+      }
       const additionalTraits = image.additional.map(trait => trait.toLowerCase());
-      if (strategy.content_strategy?.aestheticFocus) {
-        const aesthetics = strategy.content_strategy.aestheticFocus.filter(a => a && a.trim() !== '');
-        if (aesthetics.some(aesthetic => additionalTraits.some(trait => trait.includes(aesthetic.toLowerCase())))) {
-          score += 5;
-        }
+      const aesthetics = strategy.content_strategy.aestheticFocus.filter(a => a && a.trim() !== '');
+      if (aesthetics.some(aesthetic => additionalTraits.some(trait => trait.includes(aesthetic.toLowerCase())))) {
+        score += 5;
       }
     }
 
@@ -490,13 +460,17 @@ Be authentic, fun, and keep it very simple for TikTok teens.`;
       .eq('username', username)
       .single();
 
-    if (error || !profile) {
-      // Return default strategy if no profile exists
-      return {
-        target_audience: { age: "18-35", interests: ["fashion"] },
-        content_strategy: { aestheticFocus: ["trendy", "casual"], colorPalette: ["neutral", "trending"] },
-        performance_goals: { primaryMetric: "likes", targetRate: 0.05 }
-      };
+    if (error) {
+      throw new Error(`Database error fetching account strategy for ${username}: ${error.message}`);
+    }
+
+    if (!profile) {
+      throw new Error(`No account profile found for ${username}. This indicates either:
+1. The account profile hasn't been created yet
+2. The account username is incorrect
+3. The account profile was deleted
+
+Please create an account profile for ${username} through the web interface or API.`);
     }
 
     return profile;
@@ -513,11 +487,19 @@ Be authentic, fun, and keep it very simple for TikTok teens.`;
       .eq('account_type', 'owned');
 
     if (error) {
-      this.logger.error(`Failed to fetch accounts: ${error.message}`);
-      return [];
+      throw new Error(`Database error fetching active accounts: ${error.message}`);
     }
 
-    return accounts || [];
+    if (!accounts || accounts.length === 0) {
+      throw new Error(`No active accounts found. This indicates either:
+1. No account profiles have been created yet
+2. All account profiles are set to inactive (is_active = false)
+3. All account profiles are not set to 'owned' type
+
+Please create at least one active account profile through the web interface or API.`);
+    }
+
+    return accounts;
   }
 
   /**

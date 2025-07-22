@@ -28,65 +28,11 @@ async function setupAccountProfiles() {
     
     console.log('✅ Account profiles table created/verified\n');
     
-    // Insert sample account profiles
-    const sampleProfiles = [
-      {
-        username: 'fashionista_style',
-        platform: 'instagram',
-        aesthetic: 'Streetwear',
-        target_vibe: 'Urban, edgy, street culture',
-        content_focus: 'Street fashion, sneakers, urban lifestyle',
-        hashtag_strategy: 'trending, streetwear, fashion, lifestyle',
-        posting_frequency: 'daily',
-        engagement_rate: 0.045,
-        follower_count: 12500,
-        is_active: true
-      },
-      {
-        username: 'elegant_living',
-        platform: 'instagram', 
-        aesthetic: 'Elegant',
-        target_vibe: 'Sophisticated, luxury, timeless',
-        content_focus: 'High-end fashion, luxury lifestyle, elegance',
-        hashtag_strategy: 'luxury, elegant, sophisticated, fashion',
-        posting_frequency: '3x_week',
-        engagement_rate: 0.032,
-        follower_count: 8900,
-        is_active: true
-      },
-      {
-        username: 'casual_vibes',
-        platform: 'instagram',
-        aesthetic: 'Casual',
-        target_vibe: 'Relaxed, comfortable, everyday style',
-        content_focus: 'Casual fashion, comfort, daily outfits',
-        hashtag_strategy: 'casual, comfort, everyday, style',
-        posting_frequency: 'daily',
-        engagement_rate: 0.038,
-        follower_count: 15600,
-        is_active: true
-      }
-    ];
-    
-    console.log('📝 Inserting sample account profiles...');
-    
-    for (const profile of sampleProfiles) {
-      const { error: insertError } = await supabase
-        .from('account_profiles')
-        .upsert(profile, { onConflict: 'username' });
-      
-      if (insertError) {
-        console.error(`❌ Error inserting ${profile.username}:`, insertError);
-      } else {
-        console.log(`✅ Added profile for @${profile.username}`);
-      }
-    }
+    console.log('📝 Account profiles table is ready for real data.');
+    console.log('Please add your actual account profiles through the web interface or API.');
     
     console.log('\n🎉 Account profiles setup complete!');
-    console.log('📊 Sample profiles created:');
-    sampleProfiles.forEach(profile => {
-      console.log(`   • @${profile.username} (${profile.aesthetic} aesthetic)`);
-    });
+    console.log('📊 No sample data created - you will need to add real account profiles.');
     
   } catch (error) {
     console.error('❌ Error:', error.message);

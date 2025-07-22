@@ -365,21 +365,7 @@ export class ContentAcquirer {
       
       exec(command, (error, stdout, stderr) => {
         if (error) {
-          // Try with even more flexible format if the first attempt fails
-          const fallbackCommand = `yt-dlp -f "worst" -o "${videoPath}" "${videoUrl}"`;
-          
-          exec(fallbackCommand, (fallbackError, fallbackStdout, fallbackStderr) => {
-            if (fallbackError) {
-              reject(new Error(`yt-dlp failed: ${fallbackError.message}`));
-              return;
-            }
-            
-            if (fs.existsSync(videoPath)) {
-              resolve(videoPath);
-            } else {
-              reject(new Error('Video file not found after download'));
-            }
-          });
+          reject(new Error(`yt-dlp failed to download video: ${error.message}`));
           return;
         }
         

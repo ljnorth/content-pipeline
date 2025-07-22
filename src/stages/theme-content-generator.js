@@ -48,17 +48,14 @@ export class ThemeContentGenerator {
       );
 
       if (colorMatchedContent.images.length === 0) {
-        this.logger.warn('⚠️ No color-matched images found, falling back to theme-only matching');
-        
-        // Fallback: Get content by theme without strict color matching
-        const themeMatchedContent = await this.getContentByTheme(
-          selectedHookSlide.theme,
-          selectedHookSlide.target_vibe,
-          accountUsername,
-          imageCount
-        );
-        
-        colorMatchedContent.images = themeMatchedContent;
+        const errorMsg = `No color-matched images found for theme "${selectedHookSlide.theme}" with vibe "${selectedHookSlide.target_vibe}". This indicates either:
+1. Not enough content has been scraped and analyzed
+2. The color matching criteria are too strict
+3. The theme/vibe combination doesn't have enough matching content
+
+Please run the content pipeline to scrape more content or adjust the hook slide's color scheme.`;
+        this.logger.error(`❌ ${errorMsg}`);
+        throw new Error(errorMsg);
       }
 
       // Step 3: Apply account-specific filtering and optimization
@@ -132,19 +129,14 @@ export class ThemeContentGenerator {
       }
 
       if (!hookSlides || hookSlides.length === 0) {
-        // Try without filters if nothing found
-        const { data: fallbackSlides } = await this.db.client
-          .from('hook_slides')
-          .select('*')
-          .gte('confidence', 0.7)
-          .order('confidence', { ascending: false })
-          .limit(10);
+        const errorMsg = `No hook slides found matching the criteria. This indicates either:
+1. No hook slides have been created yet
+2. The confidence threshold (0.7) is too high
+3. The theme/aesthetic filters are too restrictive
 
-        if (!fallbackSlides || fallbackSlides.length === 0) {
-          return null;
-        }
-        
-        hookSlides.push(...fallbackSlides);
+Please create hook slides first or adjust the selection criteria.`;
+        this.logger.error(`❌ ${errorMsg}`);
+        throw new Error(errorMsg);
       }
 
       // Score hook slides based on account compatibility
@@ -189,35 +181,7 @@ export class ThemeContentGenerator {
     return scoredSlides.sort((a, b) => b.accountScore - a.accountScore);
   }
 
-  // Get content by theme without strict color matching (fallback)
-  async getContentByTheme(theme, targetVibe, accountUsername, limit = 10) {
-    try {
-      let query = this.db.client
-        .from('images')
-        .select('*, posts!inner(engagement_rate, like_count, view_count)')
-        .not('aesthetic', 'is', null);
 
-      // Filter by aesthetic if possible
-      if (targetVibe) {
-        query = query.or(`aesthetic.ilike.%${targetVibe}%,additional.cs.{${targetVibe}}`);
-      }
-
-      // Get performance-sorted results
-      const { data: images, error } = await query
-        .order('posts(engagement_rate)', { ascending: false, nullsLast: true })
-        .limit(limit * 3); // Get more options to filter
-
-      if (error) {
-        throw new Error(`Failed to fetch theme content: ${error.message}`);
-      }
-
-      return images?.slice(0, limit) || [];
-
-    } catch (error) {
-      this.logger.error(`❌ Failed to get content by theme: ${error.message}`);
-      return [];
-    }
-  }
 
   // Optimize content selection for a specific account
   async optimizeForAccount(images, accountProfile, targetCount) {

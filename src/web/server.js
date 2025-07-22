@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { SupabaseClient } from '../database/supabase-client.js';
-import { FashionDataPipeline } from '../pipeline/fashion-pipeline.js';
+// import { FashionDataPipeline } from '../pipeline/fashion-pipeline.js';
 import { TikTokAPI } from '../automation/tiktok-api.js';
 import { Logger } from '../utils/logger.js';
 
@@ -15,8 +15,19 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 const logger = new Logger();
-const db = new SupabaseClient();
-const tiktokAPI = new TikTokAPI();
+
+// Initialize database with error handling
+let db = null;
+let tiktokAPI = null;
+
+try {
+  db = new SupabaseClient();
+  tiktokAPI = new TikTokAPI();
+  logger.success('✅ Database and TikTok API initialized successfully');
+} catch (error) {
+  logger.error('❌ Failed to initialize database or TikTok API:', error.message);
+  logger.info('💡 This is normal if environment variables are not set up yet');
+}
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -26,6 +37,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 // API routes
 app.get('/api/accounts', async (req, res) => {
   try {
+    if (!db) {
+      return res.status(503).json({ error: 'Database not available. Please check your environment configuration.' });
+    }
     const accounts = await db.getAllAccounts();
     res.json(accounts);
   } catch (err) {
@@ -58,7 +72,9 @@ app.post('/api/run', async (req, res) => {
   // Kick off pipeline asynchronously
   (async () => {
     try {
-      const pipeline = new FashionDataPipeline();
+      // Import the pipeline dynamically to avoid startup issues
+      const { FashionDataPipelineEnhanced } = await import('../content/pipelines/enhanced.js');
+      const pipeline = new FashionDataPipelineEnhanced();
       await pipeline.run();
       logger.success('Pipeline run via web UI finished');
     } catch (err) {
@@ -71,6 +87,16 @@ app.post('/api/run', async (req, res) => {
 // Dashboard API endpoints
 app.get('/api/metrics', async (req, res) => {
   try {
+    if (!db) {
+      return res.json({
+        totalPosts: 0,
+        totalImages: 0,
+        activeAccounts: 0,
+        avgEngagement: 0,
+        message: 'Database not available - showing placeholder data'
+      });
+    }
+    
     // Use count queries for accurate totals
     const { count: totalPosts } = await db.client.from('posts').select('*', { count: 'exact', head: true });
     const { count: totalImages } = await db.client.from('images').select('*', { count: 'exact', head: true });
@@ -155,6 +181,14 @@ app.get('/api/trending', async (req, res) => {
 
 app.get('/api/engagement-trends', async (req, res) => {
   try {
+    if (!db) {
+      return res.json({
+        labels: ['2024-01-01', '2024-01-02', '2024-01-03'],
+        values: [0.05, 0.06, 0.04],
+        message: 'Database not available - showing placeholder data'
+      });
+    }
+    
     // Get engagement data for the last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -1189,6 +1223,18 @@ app.post('/api/generate-for-account', async (req, res) => {
 // Hook slides and theme generation endpoints
 app.get('/api/hook-slides', async (req, res) => {
   try {
+    if (!db) {
+      return res.json({
+        success: true,
+        stats: {
+          totalHookSlides: 0,
+          availableThemes: 0
+        },
+        themes: [],
+        message: 'Database not available - showing placeholder data'
+      });
+    }
+    
     const { HookSlideStorage } = await import('../stages/hook-slide-storage.js');
     const hookSlideStorage = new HookSlideStorage();
     
@@ -1208,6 +1254,14 @@ app.get('/api/hook-slides', async (req, res) => {
 
 app.get('/api/available-themes', async (req, res) => {
   try {
+    if (!db) {
+      return res.json({
+        success: true,
+        themes: [],
+        message: 'Database not available - showing placeholder data'
+      });
+    }
+    
     const { HookSlideStorage } = await import('../stages/hook-slide-storage.js');
     const hookSlideStorage = new HookSlideStorage();
     
@@ -1219,6 +1273,28 @@ app.get('/api/available-themes', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching themes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/account-profiles', async (req, res) => {
+  try {
+    if (!db) {
+      return res.json([]);
+    }
+    
+    const { data: profiles, error } = await db.client
+      .from('account_profiles')
+      .select('*')
+      .eq('is_active', true);
+    
+    if (error) {
+      throw error;
+    }
+    
+    res.json(profiles || []);
+  } catch (error) {
+    console.error('Error fetching account profiles:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1523,41 +1599,29 @@ app.post('/api/test-carousel-upload/:username', async (req, res) => {
       });
     }
     
-    // Create a sample carousel post
-    const samplePost = {
-      postNumber: 1,
-      caption: 'Testing carousel upload! 🚀 This is a sample post with multiple images. Swipe to see more! #test #carousel #tiktok',
-      hashtags: ['test', 'carousel', 'tiktok', 'automation', 'fashion'],
-      images: [
-        {
-          id: 'sample1',
-          imagePath: 'https://picsum.photos/1080/1920?random=1',
-          aesthetic: 'streetwear',
-          colors: ['black', 'white'],
-          season: 'fall'
-        },
-        {
-          id: 'sample2', 
-          imagePath: 'https://picsum.photos/1080/1920?random=2',
-          aesthetic: 'minimalist',
-          colors: ['beige', 'cream'],
-          season: 'spring'
-        },
-        {
-          id: 'sample3',
-          imagePath: 'https://picsum.photos/1080/1920?random=3',
-          aesthetic: 'vintage',
-          colors: ['brown', 'tan'],
-          season: 'fall'
-        }
-      ],
-      accountUsername: username
-    };
+    // Generate real content using ContentGenerator
+    const { ContentGenerator } = await import('../automation/content-generator.js');
+    const contentGenerator = new ContentGenerator();
     
-    logger.info(`📝 Created sample post with ${samplePost.images.length} images`);
+    // Get account profile
+    const { data: profile, error: profileError } = await db.client
+      .from('account_profiles')
+      .select('*')
+      .eq('username', username)
+      .eq('is_active', true)
+      .single();
+    
+    if (profileError || !profile) {
+      return res.status(404).json({ error: 'Account profile not found or not active' });
+    }
+    
+    // Generate a real post
+    const realPost = await contentGenerator.generateSinglePost(profile, profile, 1);
+    
+    logger.info(`📝 Generated real post with ${realPost.images.length} images`);
     
     // Upload to TikTok drafts
-    const uploadResult = await tiktokAPI.realUploadPost(username, samplePost);
+    const uploadResult = await tiktokAPI.realUploadPost(username, realPost);
     
     if (uploadResult.success) {
       logger.info(`✅ Carousel upload successful for @${username}`);

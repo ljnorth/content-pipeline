@@ -10,13 +10,17 @@ export class TikTokAPI {
     this.clientKey = process.env.TIKTOK_CLIENT_KEY;
     this.clientSecret = process.env.TIKTOK_CLIENT_SECRET;
     this.sandboxMode = process.env.TIKTOK_SANDBOX_MODE === 'true';
-    this.useMockAPI = !this.clientKey || !this.clientSecret;
+    
+    // Validate required credentials
+    if (!this.clientKey || !this.clientSecret) {
+      throw new Error('TikTok API credentials missing. Please set TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET environment variables.');
+    }
     
     // API endpoints - Updated to use Content Posting API v2
     this.baseUrl = 'https://open.tiktokapis.com/v2';
     this.contentPostingUrl = 'https://open.tiktokapis.com/v2/post/publish';
       
-    this.logger.info(`🔧 TikTok API initialized - ${this.useMockAPI ? 'Mock Mode' : 'Real API'} ${this.sandboxMode ? '(Sandbox)' : '(Production)'}`);
+    this.logger.info(`🔧 TikTok API initialized - Real API ${this.sandboxMode ? '(Sandbox)' : '(Production)'}`);
   }
 
   /**
@@ -70,11 +74,7 @@ export class TikTokAPI {
       try {
         let result;
         
-        if (this.useMockAPI) {
-          result = await this.mockUploadPost(account, post);
-        } else {
-          result = await this.realUploadPost(account, post);
-        }
+        result = await this.realUploadPost(account, post);
 
         uploadResults.push(result);
         
@@ -94,31 +94,7 @@ export class TikTokAPI {
     return uploadResults;
   }
 
-  /**
-   * Mock implementation for testing
-   */
-  async mockUploadPost(accountUsername, post) {
-    this.logger.info(`🎭 [MOCK] Uploading carousel post ${post.postNumber} for @${accountUsername}...`);
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-    
-    const mockPublishId = `publish_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    return {
-      postNumber: post.postNumber,
-      success: true,
-      publishId: mockPublishId,
-      platform: 'tiktok',
-      status: 'draft',
-      uploadedAt: new Date().toISOString(),
-      images: post.images.length,
-      caption: post.caption.substring(0, 50) + '...',
-      hashtags: post.hashtags.slice(0, 5),
-      mock: true,
-      type: 'carousel'
-    };
-  }
+
 
   /**
    * Real TikTok API implementation using Content Posting API v2 with FILE_UPLOAD
