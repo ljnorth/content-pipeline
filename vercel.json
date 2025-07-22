@@ -43,6 +43,18 @@
       "dest": "/api/upload-workflow-to-slack.js"
     },
     {
+      "src": "/api/postpreview/store",
+      "dest": "/api/postpreview/store.js"
+    },
+    {
+      "src": "/api/postpreview/download/([^/]+)",
+      "dest": "/api/postpreview/download/$1.js"
+    },
+    {
+      "src": "/postpreview/([^/]+)",
+      "dest": "/api/postpreview/$1.js"
+    },
+    {
       "src": "/auth/tiktok/callback",
       "dest": "api/index.js"
     },

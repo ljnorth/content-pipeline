@@ -1,132 +1,204 @@
 # Content Pipeline
 
-A comprehensive content automation system for TikTok with AI-powered content generation, aesthetic analysis, and automated posting capabilities.
+A comprehensive content generation and management system for social media automation.
 
-## 🚀 **Recent Updates**
+## 🏗️ New Architecture
 
-- ✅ **GitHub Integration**: Now connected to GitHub for automatic deployments
-- ✅ **TikTok OAuth**: Full OAuth integration with database storage
-- ✅ **Security**: Removed hardcoded API keys, using environment variables
-- ✅ **Database**: TikTok columns added to account_profiles table
+The codebase has been refactored into a clean, modular structure:
 
-## 🏗️ **Architecture**
+```
+src/
+├── database/          # Database connection and utilities
+│   └── supabase-client.js
+├── content/           # Content generation pipelines
+│   ├── pipelines/     # Different pipeline variants
+│   │   ├── index.js   # Default pipeline
+│   │   ├── batch.js   # Batch processing (50% cost savings)
+│   │   ├── fast.js    # Concurrent processing (10x faster)
+│   │   └── enhanced.js # Full analysis with hook slides
+│   └── stages/        # Pipeline stage modules
+├── slack/             # Slack integration
+│   ├── index.js       # Basic Slack API
+│   └── enhanced.js    # Enhanced Slack with previews
+├── analytics/         # Database analytics
+│   ├── aesthetics.js  # Aesthetic analysis
+│   ├── database.js    # Database statistics
+│   └── index.js       # Analytics exports
+├── utils/             # Shared utilities
+│   ├── logger.js      # Logging utility
+│   ├── supabase-storage.js
+│   └── video-generator.js
+└── index.js           # Main entry point
 
-This project uses a modular pipeline architecture with the following components:
+scripts/               # Maintenance scripts
+├── clear-database.js
+└── setup-account-profiles.js
 
-### Core Pipeline Stages
-- **Input Processor**: Handles various input formats and sources
-- **Content Acquirer**: Fetches content from external APIs (Apify)
-- **AI Analyzer**: Analyzes content using OpenAI for aesthetic classification
-- **Image Processor**: Processes and optimizes images for social media
-- **Database Storage**: Stores processed data in Supabase
-- **Theme Content Generator**: Generates themed content based on analysis
+api/                   # Vercel API endpoints
+```
 
-### Automation Features
-- **Batch Processing**: Process multiple accounts simultaneously
-- **Incremental Scraping**: Smart content acquisition with deduplication
-- **Background Analysis**: Automated aesthetic and color analysis
-- **TikTok Integration**: Direct posting to TikTok with OAuth
+## 🚀 Quick Start
 
-## 🛠️ **Setup**
+### Basic Usage
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/ljnorth/content-pipeline-clean.git
-   cd content-pipeline-clean
-   ```
+```javascript
+import ContentPipeline from './src/index.js';
 
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
+const pipeline = new ContentPipeline({
+  pipelineType: 'enhanced',  // default, batch, fast, enhanced
+  enableSlack: true,
+  enableAnalytics: true
+});
 
-3. **Set up environment variables**:
+await pipeline.run();
+```
+
+### Individual Modules
+
+```javascript
+// Content generation
+import { DefaultPipeline, BatchPipeline, FastPipeline, EnhancedPipeline } from './src/content/index.js';
+
+// Slack integration
+import { SlackAPI, EnhancedSlackAPI } from './src/slack/index.js';
+
+// Analytics
+import { AestheticsAnalytics, DatabaseAnalytics } from './src/analytics/index.js';
+
+// Database
+import { SupabaseClient } from './src/database/supabase-client.js';
+```
+
+## 📊 Pipeline Types
+
+### Default Pipeline
+- Standard content generation
+- Individual AI analysis
+- Basic database storage
+
+### Batch Pipeline
+- **50% cost savings** vs individual API calls
+- Processes images in batches
+- Ideal for large datasets
+
+### Fast Pipeline
+- **10x faster** processing
+- Concurrent AI analysis
+- Real-time results
+
+### Enhanced Pipeline
+- Full feature set
+- Hook slide detection
+- Background color analysis
+- Theme-based content generation
+
+## 🔧 Setup
+
+1. **Environment Variables**
    ```bash
    cp env.example .env
-   # Edit .env with your actual values
+   # Fill in your Supabase and Slack credentials
    ```
 
-4. **Deploy to Vercel**:
+2. **Database Setup**
    ```bash
-   vercel --prod
+   node scripts/setup-account-profiles.js
    ```
 
-## 🔧 **Environment Variables**
+3. **Run Pipeline**
+   ```bash
+   node run-enhanced-pipeline.js
+   ```
 
-Copy `env.example` to `.env` and fill in your values:
+## 📈 Analytics
 
-- `SUPABASE_URL`: Your Supabase project URL
-- `SUPABASE_ANON_KEY`: Supabase anonymous key
-- `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role key
-- `TIKTOK_CLIENT_KEY`: TikTok API client key
-- `TIKTOK_CLIENT_SECRET`: TikTok API client secret
-- `TIKTOK_REDIRECT_URI`: OAuth callback URL
-- `OPENAI_API_KEY`: OpenAI API key
-- `APIFY_TOKEN`: Apify API token
+### Database Statistics
+```javascript
+import { DatabaseAnalytics } from './src/analytics/index.js';
 
-## 🚀 **Deployment**
-
-This project is automatically deployed to Vercel when you push to the `master` branch on GitHub.
-
-**Live URL**: https://easypost.fun
-
-## 📊 **Features**
-
-### Content Processing
-- **Multi-source content acquisition** via Apify
-- **AI-powered aesthetic analysis** using OpenAI
-- **Background color detection** and storage
-- **Hook slide analysis** for engagement optimization
-- **Batch processing** for multiple accounts
-
-### TikTok Integration
-- **OAuth authentication** flow
-- **Direct video uploads** to TikTok
-- **Account management** with token storage
-- **Status tracking** for uploads
-
-### Database Management
-- **Supabase integration** for data storage
-- **Account profiles** with TikTok connection status
-- **Content tracking** and analytics
-- **Automated migrations** for schema updates
-
-## 🔄 **Workflow**
-
-1. **Setup**: Configure accounts and TikTok OAuth
-2. **Acquisition**: Fetch content from external sources
-3. **Analysis**: AI analyzes content for aesthetics and themes
-4. **Processing**: Images are optimized and prepared
-5. **Generation**: Create themed content based on analysis
-6. **Upload**: Post directly to TikTok via API
-7. **Tracking**: Monitor upload status and performance
-
-## 📁 **Project Structure**
-
-```
-├── api/                    # Vercel serverless functions
-├── src/
-│   ├── pipeline/          # Main pipeline implementations
-│   ├── stages/            # Individual pipeline stages
-│   ├── automation/        # Automated workflows
-│   ├── database/          # Database utilities
-│   └── utils/             # Helper utilities
-├── supabase/              # Database migrations
-└── docs/                  # Documentation
+const analytics = new DatabaseAnalytics();
+const stats = await analytics.getDatabaseStats();
+// Returns: { images, posts, accounts, hookSlides, generatedPosts }
 ```
 
-## 🤝 **Contributing**
+### Aesthetic Analysis
+```javascript
+import { AestheticsAnalytics } from './src/analytics/index.js';
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+const analytics = new AestheticsAnalytics();
+const analysis = await analytics.analyzeAesthetics();
+// Returns detailed aesthetic breakdown and variations
+```
 
-## 📄 **License**
+## 🔗 Slack Integration
 
-This project is licensed under the MIT License.
+### Basic Slack
+```javascript
+import { SlackAPI } from './src/slack/index.js';
 
----
+const slack = new SlackAPI();
+await slack.sendPostsToSlack(generatedContent);
+```
 
-**Built with ❤️ for content creators** 
+### Enhanced Slack
+```javascript
+import { EnhancedSlackAPI } from './src/slack/index.js';
+
+const slack = new EnhancedSlackAPI();
+await slack.sendConsolidatedPosts(generatedContent);
+// Includes preview links and batch downloads
+```
+
+## 🗄️ Database Schema
+
+The system uses Supabase with the following main tables:
+- `accounts` - Social media accounts
+- `posts` - Scraped posts
+- `images` - Extracted images with AI analysis
+- `hook_slides` - Detected hook slides and themes
+- `background_colors` - Background color analysis
+- `generated_posts` - Generated content
+- `account_profiles` - Account configuration
+
+## 🧹 Maintenance
+
+### Clear Database
+```bash
+node scripts/clear-database.js
+```
+
+### Setup Account Profiles
+```bash
+node scripts/setup-account-profiles.js
+```
+
+## 📝 API Endpoints
+
+The system includes Vercel API endpoints in the `api/` directory:
+- Content generation
+- Upload to Slack
+- Upload to TikTok
+- Account management
+- Status checking
+
+## 🎯 Key Features
+
+- **Modular Architecture**: Clean separation of concerns
+- **Multiple Pipeline Types**: Choose based on speed/cost needs
+- **Slack Integration**: Rich previews and batch downloads
+- **Analytics**: Comprehensive database and aesthetic analysis
+- **Scalable**: Easy to extend with new features
+- **Cost Optimized**: Batch processing for 50% savings
+- **Real-time**: Concurrent processing for immediate results
+
+## 🔄 Migration from Old Structure
+
+The old structure has been preserved in the `src/stages/` directory for compatibility. All new development should use the new modular structure.
+
+## 📚 Documentation
+
+- `AUTOMATION_README.md` - Automation setup guide
+- `BATCH_PROCESSING_README.md` - Batch processing details
+- `DASHBOARD_README.md` - Web dashboard setup
+- `TIKTOK_SETUP_GUIDE.md` - TikTok integration
+- `SUPABASE_STORAGE_SETUP.md` - Storage configuration 

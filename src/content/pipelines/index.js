@@ -1,10 +1,10 @@
-import { InputProcessor } from '../stages/input-processor.js';
-import { AccountProcessor } from '../stages/account-processor.js';
-import { ContentAcquirer } from '../stages/content-acquirer.js';
-import { ImageProcessor } from '../stages/image-processor.js';
-import { AIAnalyzer } from '../stages/ai-analyzer.js';
-import { DatabaseStorage } from '../stages/database-storage.js';
-import { Logger } from '../utils/logger.js';
+import { InputProcessor } from '../../stages/input-processor.js';
+import { AccountProcessor } from '../../stages/account-processor.js';
+import { ContentAcquirer } from '../../stages/content-acquirer.js';
+import { ImageProcessor } from '../../stages/image-processor.js';
+import { AIAnalyzer } from '../../stages/ai-analyzer.js';
+import { DatabaseStorage } from '../../stages/database-storage.js';
+import { Logger } from '../../utils/logger.js';
 
 export class FashionDataPipeline {
   constructor() {
@@ -36,4 +36,9 @@ export class FashionDataPipeline {
     // Stage 6: Database Storage
     await this.databaseStorage.process(analyzed);
   }
-} 
+}
+
+// Export all pipeline variants
+export { FashionDataPipelineBatch } from './batch.js';
+export { FashionDataPipelineFast } from './fast.js';
+export { FashionDataPipelineEnhanced } from './enhanced.js'; 

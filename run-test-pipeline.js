@@ -1,4 +1,4 @@
-import { FashionDataPipeline } from './src/pipeline/fashion-pipeline.js';
+import { FashionDataPipeline } from './src/content/pipelines/index.js';
 
 async function runPipeline() {
   try {

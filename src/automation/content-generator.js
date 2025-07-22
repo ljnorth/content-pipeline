@@ -82,42 +82,62 @@ export class ContentGenerator {
    * Generate a single post with 5 images
    */
   async generateSinglePost(account, strategy, postNumber) {
-    // Get curated images based on account strategy
-    const images = await this.getCuratedImages(account.username, strategy, 5);
+    this.logger.info(`🎯 Starting single post generation for ${account.username}, post ${postNumber}`);
     
-    if (images.length < 5) {
-      throw new Error(`Not enough suitable images found for ${account.username}. Found ${images.length}, need 5.`);
+    try {
+      // Get curated images based on account strategy
+      this.logger.info(`🔍 Getting curated images for ${account.username}...`);
+      const images = await this.getCuratedImages(account.username, strategy, 5);
+      
+      this.logger.info(`📊 Retrieved ${images.length} curated images`);
+      
+      if (images.length < 5) {
+        const errorMsg = `Not enough suitable images found for ${account.username}. Found ${images.length}, need 5.`;
+        this.logger.error(`❌ ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+
+      this.logger.info(`🤖 Generating content with AI for ${images.length} images...`);
+      
+      // Generate caption and hashtags
+      const content = await this.generatePostContent(images, strategy, postNumber);
+      
+      this.logger.info(`✅ AI content generated successfully - Theme: ${content.theme}`);
+      
+      // Create post object
+      const post = {
+        accountUsername: account.username,
+        postNumber,
+        images: images.map(img => ({
+          id: img.id,
+          imagePath: img.image_path,
+          aesthetic: img.aesthetic,
+          colors: img.colors,
+          season: img.season
+        })),
+        caption: content.caption,
+        hashtags: content.hashtags,
+        strategy: {
+          theme: content.theme,
+          aesthetic: content.primaryAesthetic,
+          targetAudience: strategy.target_audience
+        },
+        generatedAt: new Date().toISOString()
+      };
+
+      this.logger.info(`💾 Saving generated post to database...`);
+      
+      // Save to database
+      await this.saveGeneratedPost(post);
+      
+      this.logger.info(`✅ Post ${postNumber} generated: ${content.theme} (${images.length} images)`);
+      return post;
+      
+    } catch (error) {
+      this.logger.error(`❌ Failed to generate single post for ${account.username}: ${error.message}`);
+      this.logger.error(`❌ Stack trace: ${error.stack}`);
+      throw error; // Re-throw to be caught by the calling function
     }
-
-    // Generate caption and hashtags
-    const content = await this.generatePostContent(images, strategy, postNumber);
-    
-    // Create post object
-    const post = {
-      accountUsername: account.username,
-      postNumber,
-      images: images.map(img => ({
-        id: img.id,
-        imagePath: img.image_path,
-        aesthetic: img.aesthetic,
-        colors: img.colors,
-        season: img.season
-      })),
-      caption: content.caption,
-      hashtags: content.hashtags,
-      strategy: {
-        theme: content.theme,
-        aesthetic: content.primaryAesthetic,
-        targetAudience: strategy.target_audience
-      },
-      generatedAt: new Date().toISOString()
-    };
-
-    // Save to database
-    await this.saveGeneratedPost(post);
-    
-    this.logger.info(`✅ Post ${postNumber} generated: ${content.theme} (${images.length} images)`);
-    return post;
   }
 
   /**
@@ -126,66 +146,137 @@ export class ContentGenerator {
   async getCuratedImages(username, strategy, count = 5) {
     this.logger.info(`🔍 Curating ${count} images for ${username} with deduplication rules...`);
     
-    // Get recently used images for this account (within last 6 posts)
-    const recentlyUsedImages = await this.getRecentlyUsedImages(username);
-    this.logger.info(`🚫 Found ${recentlyUsedImages.length} recently used images to exclude`);
-    
-    // Build query based on account strategy
-    let query = this.db.client
-      .from('images')
-      .select('id, image_path, aesthetic, colors, season, occasion, username, post_id, additional')
-      .not('aesthetic', 'is', null); // Use direct aesthetic field instead of analysis
+    try {
+      // Get recently used images for this account (within last 6 posts)
+      this.logger.info(`📋 Checking for recently used images...`);
+      const recentlyUsedImages = await this.getRecentlyUsedImages(username);
+      this.logger.info(`🚫 Found ${recentlyUsedImages.length} recently used images to exclude`);
+      
+      // Build query based on account strategy
+      this.logger.info(`🗄️ Building database query for images...`);
+      let query = this.db.client
+        .from('images')
+        .select('id, image_path, aesthetic, colors, season, occasion, username, post_id, additional')
+        .not('image_path', 'is', null); // Ensure we have valid image paths
 
-    // Exclude recently used images
-    if (recentlyUsedImages.length > 0) {
-      query = query.not('id', 'in', recentlyUsedImages);
-    }
-
-    // Apply aesthetic filters if specified
-    if (strategy.content_strategy?.aestheticFocus?.length > 0) {
-      const aesthetics = strategy.content_strategy.aestheticFocus.filter(a => a && a.trim() !== '');
-      if (aesthetics.length > 0) {
-        // Use direct aesthetic field matching
-        const aestheticConditions = aesthetics.map(a => `aesthetic.ilike.%${a}%`).join(',');
-        query = query.or(aestheticConditions);
+      // Exclude recently used images
+      if (recentlyUsedImages.length > 0) {
+        query = query.not('id', 'in', recentlyUsedImages);
+        this.logger.info(`🚫 Excluding ${recentlyUsedImages.length} recently used images`);
       }
-    }
 
-    // Apply color preferences if specified
-    if (strategy.content_strategy?.colorPalette?.length > 0) {
-      const colors = strategy.content_strategy.colorPalette.filter(c => c && c.trim() !== '');
-      if (colors.length > 0) {
-        // Use direct colors field matching (array field)
-        const colorConditions = colors.map(c => `colors.cs.{${c}}`).join(',');
-        query = query.or(colorConditions);
+      // Apply aesthetic filters if specified AND there are aesthetics available
+      if (strategy.content_strategy?.aestheticFocus?.length > 0) {
+        const aesthetics = strategy.content_strategy.aestheticFocus.filter(a => a && a.trim() !== '');
+        if (aesthetics.length > 0) {
+          this.logger.info(`🎨 Applying aesthetic filters: ${aesthetics.join(', ')}`);
+          // Use direct aesthetic field matching - but don't require it to be non-null
+          const aestheticConditions = aesthetics.map(a => `aesthetic.ilike.%${a}%`).join(',');
+          query = query.or(`aesthetic.is.null,${aestheticConditions}`);
+        }
       }
+
+      // Apply color preferences if specified AND there are colors available
+      if (strategy.content_strategy?.colorPalette?.length > 0) {
+        const colors = strategy.content_strategy.colorPalette.filter(c => c && c.trim() !== '');
+        if (colors.length > 0) {
+          this.logger.info(`🌈 Applying color filters: ${colors.join(', ')}`);
+          // Use direct colors field matching (array field) - but don't require it to be non-null
+          const colorConditions = colors.map(c => `colors.cs.{${c}}`).join(',');
+          query = query.or(`colors.is.null,${colorConditions}`);
+        }
+      }
+
+      // Get recent, high-quality images
+      query = query
+        .order('created_at', { ascending: false })
+        .limit(count * 5); // Get more than needed for filtering
+
+      this.logger.info(`🔍 Executing database query...`);
+      const { data: images, error } = await query;
+      
+      if (error) {
+        this.logger.error(`❌ Database query failed: ${error.message}`);
+        throw new Error(`Failed to fetch images: ${error.message}`);
+      }
+
+      this.logger.info(`📊 Found ${images?.length || 0} potential images for curation`);
+
+      // If we don't have enough images, try a fallback query without filters
+      if (!images || images.length < count) {
+        this.logger.warn(`⚠️ Not enough images found with strategy filters (${images?.length || 0}/${count}). Trying fallback query...`);
+        
+        let fallbackQuery = this.db.client
+          .from('images')
+          .select('id, image_path, aesthetic, colors, season, occasion, username, post_id, additional')
+          .not('image_path', 'is', null);
+        
+        // Still exclude recently used images
+        if (recentlyUsedImages.length > 0) {
+          fallbackQuery = fallbackQuery.not('id', 'in', recentlyUsedImages);
+        }
+        
+        fallbackQuery = fallbackQuery
+          .order('created_at', { ascending: false })
+          .limit(count * 5);
+        
+        this.logger.info(`🔍 Executing fallback database query...`);
+        const { data: fallbackImages, error: fallbackError } = await fallbackQuery;
+        
+        if (fallbackError) {
+          this.logger.error(`❌ Fallback query failed: ${fallbackError.message}`);
+          throw new Error(`Fallback query failed: ${fallbackError.message}`);
+        }
+        
+        if (!fallbackImages || fallbackImages.length === 0) {
+          const errorMsg = `No images available in database. Please run the content pipeline to scrape and analyze images first.`;
+          this.logger.error(`❌ ${errorMsg}`);
+          throw new Error(errorMsg);
+        }
+        
+        this.logger.info(`📊 Fallback query found ${fallbackImages.length} images`);
+        
+        // Use fallback images
+        const finalImages = fallbackImages || [];
+        
+        // Process and score images
+        this.logger.info(`🎯 Scoring fallback images...`);
+        const scoredImages = finalImages.map(img => {
+          return {
+            ...img,
+            score: this.scoreImageForAccount(img, strategy)
+          };
+        }).sort((a, b) => b.score - a.score);
+
+        this.logger.info(`🎯 Using fallback: Scored ${scoredImages.length} images, top score: ${scoredImages[0]?.score || 0}`);
+
+        // Return top images, ensuring variety and no duplicates within the post
+        const selectedImages = this.selectVariedImages(scoredImages, count);
+        this.logger.info(`✅ Selected ${selectedImages.length} varied images from fallback`);
+        return selectedImages;
+      }
+
+      // Process and score images normally
+      this.logger.info(`🎯 Scoring filtered images...`);
+      const scoredImages = images.map(img => {
+        return {
+          ...img,
+          score: this.scoreImageForAccount(img, strategy)
+        };
+      }).sort((a, b) => b.score - a.score);
+
+      this.logger.info(`🎯 Scored ${scoredImages.length} images, top score: ${scoredImages[0]?.score || 0}`);
+
+      // Return top images, ensuring variety and no duplicates within the post
+      const selectedImages = this.selectVariedImages(scoredImages, count);
+      this.logger.info(`✅ Selected ${selectedImages.length} varied images`);
+      return selectedImages;
+      
+    } catch (error) {
+      this.logger.error(`❌ Error in getCuratedImages: ${error.message}`);
+      this.logger.error(`❌ Stack trace: ${error.stack}`);
+      throw error;
     }
-
-    // Get recent, high-quality images
-    query = query
-      .order('created_at', { ascending: false })
-      .limit(count * 3); // Get more than needed for filtering
-
-    const { data: images, error } = await query;
-    
-    if (error) {
-      throw new Error(`Failed to fetch images: ${error.message}`);
-    }
-
-    this.logger.info(`📊 Found ${images?.length || 0} potential images for curation`);
-
-    // Process and score images
-    const scoredImages = images.map(img => {
-      return {
-        ...img,
-        score: this.scoreImageForAccount(img, strategy)
-      };
-    }).sort((a, b) => b.score - a.score);
-
-    this.logger.info(`🎯 Scored ${scoredImages.length} images, top score: ${scoredImages[0]?.score || 0}`);
-
-    // Return top images, ensuring variety and no duplicates within the post
-    return this.selectVariedImages(scoredImages, count);
   }
 
   /**
@@ -194,9 +285,10 @@ export class ContentGenerator {
   async getRecentlyUsedImages(username) {
     try {
       // Get the last 6 generations for this account
+      // Handle both old schema (image_paths) and new schema (images)
       const { data: recentGenerations, error: genError } = await this.db.client
         .from('generated_posts')
-        .select('images')
+        .select('images, image_paths')
         .eq('account_username', username)
         .order('created_at', { ascending: false })
         .limit(6);
@@ -209,9 +301,20 @@ export class ContentGenerator {
       // Extract all image IDs from recent posts
       const usedImageIds = new Set();
       recentGenerations?.forEach(generation => {
+        // Try new schema first (images column with full objects)
         if (generation.images && Array.isArray(generation.images)) {
           generation.images.forEach(img => {
             if (img.id) usedImageIds.add(img.id);
+          });
+        }
+        // Fallback to old schema (image_paths column with just paths)
+        else if (generation.image_paths && Array.isArray(generation.image_paths)) {
+          // For image_paths, we can't get IDs directly, so this is less effective
+          // but still prevents some duplication
+          generation.image_paths.forEach(path => {
+            // Try to extract a unique identifier from the path if possible
+            const pathId = path.split('/').pop()?.split('.')[0];
+            if (pathId) usedImageIds.add(pathId);
           });
         }
       });
@@ -229,26 +332,32 @@ export class ContentGenerator {
   scoreImageForAccount(image, strategy) {
     let score = 0;
 
-    // Base score
+    // Base score for having a valid image
     score += 10;
 
-    // Aesthetic matching
+    // Aesthetic matching (with fallback if aesthetic is null)
     if (strategy.content_strategy?.aestheticFocus?.length > 0) {
       const aesthetics = strategy.content_strategy.aestheticFocus.filter(a => a && a.trim() !== '');
       if (aesthetics.length > 0 && image.aesthetic) {
         if (aesthetics.some(a => image.aesthetic.toLowerCase().includes(a.toLowerCase()))) {
           score += 20;
         }
+      } else if (!image.aesthetic) {
+        // Give a small score for images without aesthetic data (they're still usable)
+        score += 5;
       }
     }
 
-    // Color matching
+    // Color matching (with fallback if colors is null)
     if (strategy.content_strategy?.colorPalette?.length > 0) {
       const colors = strategy.content_strategy.colorPalette.filter(c => c && c.trim() !== '');
       if (colors.length > 0 && image.colors && Array.isArray(image.colors)) {
         if (colors.some(c => image.colors.some(imgColor => imgColor.toLowerCase().includes(c.toLowerCase())))) {
           score += 15;
         }
+      } else if (!image.colors || !Array.isArray(image.colors)) {
+        // Give a small score for images without color data
+        score += 3;
       }
     }
 
@@ -257,9 +366,12 @@ export class ContentGenerator {
     const currentSeason = this.getCurrentSeason(currentMonth);
     if (image.season && image.season.toLowerCase().includes(currentSeason.toLowerCase())) {
       score += 10;
+    } else if (!image.season) {
+      // Give a small score for images without season data
+      score += 2;
     }
 
-    // Additional traits matching
+    // Additional traits matching (with fallback)
     if (image.additional && Array.isArray(image.additional)) {
       const additionalTraits = image.additional.map(trait => trait.toLowerCase());
       if (strategy.content_strategy?.aestheticFocus) {
@@ -267,6 +379,19 @@ export class ContentGenerator {
         if (aesthetics.some(aesthetic => additionalTraits.some(trait => trait.includes(aesthetic.toLowerCase())))) {
           score += 5;
         }
+      }
+    }
+
+    // Bonus for recent images (more likely to be current trends)
+    if (image.created_at) {
+      const imageDate = new Date(image.created_at);
+      const now = new Date();
+      const daysDiff = (now - imageDate) / (1000 * 60 * 60 * 24);
+      
+      if (daysDiff < 30) {
+        score += 5; // Recent images get bonus
+      } else if (daysDiff < 90) {
+        score += 2; // Somewhat recent images get smaller bonus
       }
     }
 
@@ -323,7 +448,7 @@ export class ContentGenerator {
     const colors = [...new Set(images.map(img => img.colors).filter(Boolean))];
     const seasons = [...new Set(images.map(img => img.season).filter(Boolean))];
 
-    const prompt = `Create engaging TikTok content for post ${postNumber} featuring these fashion elements:
+    const prompt = `Create TikTok content for post ${postNumber} featuring these fashion elements:
 
 AESTHETICS: ${aesthetics.join(', ')}
 COLORS: ${colors.join(', ')}
@@ -334,13 +459,18 @@ ACCOUNT STRATEGY:
 - Content Focus: ${JSON.stringify(strategy.content_strategy)}
 - Performance Goals: ${JSON.stringify(strategy.performance_goals)}
 
-Create a post that will perform well on TikTok. Return JSON with:
+Instructions:
+- Write a very short, simple caption (1-2 sentences, very basic, easy to read, with 1-2 emojis that match the theme)
+- At the end of the caption, add all hashtags as one block (not as a separate list)
+- Hashtags must match the theme and ALWAYS include: #pinterest #aestheticmoodboard #fashionmoodboard
+- Make sure both caption and hashtags are appropriate for the theme and target audience
+
+Return JSON with:
 - theme: A catchy theme/concept for the post
-- caption: Engaging caption (2-3 sentences, no hashtags)
-- hashtags: Array of 8-12 relevant hashtags (mix of trending and niche)
+- caption: Short, simple caption (1-2 sentences, 1-2 emojis, with all hashtags at the end as one block)
 - primaryAesthetic: The main aesthetic this post focuses on
 
-Make it authentic, engaging, and optimized for the target audience.`;
+Be authentic, fun, and keep it very simple for TikTok teens.`;
 
     const response = await this.openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -398,25 +528,83 @@ Make it authentic, engaging, and optimized for the target audience.`;
   async saveGeneratedPost(post) {
     const generationId = `daily_${Date.now()}_${post.postNumber}`;
     
-    // Save the post
-    const { error } = await this.db.client
-      .from('generated_posts')
-      .insert({
+    try {
+      // Prepare the basic post data that should always work
+      const basePostData = {
         account_username: post.accountUsername,
         generation_id: generationId,
+        post_number: post.postNumber,
         image_paths: post.images.map(img => img.imagePath),
-        images: post.images, // Store full image data for tracking
         caption: post.caption,
         hashtags: post.hashtags,
+        status: 'generated',
+        platform: 'pending',
         created_at: post.generatedAt
-      });
+      };
 
-    if (error) {
-      throw new Error(`Failed to save post: ${error.message}`);
+      // Try to save with the images column first
+      let saveError = null;
+      try {
+        const { error } = await this.db.client
+          .from('generated_posts')
+          .insert({
+            ...basePostData,
+            images: post.images // Try to include full image data
+          });
+        
+        saveError = error;
+      } catch (err) {
+        saveError = err;
+      }
+
+      // If that failed due to the images column, try without it
+      if (saveError && (
+        saveError.message.includes('images') || 
+        saveError.message.includes('column') ||
+        saveError.message.includes('schema cache')
+      )) {
+        this.logger.warn('⚠️ Images column issue detected, saving without full image data');
+        
+        const { error: retryError } = await this.db.client
+          .from('generated_posts')
+          .insert(basePostData);
+        
+        if (retryError) {
+          throw new Error(`Failed to save post (retry): ${retryError.message}`);
+        }
+      } else if (saveError) {
+        throw new Error(`Failed to save post: ${saveError.message}`);
+      }
+
+      this.logger.info(`💾 Saved generated post ${generationId} to database`);
+
+      // Track image usage for the 6-post cooldown rule (optional, don't fail if this breaks)
+      try {
+        await this.trackImageUsage(post.accountUsername, generationId, post.images, post.postNumber);
+      } catch (trackingError) {
+        this.logger.warn(`⚠️ Image usage tracking failed: ${trackingError.message}`);
+        // Don't fail the whole operation if tracking fails
+      }
+      
+    } catch (error) {
+      this.logger.error(`❌ Error saving generated post: ${error.message}`);
+      throw error;
     }
+  }
 
-    // Track image usage for the 6-post cooldown rule
-    await this.trackImageUsage(post.accountUsername, generationId, post.images, post.postNumber);
+  /**
+   * Get current season based on month
+   */
+  getCurrentSeason(month) {
+    if (month >= 11 || month <= 1) {
+      return 'winter';
+    } else if (month >= 2 && month <= 4) {
+      return 'spring';
+    } else if (month >= 5 && month <= 7) {
+      return 'summer';
+    } else {
+      return 'autumn';
+    }
   }
 
   /**
@@ -447,15 +635,5 @@ Make it authentic, engaging, and optimized for the target audience.`;
       // Don't fail the whole generation if tracking fails
       this.logger.error(`Image usage tracking error: ${error.message}`);
     }
-  }
-
-  /**
-   * Get current season based on month
-   */
-  getCurrentSeason(month) {
-    if (month >= 2 && month <= 4) return 'spring';
-    if (month >= 5 && month <= 7) return 'summer';
-    if (month >= 8 && month <= 10) return 'fall';
-    return 'winter';
   }
 } 

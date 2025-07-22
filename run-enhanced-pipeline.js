@@ -1,4 +1,4 @@
-import { FashionDataPipelineEnhanced } from './src/pipeline/fashion-pipeline-enhanced.js';
+import { FashionDataPipelineEnhanced } from './src/content/pipelines/enhanced.js';
 import { Logger } from './src/utils/logger.js';
 
 const logger = new Logger();

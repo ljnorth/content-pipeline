@@ -1,4 +1,4 @@
-import { FashionDataPipelineFast } from './src/pipeline/fashion-pipeline-fast.js';
+import { FashionDataPipelineFast } from './src/content/pipelines/fast.js';
 import { Logger } from './src/utils/logger.js';
 
 const logger = new Logger();

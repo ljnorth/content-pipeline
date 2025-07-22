@@ -928,6 +928,420 @@ app.post('/api/generate', async (req, res) => {
   }
 });
 
+// Simplified content generation endpoint that works with current schema
+app.post('/api/generate-simple-content', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+
+    const { accountUsername, postCount = 1, imageCount = 5 } = req.body;
+    
+    console.log(`🎨 Generating SEO-focused content for @${accountUsername}: ${postCount} posts, ${imageCount} images each`);
+    
+    // Get account profile for targeting
+    let profile = null;
+    try {
+      const { data: profileData } = await db.client
+        .from('account_profiles')
+        .select('*')
+        .eq('username', accountUsername)
+        .eq('is_active', true)
+        .single();
+      profile = profileData;
+      console.log(`✅ Found account profile for targeting`);
+    } catch (error) {
+      console.log(`⚠️ No account profile found, using default targeting`);
+    }
+
+    // Get recently used images for deduplication
+    let recentlyUsedImageIds = [];
+    try {
+      const { data: recentPosts } = await db.client
+        .from('generated_posts')
+        .select('image_paths')
+        .eq('account_username', accountUsername)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      
+      if (recentPosts) {
+        recentlyUsedImageIds = recentPosts
+          .flatMap(post => post.image_paths || [])
+          .map(path => path.split('/').pop()?.split('.')[0])
+          .filter(Boolean);
+      }
+    } catch (err) {
+      console.log('Could not fetch recent posts, continuing without deduplication');
+    }
+    
+    // Get available images from database
+    const { data: availableImages, error: imagesError } = await db.client
+      .from('images')
+      .select('id, image_path, aesthetic, colors, season, occasion, username, post_id, additional')
+      .not('image_path', 'is', null)
+      .limit(200);
+    
+    if (imagesError) {
+      console.error('❌ Error fetching images:', imagesError);
+      return res.status(500).json({ error: 'Failed to fetch images from database' });
+    }
+    
+    if (!availableImages || availableImages.length === 0) {
+      return res.status(404).json({ error: 'No images found in database' });
+    }
+    
+    console.log(`📊 Found ${availableImages.length} available images`);
+    
+    // Filter out recently used images
+    const filteredImages = availableImages.filter(img => 
+      !recentlyUsedImageIds.includes(img.id.toString())
+    );
+    
+    console.log(`🎯 After deduplication: ${filteredImages.length} images available`);
+    
+    if (filteredImages.length < postCount * imageCount) {
+      return res.status(400).json({ 
+        error: `Not enough unique images available. Need ${postCount * imageCount}, have ${filteredImages.length}` 
+      });
+    }
+
+    // Generate SEO-focused content themes based on current time and target audience
+    const themes = generateSEOThemes(profile);
+    console.log(`🎯 Generated ${themes.length} SEO themes:`, themes.map(t => t.name));
+
+    const posts = [];
+    const generationId = `seo_${Date.now()}_${accountUsername}`;
+    
+    // Generate each post with SEO-focused theming
+    for (let postIndex = 0; postIndex < postCount; postIndex++) {
+      console.log(`🎨 Generating SEO post ${postIndex + 1}/${postCount}...`);
+      
+      // Select random images for this post
+      const shuffled = [...filteredImages].sort(() => 0.5 - Math.random());
+      const postImages = shuffled.slice(0, imageCount);
+      
+      // Remove these images from available pool
+      filteredImages.splice(0, imageCount);
+      
+      // Get theme for this post
+      const theme = themes[postIndex % themes.length];
+      
+      // Generate SEO-focused caption and hashtags
+      const { caption, hashtags } = generateSEOContent(postImages, theme, profile, postIndex + 1);
+      
+      const post = {
+        postNumber: postIndex + 1,
+        caption,
+        hashtags,
+        images: postImages.map(img => ({
+          id: img.id,
+          imagePath: img.image_path,
+          aesthetic: img.aesthetic,
+          colors: img.colors || [],
+          season: img.season,
+          occasion: img.occasion
+        })),
+        theme: theme.name,
+        primaryAesthetic: postImages[0]?.aesthetic || 'mixed',
+        colorPalette: postImages.flatMap(img => img.colors || []).slice(0, 5),
+        generatedAt: new Date().toISOString()
+      };
+      
+      posts.push(post);
+      console.log(`✅ Generated post ${postIndex + 1} with theme: ${theme.name}`);
+    }
+
+    // Save to database (optional - for tracking)
+    try {
+      for (const post of posts) {
+        await db.client
+          .from('generated_posts')
+          .insert({
+            account_username: accountUsername,
+            generation_id: generationId,
+            post_number: post.postNumber,
+            image_paths: post.images.map(img => img.imagePath),
+            caption: post.caption,
+            hashtags: post.hashtags,
+            status: 'generated',
+            platform: 'pending',
+            created_at: post.generatedAt
+          });
+      }
+      console.log(`💾 Saved ${posts.length} posts to database`);
+    } catch (dbError) {
+      console.warn('⚠️ Could not save to database:', dbError.message);
+    }
+
+    const generation = {
+      id: generationId,
+      accountUsername,
+      postCount,
+      imageCount,
+      posts,
+      generatedAt: new Date().toISOString()
+    };
+
+    console.log(`🎉 Successfully generated ${posts.length} SEO-focused posts`);
+    
+    res.json({
+      success: true,
+      generation,
+      posts
+    });
+
+  } catch (error) {
+    console.error('❌ Content generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate SEO-focused themes based on current time and target audience
+function generateSEOThemes(profile) {
+  const now = new Date();
+  const month = now.getMonth() + 1; // 1-12
+  const day = now.getDate();
+  const dayOfWeek = now.getDay(); // 0-6 (Sunday = 0)
+  
+  // Default targeting if no profile
+  const targetAge = profile?.target_audience?.age_range || '16-25';
+  const targetStyle = profile?.target_audience?.style_preferences?.[0] || 'streetwear';
+  const targetGender = profile?.target_audience?.gender || 'female';
+  
+  const themes = [];
+  
+  // Seasonal themes (high priority)
+  if (month >= 8 && month <= 9) {
+    themes.push({
+      name: 'Back to School',
+      keywords: ['back to school', 'school outfit', 'campus style', 'student fashion'],
+      hashtags: ['#backtoschool', '#schooloutfit', '#campusstyle', '#studentfashion', '#collegefashion'],
+      description: 'Back to school outfit inspiration for fashion-forward students'
+    });
+  }
+  
+  if (month >= 6 && month <= 8) {
+    themes.push({
+      name: 'Summer Vacation',
+      keywords: ['summer vacation', 'beach day', 'vacation outfit', 'summer style'],
+      hashtags: ['#summervacation', '#beachday', '#vacationoutfit', '#summerstyle', '#summerfashion'],
+      description: 'Perfect vacation and beach day outfits for summer adventures'
+    });
+  }
+  
+  if (month >= 12 || month <= 2) {
+    themes.push({
+      name: 'Holiday Season',
+      keywords: ['holiday outfit', 'party dress', 'festive style', 'winter fashion'],
+      hashtags: ['#holidayoutfit', '#partydress', '#festivestyle', '#winterfashion', '#holidayfashion'],
+      description: 'Festive holiday and party outfits for the winter season'
+    });
+  }
+  
+  if (month >= 3 && month <= 5) {
+    themes.push({
+      name: 'Spring Refresh',
+      keywords: ['spring outfit', 'spring fashion', 'seasonal transition', 'spring style'],
+      hashtags: ['#springoutfit', '#springfashion', '#seasonaltransition', '#springstyle', '#springvibes'],
+      description: 'Fresh spring outfits and seasonal transition styles'
+    });
+  }
+  
+  // Weekly themes
+  if (dayOfWeek === 5 || dayOfWeek === 6) { // Friday/Saturday
+    themes.push({
+      name: 'Weekend Vibes',
+      keywords: ['weekend outfit', 'night out', 'weekend style', 'going out'],
+      hashtags: ['#weekendoutfit', '#nightout', '#weekendstyle', '#goingout', '#weekendvibes'],
+      description: 'Perfect weekend and night out outfits for fun times'
+    });
+  }
+  
+  if (dayOfWeek >= 1 && dayOfWeek <= 5) { // Weekdays
+    themes.push({
+      name: 'Weekday Style',
+      keywords: ['weekday outfit', 'daily style', 'casual chic', 'everyday fashion'],
+      hashtags: ['#weekdayoutfit', '#dailystyle', '#casualchic', '#everydayfashion', '#dailyoutfit'],
+      description: 'Stylish everyday outfits for busy weekdays'
+    });
+  }
+  
+  // Style-specific themes
+  if (targetStyle.includes('streetwear')) {
+    themes.push({
+      name: 'Streetwear Essentials',
+      keywords: ['streetwear', 'urban style', 'street fashion', 'casual streetwear'],
+      hashtags: ['#streetwear', '#urbanstyle', '#streetfashion', '#casualstreetwear', '#streetstyle'],
+      description: 'Essential streetwear pieces and urban style inspiration'
+    });
+  }
+  
+  if (targetStyle.includes('casual')) {
+    themes.push({
+      name: 'Casual Comfort',
+      keywords: ['casual outfit', 'comfortable style', 'easy fashion', 'casual chic'],
+      hashtags: ['#casualoutfit', '#comfortablestyle', '#easyfashion', '#casualchic', '#comfortablefashion'],
+      description: 'Comfortable and stylish casual outfits for everyday wear'
+    });
+  }
+  
+  // Age-specific themes
+  if (targetAge.includes('16-20') || targetAge.includes('teen')) {
+    themes.push({
+      name: 'Teen Fashion',
+      keywords: ['teen fashion', 'young style', 'teen outfit', 'youth fashion'],
+      hashtags: ['#teenfashion', '#youngstyle', '#teenoutfit', '#youthfashion', '#teenstyle'],
+      description: 'Trendy fashion for teens and young adults'
+    });
+  }
+  
+  // Fallback themes
+  if (themes.length === 0) {
+    themes.push({
+      name: 'Fashion Inspiration',
+      keywords: ['fashion inspiration', 'style inspo', 'outfit ideas', 'fashion tips'],
+      hashtags: ['#fashioninspiration', '#styleinspo', '#outfitideas', '#fashiontips', '#fashioninspo'],
+      description: 'Fashion inspiration and style tips for every occasion'
+    });
+  }
+  
+  return themes;
+}
+
+// Generate SEO-focused caption and hashtags
+function generateSEOContent(images, theme, profile, postNumber) {
+  const targetAge = profile?.target_audience?.age_range || '16-25';
+  const targetStyle = profile?.target_audience?.style_preferences?.[0] || 'streetwear';
+  const targetGender = profile?.target_audience?.gender || 'female';
+  
+  // Natural caption templates that sound like real people
+  const naturalCaptions = generateNaturalCaption(theme, targetAge, targetStyle, targetGender, images);
+  
+  // Create hashtag strategy
+  const hashtags = [
+    // Theme hashtags
+    ...theme.hashtags,
+    // Style hashtags
+    `#${targetStyle}`,
+    `#${targetStyle}style`,
+    // Age/gender hashtags
+    `#${targetAge.includes('16-20') ? 'teen' : 'fashion'}fashion`,
+    `#${targetGender}fashion`,
+    // General fashion hashtags
+    '#fashioninspo',
+    '#outfitinspiration',
+    '#styleinspo',
+    '#fashiontrends',
+    '#ootd',
+    '#fashionblogger'
+  ];
+  
+  // Remove duplicates and limit to 15 hashtags
+  const uniqueHashtags = [...new Set(hashtags)].slice(0, 15);
+  
+  return { caption: naturalCaptions, hashtags: uniqueHashtags };
+}
+
+// Generate natural, authentic captions that sound like real people
+function generateNaturalCaption(theme, targetAge, targetStyle, targetGender, images) {
+  const isTeen = targetAge.includes('16-20');
+  const isStreetwear = targetStyle.includes('streetwear');
+  const isFemale = targetGender === 'female';
+  
+  // Get some image context for more natural captions
+  const aesthetics = [...new Set(images.map(img => img.aesthetic).filter(Boolean))];
+  const colors = [...new Set(images.flatMap(img => img.colors || []).filter(Boolean))];
+  
+  // Theme-specific natural captions
+  const themeCaptions = {
+    'Back to School': [
+      `back to school szn is here and i'm obsessed with these fits 😍 perfect for campus vibes`,
+      `school outfit inspo that's actually cute and comfy ✨ no more boring first day fits`,
+      `back to school but make it fashion 💅 these looks are giving everything`,
+      `campus style that's actually wearable and cute af 🎒`,
+      `school year starting but the fits are already ending everyone else 😮‍💨`
+    ],
+    'Summer Vacation': [
+      `summer vacation fits that are actually cute and not basic 🌊`,
+      `vacation wardrobe essentials that'll make you look good in every pic 📸`,
+      `beach day but make it fashion 💅 these looks are giving everything`,
+      `summer vibes with these vacation-ready fits ✨`,
+      `vacation outfit inspo that's actually wearable and cute af 🏖️`
+    ],
+    'Holiday Season': [
+      `holiday party season and these fits are giving everything ✨`,
+      `festive season but make it fashion 💅 perfect for all the holiday events`,
+      `holiday outfit inspo that's actually cute and not basic 🎄`,
+      `party season with these holiday-ready fits 🎉`,
+      `holiday vibes with these festive outfit ideas ✨`
+    ],
+    'Spring Refresh': [
+      `spring cleaning but make it wardrobe edition ✨ these fits are giving fresh start`,
+      `spring outfit inspo that's actually cute and not basic 🌸`,
+      `spring vibes with these fresh fits 💐`,
+      `spring cleaning but the fits are staying cute af 🌺`,
+      `spring season with these fresh outfit ideas ✨`
+    ],
+    'Weekend Vibes': [
+      `weekend plans but make it fashion 💅 these fits are giving everything`,
+      `weekend outfit inspo that's actually cute and comfy ✨`,
+      `weekend vibes with these cute fits 🎉`,
+      `weekend plans but the fits are the main character 😮‍💨`,
+      `weekend style that's actually wearable and cute af ✨`
+    ],
+    'Weekday Style': [
+      `daily fits that are actually cute and not boring ✨`,
+      `everyday style inspo that's actually wearable 💅`,
+      `daily vibes with these cute fits 🌟`,
+      `weekday wardrobe that's giving everything 😍`,
+      `daily outfit inspo that's actually cute and comfy ✨`
+    ],
+    'Streetwear Essentials': [
+      `streetwear essentials that are actually cute and not basic 🔥`,
+      `urban style inspo that's giving everything 💅`,
+      `streetwear vibes with these cute fits ✨`,
+      `urban essentials that are actually wearable and cute af 🔥`,
+      `streetwear but make it fashion 💅`
+    ],
+    'Casual Comfort': [
+      `casual fits that are actually cute and not boring ✨`,
+      `comfortable style inspo that's giving everything 💅`,
+      `casual vibes with these cute fits 🌟`,
+      `comfortable wardrobe that's actually fashionable 😍`,
+      `casual outfit inspo that's actually cute and comfy ✨`
+    ],
+    'Teen Fashion': [
+      `teen fashion that's actually cute and not cringe ✨`,
+      `young style inspo that's giving everything 💅`,
+      `teen vibes with these cute fits 🌟`,
+      `youth fashion that's actually wearable and cute af 😍`,
+      `teen outfit inspo that's actually cute and trendy ✨`
+    ]
+  };
+  
+  // Get theme-specific captions or fallback
+  const availableCaptions = themeCaptions[theme.name] || themeCaptions['Weekday Style'];
+  
+  // Add some variety based on image context
+  let caption = availableCaptions[Math.floor(Math.random() * availableCaptions.length)];
+  
+  // Sometimes add a question for engagement
+  const engagementQuestions = [
+    ' which look is your fave? 👀',
+    ' thoughts? 👀',
+    ' which one would you wear? 💭',
+    ' yay or nay? 👀',
+    ' which fit is giving? 💅'
+  ];
+  
+  // 70% chance to add engagement question
+  if (Math.random() < 0.7) {
+    caption += engagementQuestions[Math.floor(Math.random() * engagementQuestions.length)];
+  }
+  
+  return caption;
+}
+
 // Save generation endpoint
 app.post('/api/save-generation', async (req, res) => {
   try {
@@ -1050,8 +1464,12 @@ app.post('/api/generate-workflow-content', async (req, res) => {
       .single();
     
     if (profileError || !profile) {
+      console.error('❌ Account profile error:', profileError);
       return res.status(404).json({ error: 'Account profile not found' });
     }
+    
+    console.log(`✅ Found account profile for @${accountUsername}`);
+    console.log(`📊 Profile strategy:`, JSON.stringify(profile.content_strategy, null, 2));
     
     // Generate content using ContentGenerator (REAL images from database)
     const { ContentGenerator } = await import('../src/automation/content-generator.js');
@@ -1060,19 +1478,30 @@ app.post('/api/generate-workflow-content', async (req, res) => {
     const posts = [];
     const allImages = [];
     
+    console.log(`🔄 Starting content generation for ${postCount} posts...`);
+    
     for (let i = 1; i <= postCount; i++) {
       try {
+        console.log(`📝 Generating post ${i}/${postCount}...`);
         const post = await contentGenerator.generateSinglePost(profile, profile, i);
+        console.log(`✅ Post ${i} generated successfully with ${post.images.length} images`);
         posts.push(post);
         allImages.push(...post.images);
       } catch (error) {
-        console.error(`Failed to generate post ${i}: ${error.message}`);
-        // Continue with other posts
+        console.error(`❌ Failed to generate post ${i}:`, error.message);
+        console.error('❌ Stack trace:', error.stack);
+        // Continue with other posts - but log the detailed error
       }
     }
     
+    console.log(`📊 Final results: ${posts.length}/${postCount} posts generated successfully`);
+    
     if (posts.length === 0) {
-      return res.status(500).json({ error: 'Failed to generate any posts' });
+      console.error('❌ No posts were generated successfully');
+      return res.status(500).json({ 
+        error: 'Failed to generate any posts', 
+        details: 'Check server logs for detailed error information' 
+      });
     }
     
     // Create generation object
@@ -1100,7 +1529,8 @@ app.post('/api/generate-workflow-content', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Workflow content generation error:', error);
+    console.error('❌ Workflow content generation error:', error.message);
+    console.error('❌ Stack trace:', error.stack);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1352,7 +1782,978 @@ app.get('/api/account-profiles', async (req, res) => {
   }
 });
 
-// Catch-all handler for SPA
+// AI-powered content generation endpoint with intelligent image grouping (FIXED)
+app.post('/api/generate-ai-content', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+
+    const { accountUsername, postCount = 1, imageCount = 5 } = req.body;
+    
+    console.log(`🤖 Generating AI-powered content for @${accountUsername}: ${postCount} posts, ${imageCount} images each`);
+    
+    // Get account profile
+    let profile = null;
+    try {
+      const { data: profileData } = await db.client
+        .from('account_profiles')
+        .select('*')
+        .eq('username', accountUsername)
+        .eq('is_active', true)
+        .single();
+      profile = profileData;
+      console.log(`✅ Found account profile for @${accountUsername}`);
+    } catch (err) {
+      console.log('No account profile found, using default settings');
+    }
+    
+    // Get recently used images for this account (last 20 posts to avoid repetition)
+    let recentlyUsedImageIds = [];
+    try {
+      const { data: recentPosts } = await db.client
+        .from('generated_posts')
+        .select('image_paths')
+        .eq('account_username', accountUsername)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      
+      if (recentPosts) {
+        recentlyUsedImageIds = recentPosts
+          .flatMap(post => post.image_paths || [])
+          .map(path => path.split('/').pop()?.split('.')[0]) // Extract ID from path
+          .filter(Boolean);
+      }
+    } catch (err) {
+      console.log('Could not fetch recent posts, continuing without deduplication');
+    }
+    
+    // Get available images from database
+    const { data: availableImages, error: imagesError } = await db.client
+      .from('images')
+      .select('id, image_path, aesthetic, colors, season, occasion, username, post_id, additional')
+      .not('image_path', 'is', null)
+      .limit(200);
+    
+    if (imagesError) {
+      console.error('❌ Error fetching images:', imagesError);
+      return res.status(500).json({ error: 'Failed to fetch images from database' });
+    }
+    
+    if (!availableImages || availableImages.length === 0) {
+      return res.status(404).json({ error: 'No images found in database' });
+    }
+    
+    console.log(`📊 Found ${availableImages.length} available images`);
+    
+    // Filter out recently used images
+    const filteredImages = availableImages.filter(img => 
+      !recentlyUsedImageIds.includes(img.id.toString())
+    );
+    
+    console.log(`🎯 After deduplication: ${filteredImages.length} images available`);
+    
+    if (filteredImages.length < postCount * imageCount) {
+      return res.status(400).json({ 
+        error: `Not enough unique images available. Need ${postCount * imageCount}, have ${filteredImages.length}` 
+      });
+    }
+    
+    // Initialize OpenAI with timeout protection
+    let openai = null;
+    try {
+      const OpenAI = (await import('openai')).default;
+      openai = new OpenAI({
+        timeout: 30000, // 30 second timeout
+        maxRetries: 2
+      });
+      console.log('✅ OpenAI initialized successfully');
+    } catch (error) {
+      console.error('❌ Failed to initialize OpenAI:', error.message);
+      return res.status(500).json({ error: 'AI service unavailable, please try the simplified endpoint' });
+    }
+    
+    const posts = [];
+    
+    // Generate each post with AI-powered grouping
+    for (let postIndex = 0; postIndex < postCount; postIndex++) {
+      console.log(`🎨 Generating post ${postIndex + 1}/${postCount} with AI...`);
+      
+      try {
+        // Select random images for this post
+        const shuffled = [...filteredImages].sort(() => 0.5 - Math.random());
+        const postImages = shuffled.slice(0, imageCount);
+        
+        // Remove these images from available pool
+        const usedIds = postImages.map(img => img.id);
+        filteredImages.splice(0, imageCount);
+        
+        // Use AI to analyze and group images thematically (with timeout protection)
+        let imageAnalysis = null;
+        try {
+          imageAnalysis = await Promise.race([
+            analyzeImagesWithAI(postImages, openai),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('AI analysis timeout')), 25000)
+            )
+          ]);
+          console.log(`🤖 AI analysis complete for post ${postIndex + 1}: ${imageAnalysis.theme}`);
+        } catch (aiError) {
+          console.error(`❌ AI analysis failed for post ${postIndex + 1}:`, aiError.message);
+          // Fallback to simple analysis
+          imageAnalysis = {
+            theme: 'Fashion Inspiration',
+            primaryAesthetic: postImages[0]?.aesthetic || 'casual',
+            colorPalette: postImages.flatMap(img => img.colors || []).slice(0, 5),
+            mood: 'casual',
+            targetAudience: 'fashion enthusiasts',
+            contentType: 'outfit-inspiration'
+          };
+          console.log(`🔄 Using fallback analysis for post ${postIndex + 1}`);
+        }
+        
+        // Generate themed caption and hashtags (with timeout protection)
+        let content = null;
+        try {
+          content = await Promise.race([
+            generateThemedContent(postImages, imageAnalysis, profile, postIndex + 1, openai),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('AI content generation timeout')), 25000)
+            )
+          ]);
+          console.log(`✍️ AI content generated: "${content.caption.substring(0, 50)}..."`);
+        } catch (contentError) {
+          console.error(`❌ AI content generation failed for post ${postIndex + 1}:`, contentError.message);
+          // Fallback to template content
+          content = {
+            caption: `Love this aesthetic! ✨ Perfect for ${imageAnalysis.theme.toLowerCase()}.`,
+            hashtags: ['#fashion', '#style', '#aesthetic', '#outfit', '#ootd', '#trending', '#viral', '#fyp']
+          };
+          console.log(`🔄 Using fallback content for post ${postIndex + 1}`);
+        }
+        
+        // Create post object
+        const post = {
+          postNumber: postIndex + 1,
+          caption: content.caption,
+          hashtags: content.hashtags,
+          images: postImages.map(img => ({
+            id: img.id,
+            imagePath: img.image_path,
+            aesthetic: img.aesthetic,
+            colors: img.colors,
+            season: img.season,
+            occasion: img.occasion
+          })),
+          theme: imageAnalysis.theme,
+          primaryAesthetic: imageAnalysis.primaryAesthetic,
+          colorPalette: imageAnalysis.colorPalette,
+          generatedAt: new Date().toISOString()
+        };
+        
+        // Save to database
+        await savePostToDatabase(post, accountUsername);
+        
+        posts.push(post);
+        console.log(`✅ Post ${postIndex + 1} generated and saved successfully`);
+        
+      } catch (error) {
+        console.error(`❌ Failed to generate post ${postIndex + 1}:`, error.message);
+        // Continue with other posts
+      }
+    }
+    
+    if (posts.length === 0) {
+      return res.status(500).json({ error: 'Failed to generate any posts' });
+    }
+    
+    // Create generation summary
+    const generation = {
+      id: `ai_generation_${Date.now()}`,
+      accountUsername,
+      postCount: posts.length,
+      imageCount,
+      posts: posts,
+      generatedAt: new Date().toISOString(),
+      strategy: profile ? {
+        targetAudience: profile.target_audience,
+        contentStrategy: profile.content_strategy,
+        performanceGoals: profile.performance_goals
+      } : null
+    };
+    
+    console.log(`🎉 Successfully generated ${posts.length} AI-powered posts`);
+    
+    res.json({
+      success: true,
+      generation,
+      posts
+    });
+    
+  } catch (error) {
+    console.error('❌ AI content generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Simplified AI content generation endpoint for debugging
+app.post('/api/generate-ai-content-simple', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+
+    const { accountUsername, postCount = 1, imageCount = 2 } = req.body;
+    
+    console.log(`🤖 [SIMPLE] Starting AI content generation for @${accountUsername}`);
+    
+    // Step 1: Get images from database
+    console.log(`📊 [SIMPLE] Step 1: Fetching images...`);
+    const { data: availableImages, error: imagesError } = await db.client
+      .from('images')
+      .select('id, image_path, aesthetic, colors, season, occasion')
+      .not('image_path', 'is', null)
+      .limit(10);
+    
+    if (imagesError) {
+      console.error('❌ [SIMPLE] Database error:', imagesError);
+      return res.status(500).json({ error: 'Database error: ' + imagesError.message });
+    }
+    
+    if (!availableImages || availableImages.length === 0) {
+      return res.status(404).json({ error: 'No images found' });
+    }
+    
+    console.log(`✅ [SIMPLE] Found ${availableImages.length} images`);
+    
+    // Step 2: Initialize OpenAI
+    console.log(`🤖 [SIMPLE] Step 2: Initializing OpenAI...`);
+    const OpenAI = (await import('openai')).default;
+    const openai = new OpenAI();
+    console.log(`✅ [SIMPLE] OpenAI initialized`);
+    
+    // Step 3: Select images for one post
+    const postImages = availableImages.slice(0, imageCount);
+    console.log(`📸 [SIMPLE] Selected ${postImages.length} images for post`);
+    
+    // Step 4: AI Analysis
+    console.log(`🧠 [SIMPLE] Step 4: Running AI analysis...`);
+    const imageAnalysis = await analyzeImagesWithAI(postImages, openai);
+    console.log(`✅ [SIMPLE] AI analysis complete:`, imageAnalysis.theme);
+    
+    // Step 5: Generate content
+    console.log(`✍️ [SIMPLE] Step 5: Generating content...`);
+    const content = await generateThemedContent(postImages, imageAnalysis, null, 1, openai);
+    console.log(`✅ [SIMPLE] Content generated:`, content.caption.substring(0, 50));
+    
+    // Step 6: Create post object
+    const post = {
+      postNumber: 1,
+      caption: content.caption,
+      hashtags: content.hashtags,
+      images: postImages.map(img => ({
+        id: img.id,
+        imagePath: img.image_path,
+        aesthetic: img.aesthetic,
+        colors: img.colors,
+        season: img.season,
+        occasion: img.occasion
+      })),
+      theme: imageAnalysis.theme,
+      primaryAesthetic: imageAnalysis.primaryAesthetic,
+      colorPalette: imageAnalysis.colorPalette,
+      generatedAt: new Date().toISOString()
+    };
+    
+    console.log(`✅ [SIMPLE] Post object created successfully`);
+    
+    // Step 7: Save to database (optional - skip if it fails)
+    try {
+      await savePostToDatabase(post, accountUsername);
+      console.log(`✅ [SIMPLE] Post saved to database`);
+    } catch (dbError) {
+      console.warn(`⚠️ [SIMPLE] Database save failed, but continuing:`, dbError.message);
+    }
+    
+    // Step 8: Return success
+    const generation = {
+      id: `simple_ai_${Date.now()}`,
+      accountUsername,
+      postCount: 1,
+      imageCount,
+      posts: [post],
+      generatedAt: new Date().toISOString()
+    };
+    
+    console.log(`🎉 [SIMPLE] Successfully generated AI content!`);
+    
+    res.json({
+      success: true,
+      generation,
+      posts: [post]
+    });
+    
+  } catch (error) {
+    console.error('❌ [SIMPLE] AI content generation error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack,
+      step: 'unknown'
+    });
+  }
+});
+
+// Test OpenAI endpoint
+app.post('/api/test-openai', async (req, res) => {
+  try {
+    console.log('🧪 Testing OpenAI connection...');
+    
+    // Initialize OpenAI
+    const OpenAI = (await import('openai')).default;
+    const openai = new OpenAI({
+      timeout: 10000,
+      maxRetries: 1
+    });
+    
+    console.log('✅ OpenAI initialized, testing API call...');
+    
+    // Simple test call
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: 'Say "Hello World" in JSON format: {"message": "Hello World"}' }],
+      response_format: { type: 'json_object' },
+      max_tokens: 50
+    });
+    
+    const result = JSON.parse(response.choices[0].message.content);
+    console.log('✅ OpenAI test successful:', result);
+    
+    res.json({
+      success: true,
+      message: 'OpenAI is working!',
+      result: result
+    });
+    
+  } catch (error) {
+    console.error('❌ OpenAI test failed:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      details: error.toString()
+    });
+  }
+});
+
+// AI function to analyze and group images thematically
+async function analyzeImagesWithAI(images, openai) {
+  try {
+    const imageData = images.map(img => ({
+      id: img.id,
+      aesthetic: img.aesthetic,
+      colors: img.colors || [],
+      season: img.season,
+      occasion: img.occasion,
+      additional: img.additional || []
+    }));
+    
+    const prompt = `Analyze these ${images.length} fashion images and group them thematically for a cohesive social media post.
+
+IMAGE DATA:
+${JSON.stringify(imageData, null, 2)}
+
+Return a JSON object with:
+- theme: A catchy, specific theme that unites these images (e.g., "Cozy Fall Layering", "Summer Beach Vibes", "Date Night Glam")
+- primaryAesthetic: The main aesthetic these images share
+- colorPalette: Array of 3-5 dominant colors that work together
+- mood: The overall mood/vibe (e.g., "romantic", "casual", "sophisticated", "playful")
+- targetAudience: Who this content would appeal to
+- contentType: Type of post (e.g., "outfit-inspiration", "styling-tips", "trend-showcase")
+
+Make the theme specific and engaging for social media. Return only valid JSON.`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 300,
+      temperature: 0.7
+    });
+
+    const result = JSON.parse(response.choices[0].message.content);
+    console.log('🤖 AI analysis result:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ AI analysis error:', error.message);
+    throw error;
+  }
+}
+
+// AI function to generate themed caption and hashtags
+async function generateThemedContent(images, analysis, profile, postNumber, openai) {
+  try {
+    const accountContext = profile ? `
+ACCOUNT CONTEXT:
+- Target Audience: ${JSON.stringify(profile.target_audience)}
+- Content Strategy: ${JSON.stringify(profile.content_strategy)}
+- Performance Goals: ${JSON.stringify(profile.performance_goals)}
+` : '';
+
+    const prompt = `Create TikTok content for post ${postNumber} with this theme: "${analysis.theme}"
+
+THEME ANALYSIS:
+- Primary Aesthetic: ${analysis.primaryAesthetic}
+- Color Palette: ${analysis.colorPalette.join(', ')}
+- Mood: ${analysis.mood}
+- Target Audience: ${analysis.targetAudience}
+- Content Type: ${analysis.contentType}
+
+${accountContext}
+
+Instructions:
+- Write a very short, simple caption (1-2 sentences, very basic, easy to read, with 1-2 emojis that match the theme)
+- At the end of the caption, add all hashtags as one block (not as a separate list)
+- Hashtags must match the theme and ALWAYS include: #pinterest #aestheticmoodboard #fashionmoodboard
+- Make sure both caption and hashtags are appropriate for the theme and target audience
+
+Create a JSON object with:
+1. caption: Short, simple caption (1-2 sentences, 1-2 emojis, with all hashtags at the end as one block)
+
+Be authentic, fun, and keep it very simple for TikTok teens. Return only valid JSON.`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      max_tokens: 250,
+      temperature: 0.8
+    });
+
+    const result = JSON.parse(response.choices[0].message.content);
+    console.log('✍️ AI content result:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ AI content generation error:', error.message);
+    throw error;
+  }
+}
+
+// Helper function to save post to database
+async function savePostToDatabase(post, accountUsername) {
+  const generationId = `ai_${Date.now()}_${post.postNumber}`;
+  
+  try {
+    // Try to save with full data first
+    const { error } = await db.client
+      .from('generated_posts')
+      .insert({
+        account_username: accountUsername,
+        generation_id: generationId,
+        post_number: post.postNumber,
+        image_paths: post.images.map(img => img.imagePath),
+        caption: post.caption,
+        hashtags: post.hashtags,
+        status: 'generated',
+        platform: 'pending',
+        created_at: post.generatedAt
+      });
+    
+    if (error) {
+      console.error('Database save error:', error);
+      throw error;
+    }
+    
+    console.log(`💾 Post ${post.postNumber} saved to database`);
+    
+  } catch (error) {
+    console.error(`❌ Failed to save post ${post.postNumber}:`, error.message);
+    throw error;
+  }
+}
+
+// Preview page endpoints for Slack integration
+app.post('/api/store-preview', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+
+    const { accountUsername, posts, generationId } = req.body;
+    
+    if (!accountUsername || !Array.isArray(posts)) {
+      return res.status(400).json({ error: 'accountUsername and posts array are required' });
+    }
+
+    // Create a unique preview ID
+    const previewId = generationId || `preview_${Date.now()}_${accountUsername}`;
+    
+    // Store the preview data
+    const { error } = await db.client
+      .from('preview_batches')
+      .insert({
+        preview_id: previewId,
+        account_username: accountUsername,
+        posts: posts,
+        created_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+      });
+
+    if (error) {
+      console.error('❌ Error storing preview:', error);
+      return res.status(500).json({ error: 'Failed to store preview' });
+    }
+
+    console.log(`✅ Preview stored with ID: ${previewId}`);
+    
+    res.json({
+      success: true,
+      previewId,
+      previewUrl: `https://${process.env.VERCEL_URL || 'content-pipeline.vercel.app'}/api/preview/${previewId}`,
+      downloadUrl: `https://${process.env.VERCEL_URL || 'content-pipeline.vercel.app'}/api/preview/${previewId}/download`
+    });
+
+  } catch (error) {
+    console.error('❌ Store preview error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get preview page
+app.get('/api/preview/:previewId', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+
+    const { previewId } = req.params;
+    
+    // Get preview data
+    const { data: preview, error } = await db.client
+      .from('preview_batches')
+      .select('*')
+      .eq('preview_id', previewId)
+      .single();
+
+    if (error || !preview) {
+      return res.status(404).json({ error: 'Preview not found' });
+    }
+
+    // Check if expired
+    if (new Date(preview.expires_at) < new Date()) {
+      return res.status(410).json({ error: 'Preview has expired' });
+    }
+
+    // Return HTML preview page
+    const html = generatePreviewHTML(preview);
+    
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+
+  } catch (error) {
+    console.error('❌ Get preview error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Download preview content
+app.get('/api/preview/:previewId/download', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+
+    const { previewId } = req.params;
+    
+    // Get preview data
+    const { data: preview, error } = await db.client
+      .from('preview_batches')
+      .select('*')
+      .eq('preview_id', previewId)
+      .single();
+
+    if (error || !preview) {
+      return res.status(404).json({ error: 'Preview not found' });
+    }
+
+    // Check if expired
+    if (new Date(preview.expires_at) < new Date()) {
+      return res.status(410).json({ error: 'Preview has expired' });
+    }
+
+    // Generate download data
+    const downloadData = {
+      accountUsername: preview.account_username,
+      generatedAt: preview.created_at,
+      posts: preview.posts.map(post => ({
+        postNumber: post.postNumber,
+        caption: post.caption,
+        hashtags: post.hashtags,
+        images: post.images.map(img => ({
+          url: img.imagePath,
+          aesthetic: img.aesthetic,
+          colors: img.colors
+        }))
+      }))
+    };
+
+    // Set headers for download
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="content-${preview.account_username}-${previewId}.json"`);
+    
+    res.json(downloadData);
+
+  } catch (error) {
+    console.error('❌ Download preview error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Download all images as ZIP
+app.get('/api/preview/:previewId/download-images', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+
+    const { previewId } = req.params;
+    
+    // Get preview data
+    const { data: preview, error } = await db.client
+      .from('preview_batches')
+      .select('*')
+      .eq('preview_id', previewId)
+      .single();
+
+    if (error || !preview) {
+      return res.status(404).json({ error: 'Preview not found' });
+    }
+
+    // Check if expired
+    if (new Date(preview.expires_at) < new Date()) {
+      return res.status(410).json({ error: 'Preview has expired' });
+    }
+
+    console.log(`📦 Creating ZIP for ${preview.posts.length} posts with ${preview.posts.reduce((sum, post) => sum + post.images.length, 0)} images`);
+
+    // Import JSZip dynamically
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+
+    // Download and add each image to the ZIP
+    for (const post of preview.posts) {
+      for (let i = 0; i < post.images.length; i++) {
+        const img = post.images[i];
+        try {
+          // Download the image
+          const imageResponse = await fetch(img.imagePath);
+          if (!imageResponse.ok) {
+            console.warn(`⚠️ Failed to download image: ${img.imagePath}`);
+            continue;
+          }
+          
+          const imageBuffer = await imageResponse.arrayBuffer();
+          
+          // Create filename: username_post1_image1.jpg
+          const filename = `${preview.account_username}_post${post.postNumber}_image${i + 1}.jpg`;
+          
+          // Add to ZIP
+          zip.file(filename, imageBuffer);
+          console.log(`✅ Added ${filename} to ZIP`);
+          
+        } catch (imgError) {
+          console.error(`❌ Error downloading image ${img.imagePath}:`, imgError.message);
+        }
+      }
+    }
+
+    // Generate ZIP file
+    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+    
+    // Set headers for ZIP download
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${preview.account_username}_all_images.zip"`);
+    res.setHeader('Content-Length', zipBuffer.length);
+    
+    res.send(zipBuffer);
+    console.log(`✅ ZIP file created and sent: ${zipBuffer.length} bytes`);
+
+  } catch (error) {
+    console.error('❌ Download images ZIP error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to generate preview HTML
+function generatePreviewHTML(preview) {
+  const posts = preview.posts;
+  const accountUsername = preview.account_username;
+  
+  const postsHTML = posts.map(post => {
+    const imagesHTML = post.images.map((img, imgIndex) => `
+      <div class="image-container">
+        <div class="image-wrapper">
+          <img src="${img.imagePath}" alt="Generated content" class="content-image">
+          <div class="download-overlay">
+            <button class="download-btn" onclick="downloadImage('${img.imagePath}', '${accountUsername}_post${post.postNumber}_image${imgIndex + 1}.jpg')">
+              <i class="fas fa-download"></i>
+            </button>
+          </div>
+        </div>
+        <div class="image-info">
+          <span class="aesthetic">${img.aesthetic || 'Mixed'}</span>
+          ${img.colors ? `<span class="colors">${img.colors.join(', ')}</span>` : ''}
+        </div>
+      </div>
+    `).join('');
+
+    return `
+      <div class="post" id="post${post.postNumber}">
+        <h3>Post ${post.postNumber}</h3>
+        <div class="images-grid">
+          ${imagesHTML}
+        </div>
+        <div class="content">
+          <div class="caption">
+            <h4>Caption:</h4>
+            <p>${post.caption}</p>
+            <button class="copy-btn" onclick="copyToClipboard('${post.caption.replace(/'/g, "\\'")}')">
+              <i class="fas fa-copy"></i> Copy Caption
+            </button>
+          </div>
+          <div class="hashtags">
+            <h4>Hashtags:</h4>
+            <div class="hashtag-list">
+              ${post.hashtags.map(tag => `<span class="hashtag">${tag}</span>`).join('')}
+            </div>
+            <button class="copy-btn" onclick="copyToClipboard('${post.hashtags.join(' ')}')">
+              <i class="fas fa-copy"></i> Copy Hashtags
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Content Preview - @${accountUsername}</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: #1a1a1a; color: #ffffff; line-height: 1.6;
+                padding: 20px;
+            }
+            .header { 
+                text-align: center; margin-bottom: 30px; padding: 20px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border-radius: 10px;
+            }
+            .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+            .header p { opacity: 0.9; font-size: 1.1em; }
+            .download-btn {
+                display: inline-block; background: #4CAF50; color: white;
+                padding: 12px 24px; text-decoration: none; border-radius: 6px;
+                margin: 10px; font-weight: bold; transition: background 0.3s;
+                border: none; cursor: pointer; font-size: 1em;
+            }
+            .download-btn:hover { background: #45a049; }
+            .download-all-btn {
+                background: #2196F3; margin-left: 10px;
+            }
+            .download-all-btn:hover { background: #1976D2; }
+            .post { 
+                background: #2a2a2a; margin: 20px 0; padding: 20px;
+                border-radius: 10px; border-left: 4px solid #667eea;
+            }
+            .post h3 { color: #667eea; margin-bottom: 15px; font-size: 1.5em; }
+            .images-grid { 
+                display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 15px; margin-bottom: 20px;
+            }
+            .image-container { position: relative; }
+            .image-wrapper { position: relative; overflow: hidden; border-radius: 8px; }
+            .content-image { 
+                width: 100%; 
+                height: 400px; 
+                object-fit: contain; /* Show full image, not cropped */
+                background: #222;
+                border: 2px solid #333; 
+                border-radius: 8px;
+                transition: transform 0.3s ease;
+            }
+            .image-wrapper:hover .content-image {
+                transform: scale(1.05);
+            }
+            .download-overlay {
+                position: absolute; top: 10px; right: 10px;
+                opacity: 0; transition: opacity 0.3s ease;
+                background: rgba(0,0,0,0.7); border-radius: 50%;
+                width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+            }
+            .image-wrapper:hover .download-overlay {
+                opacity: 1;
+            }
+            .download-overlay .download-btn {
+                background: #4CAF50; color: white; border: none;
+                width: 100%; height: 100%; border-radius: 50%;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 16px; margin: 0; padding: 0;
+            }
+            .download-overlay .download-btn:hover {
+                background: #45a049;
+            }
+            .image-info { 
+                position: absolute; bottom: 0; left: 0; right: 0;
+                background: rgba(0,0,0,0.8); padding: 8px;
+                border-radius: 0 0 8px 8px; font-size: 0.9em;
+            }
+            .aesthetic { color: #667eea; font-weight: bold; }
+            .colors { color: #ccc; margin-left: 10px; }
+            .content h4 { color: #667eea; margin: 15px 0 8px 0; }
+            .caption p { background: #333; padding: 15px; border-radius: 6px; margin-bottom: 10px; }
+            .hashtag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+            .hashtag { 
+                background: #667eea; color: white; padding: 4px 8px;
+                border-radius: 4px; font-size: 0.9em;
+            }
+            .copy-btn {
+                background: #666; color: white; border: none;
+                padding: 8px 12px; border-radius: 4px; cursor: pointer;
+                font-size: 0.9em; transition: background 0.3s;
+            }
+            .copy-btn:hover { background: #555; }
+            .footer { 
+                text-align: center; margin-top: 40px; padding: 20px;
+                border-top: 1px solid #333; opacity: 0.7;
+            }
+            .loading {
+                display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.8); z-index: 1000;
+                align-items: center; justify-content: center;
+            }
+            .loading.show { display: flex; }
+            .loading-content {
+                background: #2a2a2a; padding: 30px; border-radius: 10px;
+                text-align: center;
+            }
+            .spinner {
+                border: 4px solid #333; border-top: 4px solid #667eea;
+                border-radius: 50%; width: 40px; height: 40px;
+                animation: spin 1s linear infinite; margin: 0 auto 20px;
+            }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            @media (max-width: 768px) {
+                .images-grid { grid-template-columns: 1fr; }
+                .header h1 { font-size: 2em; }
+                .download-overlay { opacity: 1; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="loading" id="loading">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <p>Downloading images...</p>
+            </div>
+        </div>
+        
+        <div class="header">
+            <h1>🎨 Content Preview</h1>
+            <p>Generated content for @${accountUsername}</p>
+            <p>${posts.length} posts • ${posts.reduce((sum, post) => sum + post.images.length, 0)} images</p>
+            <button class="download-btn download-all-btn" onclick="downloadAllImages()">
+                <i class="fas fa-download"></i> Download All Images
+            </button>
+        </div>
+        
+        ${postsHTML}
+        
+        <div class="footer">
+            <p>Content Pipeline • Generated on ${new Date(preview.created_at).toLocaleString()}</p>
+            <p>This preview expires on ${new Date(preview.expires_at).toLocaleString()}</p>
+        </div>
+
+        <script>
+            // Download individual image
+            async function downloadImage(imageUrl, filename) {
+                try {
+                    const response = await fetch(imageUrl);
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                } catch (error) {
+                    console.error('Download failed:', error);
+                    alert('Failed to download image. Please try again.');
+                }
+            }
+
+            // Download all images as ZIP
+            async function downloadAllImages() {
+                const loading = document.getElementById('loading');
+                loading.classList.add('show');
+                
+                try {
+                    const response = await fetch('/api/preview/${preview.preview_id}/download-images');
+                    if (!response.ok) {
+                        throw new Error('Failed to download images');
+                    }
+                    
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = '${accountUsername}_all_images.zip';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                } catch (error) {
+                    console.error('Download failed:', error);
+                    alert('Failed to download images. Please try again.');
+                } finally {
+                    loading.classList.remove('show');
+                }
+            }
+
+            // Copy text to clipboard
+            async function copyToClipboard(text) {
+                try {
+                    await navigator.clipboard.writeText(text);
+                    // Show a brief success message
+                    const btn = event.target.closest('.copy-btn');
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                    btn.style.background = '#4CAF50';
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.style.background = '#666';
+                    }, 2000);
+                } catch (error) {
+                    console.error('Copy failed:', error);
+                    alert('Failed to copy to clipboard. Please copy manually.');
+                }
+            }
+        </script>
+    </body>
+    </html>
+  `;
+}
+
+// Catch-all handler for SPA (must be after all other routes)
 app.get('*', (req, res) => {
   try {
     res.sendFile(path.join(__dirname, '../src/web/public/index.html'));

@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { SlackAPI } from './src/automation/slack-api.js';
+import { SlackAPI } from './src/slack/index.js';
 
 dotenv.config();
 

@@ -1,5 +1,5 @@
 import { SupabaseClient } from '../src/database/supabase-client.js';
-import { SlackAPI } from '../src/automation/slack-api.js';
+import { SlackAPI } from '../src/slack/index.js';
 
 export default async function handler(req, res) {
   // CORS headers
@@ -33,9 +33,33 @@ export default async function handler(req, res) {
     const db = new SupabaseClient();
     const uploads = [];
 
+    // Store preview first
+    let previewData = null;
+    try {
+      const previewResponse = await fetch(`https://${process.env.VERCEL_URL || 'content-pipeline.vercel.app'}/api/store-preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountUsername,
+          posts,
+          generationId: `slack_${Date.now()}_${accountUsername}`
+        })
+      });
+
+      if (previewResponse.ok) {
+        previewData = await previewResponse.json();
+        console.log(`✅ Preview stored: ${previewData.previewUrl}`);
+      } else {
+        const errorText = await previewResponse.text();
+        console.warn('⚠️ Failed to store preview:', errorText);
+      }
+    } catch (error) {
+      console.warn('⚠️ Preview storage failed:', error.message);
+    }
+
     for (const post of posts) {
       try {
-        const result = await slackAPI.sendPostToSlack(accountUsername, post);
+        const result = await slackAPI.sendPostToSlack(accountUsername, post, previewData);
 
         // Save to DB
         await db.client.from('generated_posts').insert({
@@ -55,7 +79,15 @@ export default async function handler(req, res) {
     }
 
     const successfulUploads = uploads.filter(u => u.success).length;
-    res.status(200).json({ success: successfulUploads === uploads.length, uploads });
+    
+    res.status(200).json({ 
+      success: successfulUploads === uploads.length, 
+      uploads,
+      previewData: previewData ? {
+        previewUrl: previewData.previewUrl,
+        downloadUrl: previewData.downloadUrl
+      } : null
+    });
   } catch (error) {
     console.error('Slack upload error:', error);
     res.status(500).json({ error: error.message });

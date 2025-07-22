@@ -5,7 +5,7 @@ export class EnhancedSlackAPI {
     this.logger = new Logger();
     this.webhookUrl = process.env.SLACK_WEBHOOK_URL;
     this.channel = process.env.SLACK_CHANNEL || '#content-pipeline';
-    this.previewBaseUrl = process.env.PREVIEW_BASE_URL || 'http://localhost:3004';
+    this.previewBaseUrl = process.env.PREVIEW_BASE_URL || 'https://easypost.fun';
     this.enabled = !!this.webhookUrl;
 
     this.logger.info(`🔗 Enhanced Slack API initialized - ${this.enabled ? 'Enabled' : 'Disabled (no webhook URL)'}`);
@@ -44,6 +44,9 @@ export class EnhancedSlackAPI {
       // Generate unique batch ID
       const batchId = `batch_${Date.now()}_${account}`;
       
+      // Store batch data in live database
+      await this.storeBatchData(batchId, account, posts);
+      
       // Create consolidated Slack message
       const payload = this.buildConsolidatedPayload(account, posts, batchId);
 
@@ -62,7 +65,7 @@ export class EnhancedSlackAPI {
         account, 
         success: true, 
         batchId,
-        previewUrl: `${this.previewBaseUrl}/preview/${batchId}`,
+        previewUrl: `${this.previewBaseUrl}/postpreview/${batchId}`,
         postsCount: posts.length 
       };
 
@@ -73,12 +76,36 @@ export class EnhancedSlackAPI {
   }
 
   /**
+   * Store batch data using the live API
+   */
+  async storeBatchData(batchId, accountUsername, posts) {
+    try {
+      const response = await fetch(`${this.previewBaseUrl}/api/postpreview/store`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batchId, accountUsername, posts })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to store batch data: ${response.status}`);
+      }
+
+      const result = await response.json();
+      this.logger.info(`✅ Stored batch ${batchId} for preview`);
+      return result;
+    } catch (error) {
+      this.logger.warn(`⚠️ Could not store batch in preview system: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Build consolidated Slack message payload
    */
   buildConsolidatedPayload(accountUsername, posts, batchId) {
     const totalImages = posts.reduce((sum, post) => sum + post.images.length, 0);
     const aesthetics = [...new Set(posts.map(post => post.images[0]?.aesthetic).filter(a => a))];
-    const previewUrl = `${this.previewBaseUrl}/preview/${batchId}`;
+    const previewUrl = `${this.previewBaseUrl}/postpreview/${batchId}`;
 
     // Create post summaries for the Slack message
     const postSummaries = posts.map(post => {
@@ -116,8 +143,8 @@ export class EnhancedSlackAPI {
           short: true 
         },
         { 
-          title: 'Preview Link', 
-          value: `<${previewUrl}|View Full Details & Download>`, 
+          title: 'Live Preview', 
+          value: `<${previewUrl}|View & Download All>`, 
           short: true 
         }
       ],
@@ -131,7 +158,7 @@ export class EnhancedSlackAPI {
         {
           type: 'button', 
           text: '📥 Download All',
-          url: `${previewUrl}?action=download`,
+          url: `${previewUrl.replace('/postpreview/', '/api/postpreview/download/')}`,
           style: 'default'
         }
       ]
@@ -151,7 +178,7 @@ export class EnhancedSlackAPI {
   }
 
   /**
-   * Store batch data for preview page (in production, use database)
+   * Legacy batch storage methods (kept for compatibility)
    */
   static batchStorage = new Map();
 
@@ -180,15 +207,12 @@ export class EnhancedSlackAPI {
     if (!this.enabled) return { account, success: false, error: 'Slack not configured' };
 
     const batchId = `batch_${Date.now()}_${account}`;
-    // store entire batch first so preview page knows about it
+    
+    // Store batch data in live system
     try {
-      await fetch(`${this.previewBaseUrl}/api/store-batch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ batchId, accountUsername: account, posts })
-      });
+      await this.storeBatchData(batchId, account, posts);
     } catch (e) {
-      this.logger.warn('⚠️ Could not store batch in preview server: ' + e.message);
+      this.logger.warn('⚠️ Could not store batch in preview system: ' + e.message);
     }
 
     let successCount = 0;
@@ -214,7 +238,7 @@ export class EnhancedSlackAPI {
   }
 
   buildSinglePostPayload(accountUsername, post, batchId) {
-    const previewUrl = `${this.previewBaseUrl}/preview/${batchId}`;
+    const previewUrl = `${this.previewBaseUrl}/postpreview/${batchId}`;
     const captionPreview = post.caption.length > 150 ? post.caption.substring(0, 147) + '…' : post.caption;
 
     const attachment = {
@@ -238,7 +262,7 @@ export class EnhancedSlackAPI {
         {
           type: 'button',
           text: '📥 Download',
-          url: `${previewUrl}?action=download&post=${post.postNumber}`,
+          url: `${this.previewBaseUrl}/api/postpreview/download/${batchId}`,
           style: 'default'
         }
       ]

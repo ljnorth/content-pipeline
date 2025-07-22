@@ -2469,7 +2469,8 @@ async function runCompleteWorkflow() {
 
 async function generateContentForWorkflow(account, postCount, imageCount) {
     try {
-        const response = await fetch('/api/generate-workflow-content', {
+        // Use the working simplified AI endpoint for intelligent content generation
+        const response = await fetch('/api/generate-ai-content-simple', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -2483,10 +2484,30 @@ async function generateContentForWorkflow(account, postCount, imageCount) {
         
         const data = await response.json();
         
-        if (response.ok) {
-            return { success: true, generation: data.generation, posts: data.posts };
+        if (response.ok && data.success) {
+            return { success: true, generation: data.generation, posts: data.generation.posts };
         } else {
-            return { success: false, error: data.error };
+            // Fallback to simplified endpoint if AI fails
+            console.log('AI endpoint failed, trying simplified endpoint...');
+            const fallbackResponse = await fetch('/api/generate-simple-content', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    accountUsername: account,
+                    postCount: postCount,
+                    imageCount: imageCount
+                })
+            });
+            
+            const fallbackData = await fallbackResponse.json();
+            
+            if (fallbackResponse.ok && fallbackData.success) {
+                return { success: true, generation: fallbackData.generation, posts: fallbackData.generation.posts };
+            } else {
+                return { success: false, error: fallbackData.error || data.error };
+            }
         }
     } catch (error) {
         return { success: false, error: error.message };
@@ -2837,8 +2858,8 @@ async function generateContentSimple() {
             progressBar.textContent = Math.round(progress) + '%';
         }, 200);
 
-        // Call generation API
-        const response = await fetch('/api/generate-workflow-content', {
+        // Call generation API - use the working simplified AI endpoint
+        const response = await fetch('/api/generate-ai-content-simple', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -2857,8 +2878,9 @@ async function generateContentSimple() {
         const result = await response.json();
 
         if (result.success) {
-            showSimpleSuccess(`Generated ${result.posts.length} posts successfully!`);
-            showGeneratedContentModal(result.posts, accountSelect.value);
+            showSimpleSuccess(`Generated ${result.generation.posts.length} posts successfully!`);
+            showGeneratedContentModal(result.generation.posts, accountSelect.value);
+            currentGeneratedContent = result.generation; // Store for later use
         } else {
             throw new Error(result.error || 'Generation failed');
         }
@@ -2899,9 +2921,6 @@ function showGeneratedContentModal(posts, accountUsername) {
                         ${imagesHtml}
                     </div>
                     <p class="small">${post.caption}</p>
-                    <div class="hashtags">
-                        ${post.hashtags.map(tag => `<span class="badge bg-primary me-1">${tag}</span>`).join('')}
-                    </div>
                 </div>
             </div>
         `;

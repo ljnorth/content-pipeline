@@ -1,10 +1,10 @@
-import { InputProcessor } from '../stages/input-processor.js';
-import { AccountProcessor } from '../stages/account-processor.js';
-import { ContentAcquirer } from '../stages/content-acquirer.js';
-import { ImageProcessor } from '../stages/image-processor.js';
-import { AIAnalyzerConcurrent } from '../stages/ai-analyzer-concurrent.js';
-import { DatabaseStorage } from '../stages/database-storage.js';
-import { Logger } from '../utils/logger.js';
+import { InputProcessor } from '../../stages/input-processor.js';
+import { AccountProcessor } from '../../stages/account-processor.js';
+import { ContentAcquirer } from '../../stages/content-acquirer.js';
+import { ImageProcessor } from '../../stages/image-processor.js';
+import { AIAnalyzerConcurrent } from '../../stages/ai-analyzer-concurrent.js';
+import { DatabaseStorage } from '../../stages/database-storage.js';
+import { Logger } from '../../utils/logger.js';
 
 export class FashionDataPipelineFast {
   constructor(options = {}) {

@@ -1,4 +1,4 @@
-import { FashionDataPipelineBatch } from './src/pipeline/fashion-pipeline-batch.js';
+import { FashionDataPipelineBatch } from './src/content/pipelines/batch.js';
 import { Logger } from './src/utils/logger.js';
 
 const logger = new Logger();

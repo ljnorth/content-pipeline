@@ -1,10 +1,10 @@
-import { InputProcessor } from '../stages/input-processor.js';
-import { AccountProcessor } from '../stages/account-processor.js';
-import { ContentAcquirer } from '../stages/content-acquirer.js';
-import { ImageProcessor } from '../stages/image-processor.js';
-import { AIAnalyzerBatch } from '../stages/ai-analyzer-batch.js';
-import { DatabaseStorage } from '../stages/database-storage.js';
-import { Logger } from '../utils/logger.js';
+import { InputProcessor } from '../../stages/input-processor.js';
+import { AccountProcessor } from '../../stages/account-processor.js';
+import { ContentAcquirer } from '../../stages/content-acquirer.js';
+import { ImageProcessor } from '../../stages/image-processor.js';
+import { AIAnalyzerBatch } from '../../stages/ai-analyzer-batch.js';
+import { DatabaseStorage } from '../../stages/database-storage.js';
+import { Logger } from '../../utils/logger.js';
 
 export class FashionDataPipelineBatch {
   constructor() {
