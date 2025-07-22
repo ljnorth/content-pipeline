@@ -189,8 +189,7 @@ export class ContentGenerator {
 
       // Get recent, high-quality images
       query = query
-        .order('created_at', { ascending: false })
-        .limit(count * 5); // Get more than needed for filtering
+        .order('created_at', { ascending: false });
 
       this.logger.info(`🔍 Executing database query...`);
       const { data: images, error } = await query;
@@ -217,8 +216,7 @@ export class ContentGenerator {
         }
         
         fallbackQuery = fallbackQuery
-          .order('created_at', { ascending: false })
-          .limit(count * 5);
+          .order('created_at', { ascending: false });
         
         this.logger.info(`🔍 Executing fallback database query...`);
         const { data: fallbackImages, error: fallbackError } = await fallbackQuery;

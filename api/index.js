@@ -978,8 +978,7 @@ app.post('/api/generate-simple-content', async (req, res) => {
     const { data: availableImages, error: imagesError } = await db.client
       .from('images')
       .select('id, image_path, aesthetic, colors, season, occasion, username, post_id, additional')
-      .not('image_path', 'is', null)
-      .limit(200);
+      .not('image_path', 'is', null);
     
     if (imagesError) {
       console.error('❌ Error fetching images:', imagesError);
@@ -1832,8 +1831,7 @@ app.post('/api/generate-ai-content', async (req, res) => {
     const { data: availableImages, error: imagesError } = await db.client
       .from('images')
       .select('id, image_path, aesthetic, colors, season, occasion, username, post_id, additional')
-      .not('image_path', 'is', null)
-      .limit(200);
+      .not('image_path', 'is', null);
     
     if (imagesError) {
       console.error('❌ Error fetching images:', imagesError);
@@ -2012,8 +2010,7 @@ app.post('/api/generate-ai-content-simple', async (req, res) => {
     const { data: availableImages, error: imagesError } = await db.client
       .from('images')
       .select('id, image_path, aesthetic, colors, season, occasion')
-      .not('image_path', 'is', null)
-      .limit(10);
+      .not('image_path', 'is', null);
     
     if (imagesError) {
       console.error('❌ [SIMPLE] Database error:', imagesError);
