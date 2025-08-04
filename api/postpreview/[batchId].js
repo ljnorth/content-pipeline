@@ -236,6 +236,10 @@ module.exports = async function handler(req, res) {
         .image-checkbox:checked {
             background: #667eea;
             color: white;
+            opacity: 1 !important;
+        }
+        .image-checkbox:checked:hover {
+            opacity: 1;
         }
         .image-checkbox:checked::after {
             content: '✓';
