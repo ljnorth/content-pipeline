@@ -1,8 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
+const { SupabaseClient } = require('../../src/database/supabase-client.js');
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+const db = new SupabaseClient();
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
     console.log(`🔄 Rerolling ${imageIds.length} images for batch ${batchId}`);
 
     // Step 1: Load existing post
-    const { data: batch, error: batchError } = await supabase
+    const { data: batch, error: batchError } = await db.client
       .from('preview_batches')
       .select('*')
       .eq('preview_id', batchId)
@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     console.log(`✅ Found existing batch with ${batch.posts[0].images.length} images`);
 
     // Step 2: Get account profile
-    const { data: accountProfile, error: profileError } = await supabase
+    const { data: accountProfile, error: profileError } = await db.client
       .from('account_profiles')
       .select('*')
       .eq('username', accountUsername)
@@ -56,7 +56,7 @@ export default async function handler(req, res) {
     const updatedPost = replaceImagesInPost(batch.posts[0], imageIds, newImages);
 
     // Step 5: Update database
-    const { error: updateError } = await supabase
+    const { error: updateError } = await db.client
       .from('preview_batches')
       .update({
         posts: [updatedPost],
@@ -102,7 +102,7 @@ async function generateReplacementImages(accountUsername, count, existingPost, a
     const pageSize = 1000;
     
     while (true) {
-      const { data: pageImages, error: pageError } = await supabase
+      const { data: pageImages, error: pageError } = await db.client
         .from('images')
         .select('*')
         .range(from, from + pageSize - 1);
