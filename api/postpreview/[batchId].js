@@ -30,7 +30,7 @@ export default async function handler(req, res) {
   }
 
   // Check if this is a data request (for client-side loading)
-  if (req.query.format === 'json' || req.url.includes('?format=json')) {
+  if (req.query.format === 'json') {
     try {
       // Get batch data from database
       const { data: batch, error } = await db.client
