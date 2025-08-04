@@ -369,6 +369,11 @@ module.exports = async function handler(req, res) {
                     <p>Generated</p>
                 </div>
             </div>
+            <div class="reroll-content-section">
+                <button class="reroll-content-btn" onclick="rerollAllContent()" style="background: linear-gradient(135deg, #667eea, #764ba2); border: none; color: white; font-weight: bold; font-size: 1.1em; padding: 15px 30px; border-radius: 25px; cursor: pointer; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); transition: all 0.3s ease;">
+                    🎲 Reroll Content
+                </button>
+            </div>
         </div>
 
         <div class="posts-grid">
@@ -523,6 +528,58 @@ module.exports = async function handler(req, res) {
                 if (rerollBtn) {
                     rerollBtn.disabled = false;
                     rerollBtn.textContent = '🚨 REROLL SELECTED IMAGES NOW';
+                }
+            }
+        }
+
+        async function rerollAllContent() {
+            // Get all image IDs from the current batch
+            const allImageIds = Array.from(document.querySelectorAll('.image-checkbox'))
+                .map(checkbox => checkbox.value);
+
+            if (allImageIds.length === 0) {
+                alert('No images found to reroll.');
+                return;
+            }
+
+            // Show loading state
+            const rerollContentBtn = document.querySelector('.reroll-content-btn');
+            if (rerollContentBtn) {
+                rerollContentBtn.disabled = true;
+                rerollContentBtn.textContent = '🔄 Rerolling All Content...';
+            }
+
+            try {
+                const response = await fetch('/api/reroll-images', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        batchId: '${batchId}',
+                        imageIds: allImageIds,
+                        accountUsername: '${batch.account_username}'
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Show success message
+                    alert('✅ Successfully rerolled all content!');
+                    // Reload the page to show new images
+                    location.reload();
+                } else {
+                    alert('❌ Failed to reroll content: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Reroll all content error:', error);
+                alert('❌ Failed to reroll content. Please try again.');
+            } finally {
+                // Hide loading state
+                if (rerollContentBtn) {
+                    rerollContentBtn.disabled = false;
+                    rerollContentBtn.textContent = '🎲 Reroll Content';
                 }
             }
         }
