@@ -1,0 +1,274 @@
+# 🚀 **Enhanced Content Analysis & Generation Project Roadmap**
+
+## 📋 **Project Overview**
+This is the master roadmap for building an intelligent content generation system that can run 10s-100s of accounts automatically, create trending content without daily input, and use existing data to identify themes and hook slides.
+
+## 🎯 **Current Status: Phase 1 - Database Cleanup & Enhancement**
+
+### **Phase 1: Database Cleanup & Enhancement**
+
+#### **1.1 Audit Current System** ✅ **COMPLETED**
+- [x] **Audit current project files** - identify what's being used vs. unused
+- [x] **Audit current database tables** - what's actually being used vs. unused
+- [x] **Document current API endpoints** - which ones are active and working
+- [x] **Review current content generation logic** - understand existing workflows
+- [x] **Backup current data** before making changes
+
+**📋 AUDIT FINDINGS:**
+- **Active Components:** Main pipeline, API (2,777 lines), automation, analytics, Slack integration
+- **Database:** 12+ active tables with engagement data, account profiles, generated content
+- **API Endpoints:** 15+ active endpoints for content generation, account management, TikTok integration
+- **Current Data:** 8k+ images with aesthetic, colors, season, occasion analysis
+- **Issues:** Schema inconsistencies, large monolithic API file, missing rich context fields
+
+#### **1.2 Clean Up Existing Data** ✅ **COMPLETED**
+- [x] **Remove unused columns** from `images` and `posts` tables
+- [x] **Standardize data formats** (some aesthetic values might be inconsistent)
+- [x] **Fix any data inconsistencies** (null values, malformed JSON, etc.)
+- [x] **Archive unused project files** - move to backup folder
+- [x] **Consolidate schema files** - merge overlapping schema definitions into single source of truth
+- [x] **Modularize API** - split 2,777-line `api/index.js` into focused modules (auth, content, accounts, etc.)
+
+**📋 CLEANUP RESULTS:**
+- **Archived:** 15+ old schema files, 20+ old scripts, 15+ old docs to `backup/` folders
+- **Consolidated:** All schema definitions into single `schema.sql` source of truth
+- **Modularized:** API split into focused modules (`api/auth/tiktok.js`, `api/accounts/profiles.js`)
+- **Reduced:** API file from 2,777 lines to ~200 lines with modular structure
+- **Maintained:** Backward compatibility with redirects for existing endpoints
+
+#### **1.3 Add New Fields to Existing Tables** ✅ **COMPLETED**
+```sql
+-- Add to images table
+ALTER TABLE public.images ADD COLUMN IF NOT EXISTS rich_context JSONB DEFAULT '{}';
+ALTER TABLE public.images ADD COLUMN IF NOT EXISTS hook_slide_analysis JSONB DEFAULT '{}';
+ALTER TABLE public.images ADD COLUMN IF NOT EXISTS item_preference TEXT; -- 'single_item', 'full_outfit', 'on_person'
+ALTER TABLE public.images ADD COLUMN IF NOT EXISTS style_category TEXT;
+ALTER TABLE public.images ADD COLUMN IF NOT EXISTS content_hooks TEXT[];
+ALTER TABLE public.images ADD COLUMN IF NOT EXISTS target_audience TEXT[];
+ALTER TABLE public.images ADD COLUMN IF NOT EXISTS mood TEXT;
+ALTER TABLE public.images ADD COLUMN IF NOT EXISTS setting TEXT;
+
+-- Add to posts table  
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS theme_used TEXT;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS content_strategy JSONB DEFAULT '{}';
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS performance_insights JSONB DEFAULT '{}';
+```
+
+**📋 PHASE 1.3 RESULTS:**
+- **Migration SQL:** Created comprehensive `add-rich-context-fields.sql` with all new fields
+- **API Endpoint:** Created `/api/schema/deploy` endpoint for deployment
+- **Deployment Script:** Created `deploy-phase-1-3.js` standalone script
+- **New Fields:** 8 new image fields + 3 new post fields + 4 new tables
+- **Indexes:** Performance indexes for all new fields
+- **Triggers:** Auto-update triggers for item preference and hook slide detection
+- **Views:** Helper views for easy querying
+- **Sample Data:** Pre-populated themes for testing
+- **Status:** Ready for deployment when Supabase credentials are available
+
+#### **1.4 Create New Tables**
+```sql
+-- Account profiles for targeting
+CREATE TABLE IF NOT EXISTS public.account_profiles (
+    id BIGSERIAL PRIMARY KEY,
+    username TEXT REFERENCES public.accounts(username) ON DELETE CASCADE,
+    is_active BOOLEAN DEFAULT true,
+    target_audience JSONB DEFAULT '{}',
+    content_strategy JSONB DEFAULT '{}',
+    style_preferences TEXT[],
+    avg_engagement_rate DECIMAL(5,4) DEFAULT 0,
+    best_performing_themes TEXT[],
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Hook slides for reuse
+CREATE TABLE IF NOT EXISTS public.hook_slides (
+    id BIGSERIAL PRIMARY KEY,
+    image_id BIGINT REFERENCES public.images(id) ON DELETE CASCADE,
+    post_id TEXT REFERENCES public.posts(post_id) ON DELETE CASCADE,
+    text_detected TEXT,
+    suggested_theme TEXT,
+    confidence DECIMAL(3,2),
+    performance_when_used DECIMAL(5,4),
+    times_used_as_hook INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Theme library
+CREATE TABLE IF NOT EXISTS public.themes (
+    id BIGSERIAL PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    keywords TEXT[],
+    hashtags TEXT[],
+    description TEXT,
+    avg_engagement DECIMAL(5,4) DEFAULT 0,
+    seasonal_relevance TEXT[],
+    style_categories TEXT[],
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Content generation history
+CREATE TABLE IF NOT EXISTS public.generated_content (
+    id BIGSERIAL PRIMARY KEY,
+    account_username TEXT,
+    theme_used TEXT,
+    images_used TEXT[],
+    caption TEXT,
+    hashtags TEXT[],
+    performance_data JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### **Phase 2: Rich Context Analysis**
+
+#### **2.1 Smart Sampling Analysis**
+- [ ] **Identify top 800 images** by engagement rate
+- [ ] **Batch analyze with GPT-4o-mini** (16 batches of 50 images)
+- [ ] **Extract rich context** (themes, style categories, content hooks, etc.)
+- [ ] **Apply patterns to remaining 7,200 images**
+- [ ] **Store results in `rich_context` JSONB field**
+
+#### **2.2 Hook Slide Detection**
+- [ ] **Analyze cover images** from multi-image posts
+- [ ] **Detect text overlays** using GPT Vision
+- [ ] **Extract themes from text** (e.g., "back to school outfits")
+- [ ] **Store hook slide data** in new table
+- [ ] **Correlate with performance** data
+
+#### **2.3 Item Preference Analysis**
+- [ ] **Classify images** as `single_item`, `full_outfit`, or `on_person`
+- [ ] **Update `item_preference` field** for all images
+- [ ] **Create filtering logic** for content generation
+
+### **Phase 3: Theme Discovery & Management**
+
+#### **3.1 Performance-Based Theme Discovery**
+- [ ] **Analyze high-performing posts** (engagement > 5%)
+- [ ] **Group by common patterns** (aesthetic + season + occasion)
+- [ ] **Extract theme keywords** and hashtags
+- [ ] **Calculate theme performance** metrics
+- [ ] **Populate themes table** with discovered themes
+
+#### **3.2 Seasonal & Event Integration**
+- [ ] **Add calendar-based themes** (back to school, holidays, etc.)
+- [ ] **Create seasonal relevance** logic
+- [ ] **Build event detection** system
+- [ ] **Update theme recommendations** based on time of year
+
+#### **3.3 Theme Optimization**
+- [ ] **Track theme performance** over time
+- [ ] **Identify trending themes** from recent posts
+- [ ] **Update theme library** with new discoveries
+- [ ] **Deactivate underperforming themes**
+
+### **Phase 4: Smart Content Generation**
+
+#### **4.1 Enhanced Image Selection**
+- [ ] **Build scoring algorithm** for image selection
+- [ ] **Implement diversity filtering** (no duplicate aesthetics)
+- [ ] **Add item preference matching** (consistent post types)
+- [ ] **Create performance-based ranking** system
+
+#### **4.2 Hook Slide Integration**
+- [ ] **Select appropriate hook slides** for themes
+- [ ] **Use hook slide text** in captions
+- [ ] **Track hook slide performance** when reused
+- [ ] **Optimize hook slide selection** based on results
+
+#### **4.3 Account-Specific Generation**
+- [ ] **Create account profiles** with targeting info
+- [ ] **Build style preference matching**
+- [ ] **Implement personalized caption generation**
+- [ ] **Add account-specific hashtag optimization**
+
+### **Phase 5: Performance Tracking & Optimization**
+
+#### **5.1 Content Performance Tracking**
+- [ ] **Track generated content performance**
+- [ ] **Correlate themes with engagement**
+- [ ] **Analyze hook slide effectiveness**
+- [ ] **Measure account-specific performance**
+
+#### **5.2 Continuous Learning**
+- [ ] **Update theme performance** based on new data
+- [ ] **Optimize image selection** algorithms
+- [ ] **Refine caption generation** based on performance
+- [ ] **Improve hook slide detection** accuracy
+
+### **Phase 6: API Endpoint Implementation**
+
+#### **6.1 Update Existing Endpoints**
+- [ ] **`/api/hook-slides`** - Return discovered hook slides
+- [ ] **`/api/available-themes`** - Return performance-based themes
+- [ ] **`/api/account-profiles`** - Return account targeting data
+- [ ] **`/api/generate-theme-content`** - Use enhanced generation
+- [ ] **`/api/run-enhanced-pipeline`** - Execute full analysis pipeline
+
+#### **6.2 New Endpoints**
+- [ ] **`/api/analyze-images`** - Run rich context analysis
+- [ ] **`/api/discover-themes`** - Find new themes from data
+- [ ] **`/api/optimize-content`** - Performance-based optimization
+- [ ] **`/api/trending-themes`** - Real-time trend detection
+
+### **Phase 7: Testing & Validation**
+
+#### **7.1 Data Quality Checks**
+- [ ] **Validate rich context data** accuracy
+- [ ] **Test hook slide detection** precision
+- [ ] **Verify theme discovery** logic
+- [ ] **Check content generation** quality
+
+#### **7.2 Performance Testing**
+- [ ] **Test with sample accounts**
+- [ ] **Measure engagement improvements**
+- [ ] **Validate content consistency**
+- [ ] **Check system scalability**
+
+## 🚀 **Implementation Priority Order:**
+
+### **High Priority (Start Here):**
+1. **Database cleanup** - Remove unused fields, standardize data
+2. **Add new fields** - Rich context, hook slide analysis, item preference
+3. **Smart sampling analysis** - Analyze top 800 images
+4. **Basic theme discovery** - Find themes from high-performing posts
+
+### **Medium Priority:**
+1. **Hook slide detection** - Identify and catalog hook slides
+2. **Enhanced content generation** - Use rich context for better selection
+3. **Account profiles** - Add targeting capabilities
+
+### **Lower Priority:**
+1. **Advanced optimization** - Performance tracking and learning
+2. **External trend integration** - Google Trends, etc.
+3. **Advanced analytics** - Deep performance insights
+
+## 💰 **Cost Breakdown:**
+- **Smart sampling analysis:** $0.17 (800 images)
+- **Hook slide detection:** $0.05 (cover images only)
+- **Total one-time cost:** ~$0.22
+- **Monthly optimization:** $0.01-0.05
+
+## 📝 **Progress Tracking:**
+- **Last Updated:** January 21, 2025
+- **Current Phase:** Phase 1 - Database Cleanup & Enhancement
+- **Next Task:** Create new tables (account_profiles, hook_slides, themes, generated_content)
+- **Completed Tasks:** 17/52 total tasks (33% complete)
+
+## 🎯 **Key Principles:**
+1. **No deviation from this roadmap** - stick to the plan
+2. **Update status after each completed task**
+3. **Focus on high-priority items first**
+4. **Test thoroughly before moving to next phase**
+5. **Keep costs under $0.25 for initial setup**
+
+## 🔗 **Related Files:**
+- [supabase-schema.sql](mdc:supabase-schema.sql) - Current database schema
+- [api/index.js](mdc:api/index.js) - Current API endpoints
+- [src/stages/](mdc:src/stages/) - Current content processing stages
+description:
+globs:
+alwaysApply: false
+---

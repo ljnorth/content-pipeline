@@ -1,6 +1,6 @@
 import { Logger } from '../utils/logger.js';
 
-export class SlackAPI {
+class SlackAPI {
   constructor() {
     this.logger = new Logger();
     this.webhookUrl = process.env.SLACK_WEBHOOK_URL;
@@ -101,8 +101,29 @@ export class SlackAPI {
       throw new Error(`Slack API error: ${response.status} ${response.statusText}`);
     }
 
-    this.logger.info(`✅ Sent post ${post.postNumber} for @${accountUsername} to Slack`);
     return { postNumber: post.postNumber, success: true };
+  }
+
+  /**
+   * Send a raw payload to Slack.
+   */
+  async sendToSlack(payload) {
+    if (!this.enabled) {
+      this.logger.warn('⚠️ Slack integration disabled - no webhook URL configured');
+      return { success: false, error: 'Slack webhook URL not configured' };
+    }
+
+    const response = await fetch(this.webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Slack API error: ${response.status} ${response.statusText}`);
+    }
+
+    return { success: true };
   }
 
   /**
@@ -168,4 +189,6 @@ export class SlackAPI {
       attachments: [attachment]
     };
   }
-} 
+}
+
+export { SlackAPI }; 

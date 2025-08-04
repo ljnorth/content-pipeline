@@ -1,0 +1,1 @@
+import "dotenv/config"; import OpenAI from "openai"; const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY }); openai.batches.retrieve("batch_688070b5723c819095518fe854e3dbd2").then(job => console.log("Status:", job.status, "Completed:", job.request_counts?.completed || 0, "/", job.request_counts?.total || 0));

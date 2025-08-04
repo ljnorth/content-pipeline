@@ -1,4 +1,4 @@
-export class Logger {
+class Logger {
   info(message, ...args) {
     console.log(`[${new Date().toISOString()}] ℹ️ ${message}`, ...args);
   }
@@ -8,4 +8,9 @@ export class Logger {
   success(message, ...args) {
     console.log(`[${new Date().toISOString()}] ✅ ${message}`, ...args);
   }
-} 
+  warn(message, ...args) {
+    console.warn(`[${new Date().toISOString()}] ⚠️ ${message}`, ...args);
+  }
+}
+
+export { Logger }; 

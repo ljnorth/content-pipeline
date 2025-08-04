@@ -1,0 +1,44 @@
+# No Test Accounts Rule
+
+## 🚫 NEVER Create Test Accounts
+
+**CRITICAL**: Never create test accounts, dummy accounts, or placeholder accounts for content generation. Only use real, live accounts from the `account_profiles` table.
+
+### ✅ Allowed Accounts
+- Real accounts from `account_profiles` table only
+- Accounts with complete profiles and strategies
+- Verified accounts with `is_active: true`
+- Accounts that have been scraped and contain real images/posts
+
+### ❌ Forbidden Actions
+- Creating test account profiles
+- Using placeholder usernames like `test_account`, `demo_user`, `example_account`
+- Generating content for non-existent accounts
+- Creating dummy data for testing purposes
+- Using accounts from general `accounts` table for content generation
+
+### 🔍 How to Check for Real Accounts
+1. Use [check-available-accounts.js](mdc:check-available-accounts.js) to see real accounts with images
+2. Query `account_profiles` table for accounts with complete profiles
+3. Only use accounts that appear in `account_profiles` with `is_active: true`
+4. Verify accounts have real images, posts, and engagement data
+
+### 📋 Account Selection Process
+1. Run `node check-available-accounts.js` to see available accounts
+2. Query `account_profiles` table for accounts with complete data
+3. Choose from accounts with the highest image counts (e.g., accounts with 100+ images)
+4. Use accounts like `3fashionicon3`, `miaslife_09`, `my.darling.g`, etc. from `account_profiles`
+5. Never create new test accounts - only use existing real data from `account_profiles`
+
+### 🧹 Cleanup Required
+If you accidentally create test accounts:
+1. Delete the test account profile from the `account_profiles` table
+2. Remove any test scripts or files
+3. Only use real accounts from `account_profiles` going forward
+
+### 💡 Best Practices
+- Always verify account exists in `account_profiles` table before generating content
+- Use accounts with substantial image collections (50+ images minimum)
+- Focus on accounts with good aesthetic variety and engagement
+- Never create placeholder or dummy data for testing
+- Only use `account_profiles` table for content generation, never `accounts` table

@@ -1,4 +1,5 @@
 import { Logger } from '../utils/logger.js';
+import { SupabaseClient } from '../database/supabase-client.js';
 
 export class EnhancedSlackAPI {
   constructor() {
@@ -7,6 +8,7 @@ export class EnhancedSlackAPI {
     this.channel = process.env.SLACK_CHANNEL || '#content-pipeline';
     this.previewBaseUrl = process.env.PREVIEW_BASE_URL || 'https://easypost.fun';
     this.enabled = !!this.webhookUrl;
+    this.db = new SupabaseClient();
 
     this.logger.info(`🔗 Enhanced Slack API initialized - ${this.enabled ? 'Enabled' : 'Disabled (no webhook URL)'}`);
   }
@@ -47,8 +49,23 @@ export class EnhancedSlackAPI {
       // Store batch data in live database
       await this.storeBatchData(batchId, account, posts);
       
+      // Get account profile for owner tagging
+      let accountProfile = null;
+      try {
+        const { SupabaseClient } = await import('../database/supabase-client.js');
+        const db = new SupabaseClient();
+        const { data } = await db.client
+          .from('account_profiles')
+          .select('owner_slack_id, owner_display_name')
+          .eq('username', account)
+          .single();
+        accountProfile = data;
+      } catch (profileError) {
+        this.logger.warn(`⚠️ Could not fetch account profile for @${account}: ${profileError.message}`);
+      }
+      
       // Create consolidated Slack message
-      const payload = this.buildConsolidatedPayload(account, posts, batchId);
+      const payload = await this.buildConsolidatedPayload(account, posts, batchId, accountProfile);
 
       const response = await fetch(this.webhookUrl, {
         method: 'POST',
@@ -76,23 +93,34 @@ export class EnhancedSlackAPI {
   }
 
   /**
-   * Store batch data using the live API
+   * Store batch data directly in database
    */
   async storeBatchData(batchId, accountUsername, posts) {
     try {
-      const response = await fetch(`${this.previewBaseUrl}/api/postpreview/store`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ batchId, accountUsername, posts })
-      });
+      // Store batch data in database for persistence
+      const batchData = {
+        preview_id: batchId,
+        account_username: accountUsername,
+        posts: posts,
+        created_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+      };
 
-      if (!response.ok) {
-        throw new Error(`Failed to store batch data: ${response.status}`);
+      // Insert or update batch data
+      const { error } = await this.db.client
+        .from('preview_batches')
+        .upsert(batchData, { onConflict: 'preview_id' });
+
+      if (error) {
+        throw new Error(`Database error: ${error.message}`);
       }
 
-      const result = await response.json();
       this.logger.info(`✅ Stored batch ${batchId} for preview`);
-      return result;
+      return { 
+        success: true, 
+        batchId,
+        previewUrl: `${this.previewBaseUrl}/postpreview/${batchId}`
+      };
     } catch (error) {
       this.logger.warn(`⚠️ Could not store batch in preview system: ${error.message}`);
       throw error;
@@ -102,10 +130,13 @@ export class EnhancedSlackAPI {
   /**
    * Build consolidated Slack message payload
    */
-  buildConsolidatedPayload(accountUsername, posts, batchId) {
+  async buildConsolidatedPayload(accountUsername, posts, batchId, accountProfile = null) {
     const totalImages = posts.reduce((sum, post) => sum + post.images.length, 0);
     const aesthetics = [...new Set(posts.map(post => post.images[0]?.aesthetic).filter(a => a))];
     const previewUrl = `${this.previewBaseUrl}/postpreview/${batchId}`;
+
+    // Get owner tag if account profile has owner info
+    const ownerTag = accountProfile?.owner_slack_id ? `<@${accountProfile.owner_slack_id}> ` : '';
 
     // Create post summaries for the Slack message
     const postSummaries = posts.map(post => {
@@ -123,7 +154,7 @@ export class EnhancedSlackAPI {
       color: '#667eea',
       title: `🎨 Content Generated for @${accountUsername}`,
       title_link: previewUrl,
-      text: `Generated ${posts.length} posts with ${totalImages} total images\n\n${postSummaries}`,
+      text: `${ownerTag}Generated ${posts.length} posts with ${totalImages} total images\n\n${postSummaries}`,
       footer: 'Content Pipeline • Click title to view full preview',
       ts: Math.floor(Date.now() / 1000),
       fields: [

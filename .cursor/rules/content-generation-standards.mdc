@@ -1,0 +1,49 @@
+# Content Generation Standards
+
+## 🎯 Core Requirements
+
+**CRITICAL**: Content generation must follow these strict standards:
+
+### 📋 Account Source Requirements
+- **ONLY** use accounts from `account_profiles` table
+- **NEVER** use accounts from general `accounts` table for content generation
+- **NEVER** create test accounts or dummy accounts
+- **ONLY** use accounts with `is_active: true`
+
+### ✅ Current Available Account Profiles
+Based on database check, only these accounts are available for content generation:
+- `@aestheticgirl3854` (aestheticgirl) - Target: 16-20, Focus: minimalist, streetwear, vintage
+
+### ❌ Forbidden Actions
+- Creating test account profiles
+- Using placeholder usernames
+- Generating content for non-existent accounts
+- Using `accounts` table for content generation
+- Creating dummy data for testing
+
+### 🔍 Verification Process
+1. Run `node check-account-profiles.js` to see available account profiles
+2. Only use accounts that appear in `account_profiles` table
+3. Verify account has `is_active: true`
+4. Ensure account has complete profile data (target_audience, content_strategy, etc.)
+
+### 📝 Content Generation Workflow
+1. **Check Account Profiles**: Query `account_profiles` table only
+2. **Verify Profile Exists**: Ensure account has complete profile data
+3. **Use Profile Data**: Leverage `target_audience`, `content_strategy`, etc.
+4. **Generate Content**: Use only account profile data for generation
+5. **No Raw Accounts**: Never use `accounts` table for content generation
+
+### 🚨 Error Handling
+If account not found in `account_profiles`:
+- DO NOT create test accounts
+- DO NOT fall back to `accounts` table
+- Check available account profiles first
+- Only use accounts with complete profiles
+
+### 💡 Best Practices
+- Always query `account_profiles` table for generation
+- Use account profile data for targeting and strategy
+- Leverage `content_strategy` and `target_audience` fields
+- Ensure `is_active: true` before generating content
+- Only use verified account profiles, never raw account data

@@ -1,0 +1,126 @@
+# 🚀 Pipeline Processing Queue
+
+This document tracks the pipeline stages that need to be run, especially for overnight processing of large datasets.
+
+## 📋 Current Queue Status
+
+### ✅ **COMPLETED**
+- **Phase 2.2**: Database sync fix for hook slide detection ✅
+  - Fixed individual image updates by `image_id` instead of `post_id`
+  - Tested successfully on 100 images
+  - Ready for full-scale processing
+
+### 🎯 **NEXT TO RUN** (Priority Order)
+
+#### 1. **Phase 2.3: Item Preference Analysis** 🔥
+- **Command**: `node run-item-preference-analysis.js --limit=100` (then scale up)
+- **Target**: All ~8,000 images without item_preference classification
+- **Estimated Cost**: ~$6.40 (based on $0.80 per 100 images)
+- **Estimated Time**: 5-7 hours for full dataset
+- **Status**: ⚠️ **Requires manual SQL setup first**
+- **Purpose**: Classify images as single_item, full_outfit, or on_person for better content generation
+- **Setup Required**: 
+  1. Go to Supabase SQL Editor
+  2. Run: `ALTER TABLE public.images ADD COLUMN IF NOT EXISTS item_preference TEXT DEFAULT NULL;`
+  3. Run: `CREATE INDEX IF NOT EXISTS idx_images_item_preference ON public.images(item_preference);`
+
+#### 2. **Cover Slide Detection - FULL DATASET** 🔥
+- **Command**: `node run-enhanced-pipeline.js --hook-slides-only`
+- **Target**: ~7,844 remaining images (all unprocessed images)
+- **Estimated Cost**: ~$60 (7,844 × $0.00765 per image)
+- **Estimated Time**: ~8-10 hours
+- **Purpose**: Identify all hook slides with themes for content generation
+- **Status**: READY TO RUN ⚡
+
+#### 2. **Background Color Analysis**
+- **Command**: TBD (needs implementation)
+- **Target**: All images for uniform generation
+- **Purpose**: Analyze background colors for matching content
+- **Status**: Pending implementation
+
+#### 3. **Rich Context Analysis**
+- **Command**: TBD (batch processing for cost savings)
+- **Target**: All images for enhanced metadata
+- **Purpose**: Detailed aesthetic, mood, setting analysis
+- **Status**: Pending implementation
+
+#### 4. **Theme-Based Content Generation**
+- **Command**: TBD
+- **Target**: Use discovered hook slides to generate themed content
+- **Purpose**: Create posts based on discovered themes
+- **Status**: Pending hook slide completion
+
+## 🌙 **Overnight Processing Strategy**
+
+### **Tonight's Run** (Recommended)
+```bash
+# Run this command before bed:
+node run-enhanced-pipeline.js --hook-slides-only
+
+# This will:
+# - Process all ~7,844 remaining images
+# - Cost ~$60 total
+# - Take 8-10 hours
+# - Give you complete hook slide dataset by morning
+```
+
+### **Expected Results**
+- **Hook Slides**: Estimate 200-400 hook slides discovered
+- **Themes**: Discover 15-25 unique themes for content generation
+- **Database**: All images will have `is_cover_slide` status (true/false)
+
+## 📊 **Progress Tracking**
+
+### **Current Database State**
+- ✅ **46 hook slides** found (from 144 processed images)
+- ❌ **98 non-hook slides** marked
+- 🔍 **7,844 unprocessed** images remaining
+- 📈 **Discovery Rate**: ~32% (46/144) - very promising!
+
+### **Projected Full Results**
+- **Estimated Hook Slides**: 2,510 hook slides (32% of 7,844)
+- **Estimated Themes**: 20-30 unique content themes
+- **Content Generation Ready**: Yes, after completion
+
+## 🔧 **Commands Reference**
+
+### **Check Progress**
+```bash
+# Check current database state
+node check-database-state.js
+
+# Check for specific themes found
+node check-hook-slides.js  # (if exists)
+```
+
+### **Resume/Continue Processing**
+```bash
+# Continue from where it left off (automatically skips processed images)
+node run-enhanced-pipeline.js --hook-slides-only
+
+# Process specific batch size
+node run-enhanced-pipeline.js --hook-slides-only --limit=1000
+```
+
+### **Monitor Costs**
+- Current session cost tracking in logs
+- Each image costs ~$0.00765
+- Budget accordingly for full dataset
+
+## 🎯 **Phase 2.3 Preview**
+
+After cover slide detection completes, Phase 2.3 will focus on:
+1. **Theme Analysis**: Analyze discovered hook slide themes
+2. **Content Strategy**: Map themes to account strategies  
+3. **Generation Pipeline**: Build theme-based content generation
+4. **Automation**: Set up automated theme-based posting
+
+## 📝 **Notes**
+- Pipeline automatically skips already processed images
+- Database sync is working perfectly (Phase 2.2 ✅)
+- Ready for large-scale overnight processing
+- All errors are handled gracefully (timeouts, API issues)
+description:
+globs:
+alwaysApply: false
+---

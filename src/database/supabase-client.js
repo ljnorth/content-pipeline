@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-export class SupabaseClient {
+class SupabaseClient {
   constructor() {
     if (!process.env.SUPABASE_URL) {
       throw new Error('SUPABASE_URL is not set in environment variables');
@@ -99,4 +99,28 @@ export class SupabaseClient {
     if (error) throw error;
     return count || 0;
   }
-} 
+
+  async getAccountProfiles() {
+    const { data, error } = await this.client
+      .from('account_profiles')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    return data;
+  }
+
+  async upsertAccountProfile(profile) {
+    const { error } = await this.client.from('account_profiles').upsert(profile);
+    if (error) throw error;
+  }
+
+  async deleteAccountProfile(username) {
+    const { error } = await this.client
+      .from('account_profiles')
+      .delete()
+      .eq('username', username);
+    if (error) throw error;
+  }
+}
+
+export { SupabaseClient }; 

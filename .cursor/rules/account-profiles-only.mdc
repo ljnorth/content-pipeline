@@ -1,0 +1,44 @@
+# Account Profiles Only Rule
+
+## 🎯 Content Generation Source
+
+**CRITICAL**: When generating content or posts, **ONLY** use accounts from the `account_profiles` table, never from the general `accounts` table.
+
+### ✅ Allowed Sources
+- `account_profiles` table only
+- Accounts with proper profiles and strategies
+- Verified accounts with content strategies
+
+### ❌ Forbidden Sources
+- `accounts` table (general scraped accounts)
+- Raw usernames without profiles
+- Unverified account data
+
+### 🔍 Account Profile Requirements
+Accounts must have:
+- `username` field
+- `target_audience` data
+- `content_strategy` configuration
+- `performance_goals` defined
+- `is_active: true`
+
+### 📋 Content Generation Workflow
+1. **Check Account Profiles**: Query `account_profiles` table only
+2. **Verify Profile Exists**: Ensure account has complete profile data
+3. **Use Profile Data**: Leverage `target_audience`, `content_strategy`, etc.
+4. **Generate Content**: Use only account profile data for generation
+5. **No Raw Accounts**: Never use `accounts` table for content generation
+
+### 🚨 Error Handling
+If account not found in `account_profiles`:
+- DO NOT create test accounts
+- DO NOT fall back to `accounts` table
+- Check available account profiles first
+- Only use accounts with complete profiles
+
+### 💡 Best Practices
+- Always query `account_profiles` table for generation
+- Use account profile data for targeting and strategy
+- Leverage `content_strategy` and `target_audience` fields
+- Ensure `is_active: true` before generating content
+---

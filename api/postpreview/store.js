@@ -1,8 +1,8 @@
-import { SupabaseClient } from '../../src/database/supabase-client.js';
+const { SupabaseClient } = require('../../src/database/supabase-client.js');
 
 const db = new SupabaseClient();
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -28,35 +28,19 @@ export default async function handler(req, res) {
 
     // Store batch data in database for persistence
     const batchData = {
-      batch_id: batchId,
+      preview_id: batchId,
       account_username: accountUsername,
-      posts_data: posts,
+      posts: posts,
       created_at: new Date().toISOString(),
-      total_images: posts.reduce((sum, post) => sum + (post.images?.length || 0), 0)
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
     };
 
-    // Create preview_batches table if it doesn't exist
-    const { error: createError } = await db.client.rpc('create_preview_batches_table_if_not_exists', {
-      table_sql: `
-        CREATE TABLE IF NOT EXISTS preview_batches (
-          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-          batch_id TEXT UNIQUE NOT NULL,
-          account_username TEXT NOT NULL,
-          posts_data JSONB NOT NULL,
-          total_images INTEGER DEFAULT 0,
-          created_at TIMESTAMPTZ DEFAULT now()
-        );
-      `
-    });
-    
-    if (createError) {
-      throw new Error(`Failed to create preview_batches table: ${createError.message}`);
-    }
+    // Table should already exist from migration
 
     // Insert or update batch data
     const { error } = await db.client
       .from('preview_batches')
-      .upsert(batchData, { onConflict: 'batch_id' });
+      .upsert(batchData, { onConflict: 'preview_id' });
 
     if (error) {
       console.error('Database error:', error);
@@ -74,4 +58,4 @@ export default async function handler(req, res) {
     console.error('Store batch error:', error);
     res.status(500).json({ error: error.message });
   }
-} 
+}; 

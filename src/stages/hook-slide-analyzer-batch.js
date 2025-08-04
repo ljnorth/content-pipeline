@@ -48,10 +48,7 @@ export class HookSlideAnalyzerBatch {
       }
 
       try {
-        // Read image file as buffer and convert to base64
-        const imageBuffer = await fs.readFile(item.imagePath);
-        const base64Image = imageBuffer.toString('base64');
-
+        // Use public image URL directly (no base64 conversion needed)
         const task = {
           custom_id: `hook-task-${i}-${item.postId}`,
           method: "POST",
@@ -64,22 +61,11 @@ export class HookSlideAnalyzerBatch {
                 content: [
                   { 
                     type: 'text', 
-                    text: `Analyze if this image is a "hook slide" - an image with text overlays that announces a theme like "Back to School Outfits", "Summer Vacation Fits", "Date Night Looks", etc. 
-
-Return JSON: {
-  "h": true/false,
-  "c": 0.0-1.0,
-  "t": "extracted text or null",
-  "th": "theme like 'back to school' or null",
-  "cd": "content direction or null",
-  "tv": "target vibe like 'preppy' or null"
-}
-
-Focus on images with clear text overlays announcing outfit themes.` 
+                    text: `Analyze if this image is a "hook slide" - an image with text overlays that announces a theme like "Back to School Outfits", "Summer Vacation Fits", "Date Night Looks", etc. \n\nReturn JSON: {\n  "h": true/false,\n  "c": 0.0-1.0,\n  "t": "extracted text or null",\n  "th": "theme like 'back to school' or null",\n  "cd": "content direction or null",\n  "tv": "target vibe like 'preppy' or null"\n}\n\nFocus on images with clear text overlays announcing outfit themes.` 
                   },
                   { 
                     type: 'image_url', 
-                    image_url: { url: `data:image/jpeg;base64,${base64Image}` } 
+                    image_url: { url: item.imagePath } // Use public URL directly
                   }
                 ]
               }
@@ -114,6 +100,10 @@ Focus on images with clear text overlays announcing outfit themes.`
     
     const batchContent = batchTasks.map(task => JSON.stringify(task)).join('\n');
     await fs.writeFile(batchFilePath, batchContent);
+    
+    // Verify the file format
+    this.logger.info(`📄 Batch file size: ${batchContent.length} characters`);
+    this.logger.info(`📄 Batch file lines: ${batchTasks.length}`);
     
     this.logger.info(`📄 Batch file created: ${batchFilePath}`);
     
@@ -206,8 +196,13 @@ Focus on images with clear text overlays announcing outfit themes.`
       
       try {
         const response = result.response.body;
-        const text = response.choices[0].message.content.trim();
-        
+        let text = response.choices[0].message.content.trim();
+        // Strip markdown code block if present
+        if (text.startsWith('```json')) {
+          text = text.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
+        } else if (text.startsWith('```')) {
+          text = text.replace(/^```\s*/, '').replace(/```\s*$/, '').trim();
+        }
         // Parse compressed JSON and convert back to full format
         const compressed = JSON.parse(text);
         const analysis = {

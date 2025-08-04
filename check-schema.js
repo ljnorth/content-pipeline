@@ -1,61 +1,51 @@
-import dotenv from 'dotenv';
-import { SupabaseClient } from './src/database/supabase-client.js';
+import { createClient } from '@supabase/supabase-js';
+import { config } from 'dotenv';
+config();
 
-// Load environment variables
-dotenv.config();
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
-const db = new SupabaseClient();
-
-async function checkImageSchema() {
-  try {
-    console.log('🔍 Checking current images table schema...\n');
+async function checkDatabaseSchema() {
+  console.log('🔍 Checking current database schema and data...');
+  
+  // Get a sample record to see what fields exist
+  const { data: sample, error } = await supabase
+    .from('images')
+    .select('*')
+    .limit(1);
     
-    // Get sample image to see current schema
-    const { data: images } = await db.client
-      .from('images')
-      .select('*')
-      .limit(1);
+  if (!error && sample && sample.length > 0) {
+    console.log('📋 Current fields in images table:');
+    const fields = Object.keys(sample[0]);
     
-    if (images && images.length > 0) {
-      console.log('📊 Current images table fields:');
-      console.log('===============================');
-      Object.keys(images[0]).forEach(key => {
-        const value = images[0][key];
-        const type = typeof value;
-        const isNull = value === null ? ' (null)' : '';
-        console.log(`  ✓ ${key}: ${type}${isNull}`);
-      });
+    // Categorize the fields
+    const hookFields = fields.filter(f => f.includes('hook') || f.includes('cover_slide'));
+    const bgFields = fields.filter(f => f.includes('bg_') || f.includes('background') || f.includes('uniformity') || f.includes('suitable'));
+    const otherFields = fields.filter(f => !hookFields.includes(f) && !bgFields.includes(f));
+    
+    console.log('\n🎯 Hook/Cover slide fields (duplicates):');
+    hookFields.forEach(f => {
+      const value = sample[0][f];
+      console.log(`  - ${f}: ${value === null ? 'NULL' : value}`);
+    });
+    
+    console.log('\n🗑️  Background analysis fields (to remove):');
+    bgFields.forEach(f => {
+      const value = sample[0][f];
+      console.log(`  - ${f}: ${value === null ? 'NULL' : value}`);
+    });
+    
+    console.log('\n✅ Other fields:');
+    otherFields.slice(0, 10).forEach(f => {
+      console.log(`  - ${f}`);
+    });
+    if (otherFields.length > 10) {
+      console.log(`  ... and ${otherFields.length - 10} more fields`);
     }
     
-    // Get total count
-    const { count } = await db.client
-      .from('images')
-      .select('*', { count: 'exact', head: true });
-    
-    console.log(`\n📈 Total images in database: ${count}`);
-    
-    // Check if hook slide fields exist
-    console.log('\n🎯 Checking for hook slide fields...');
-    const hookFields = ['is_hook_slide', 'hook_confidence', 'hook_theme', 'hook_text'];
-    const existingFields = Object.keys(images?.[0] || {});
-    
-    hookFields.forEach(field => {
-      const exists = existingFields.includes(field);
-      console.log(`  ${exists ? '✅' : '❌'} ${field}: ${exists ? 'EXISTS' : 'MISSING'}`);
-    });
-    
-    // Check for background color fields
-    console.log('\n🎨 Checking for background color fields...');
-    const bgFields = ['primary_bg_color', 'bg_type', 'bg_brightness', 'suitable_for_matching'];
-    
-    bgFields.forEach(field => {
-      const exists = existingFields.includes(field);
-      console.log(`  ${exists ? '✅' : '❌'} ${field}: ${exists ? 'EXISTS' : 'MISSING'}`);
-    });
-    
-  } catch (error) {
-    console.error('❌ Error:', error.message);
+    console.log(`\n📊 Total fields: ${fields.length}`);
+  } else {
+    console.log('❌ Error fetching sample data:', error?.message);
   }
 }
 
-checkImageSchema(); 
+checkDatabaseSchema().catch(console.error); 

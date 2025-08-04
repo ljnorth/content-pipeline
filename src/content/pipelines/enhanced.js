@@ -3,6 +3,7 @@ import { AccountProcessor } from '../../stages/account-processor.js';
 import { ContentAcquirer } from '../../stages/content-acquirer.js';
 import { ImageProcessor } from '../../stages/image-processor.js';
 import { AIAnalyzer } from '../../stages/ai-analyzer.js';
+import { HookSlideAnalyzer } from '../../stages/hook-slide-analyzer.js';
 import { HookSlideAnalyzerBatch } from '../../stages/hook-slide-analyzer-batch.js';
 import { BackgroundColorAnalyzer } from '../../stages/background-color-analyzer.js';
 import { DatabaseStorage } from '../../stages/database-storage.js';
@@ -120,74 +121,130 @@ export class FashionDataPipelineEnhanced {
   }
 
   // Run hook slide detection only on existing images
-  async runHookSlideDetectionOnly() {
-    this.logger.info('✨ Running BATCH Hook Slide Detection on existing images (50% cost savings)...');
-    
+  async runHookSlideDetectionOnly(limit) {
+    this.logger.info('✨ Running Hook Slide Detection (normal API, not batch)...');
     try {
       // Get all images from database that haven't been checked for hook slides
-      // First get all post_ids that already have hook slides
-      const { data: existingHookSlides } = await this.hookSlideStorage.db.client
-        .from('hook_slides')
-        .select('post_id');
-      
-      const existingPostIds = existingHookSlides?.map(slide => slide.post_id) || [];
-      
-      // Then get images that are NOT in that list
-      let imageQuery = this.hookSlideStorage.db.client
+      // Check for images where is_cover_slide is null (not yet processed)
+      let imageQuery = this.databaseStorage.db.client
         .from('images')
-        .select('*');
-      
-      if (existingPostIds.length > 0) {
-        imageQuery = imageQuery.not('post_id', 'in', `(${existingPostIds.map(id => `'${id}'`).join(',')})`);
+        .select('*')
+        .is('is_cover_slide', null);
+        
+      if (limit) {
+        imageQuery = imageQuery.limit(limit);
       }
-      
       const { data: images, error } = await imageQuery;
-
       if (error) {
-        throw new Error(`Failed to fetch images: ${error.message}`);
+        this.logger.error(`❌ Database error fetching images: ${error.message}`);
+        throw error;
       }
-
       if (!images || images.length === 0) {
-        this.logger.info('✅ No new images to check for hook slides');
-        return { processed: 0, found: 0 };
+        this.logger.info('✅ No new images to process for hook slides');
+        return { processed: 0, hookSlides: 0, cost: 0 };
       }
-
-      this.logger.info(`🔍 Found ${images.length} images to check for hook slides`);
-
-      // Convert database images to format expected by hook slide analyzer
-      const imageItems = images.map(img => ({
-        postId: img.post_id,
-        imagePath: img.image_path,
-        metadata: {
-          username: img.username,
-          post_id: img.post_id,
-          image_path: img.image_path
-        }
-      }));
-
-      // Run hook slide detection
-      const hookSlides = await this.hookSlideAnalyzer.process(imageItems);
-
-      // Store found hook slides
-      const hookStats = await this.hookSlideStorage.process(hookSlides);
-
-      this.logger.info('✨ BATCH Hook slide detection complete!');
-      this.logger.info(`   📊 Images processed: ${images.length}`);
-      this.logger.info(`   ✨ Hook slides found: ${hookStats.stored}`);
-      this.logger.info(`   💰 Detection cost: $${this.hookSlideAnalyzer.totalCost.toFixed(4)} (BATCH mode)`);
       
-      // Show batch savings
-      const regularCost = this.hookSlideAnalyzer.totalCost * 2;
-      this.logger.info(`   💰 Batch savings: $${(regularCost - this.hookSlideAnalyzer.totalCost).toFixed(4)} (50% off individual calls)`);
-
+      // Get batch size from environment or default to 5
+      const batchSize = parseInt(process.env.BATCH_SIZE, 10) || 5;
+      const totalImages = images.length;
+      const totalBatches = Math.ceil(totalImages / batchSize);
+      
+      // Cost calculation (approximate)
+      const costPerImage = 0.00765; // gpt-4o-mini vision cost per image
+      const projectedCost = totalImages * costPerImage;
+      
+      this.logger.info(`📊 Processing ${totalImages} images in ${totalBatches} batches of ${batchSize}`);
+      this.logger.info(`💰 Projected cost: $${projectedCost.toFixed(4)}`);
+      
+      let totalProcessed = 0;
+      let totalHookSlides = 0;
+      let totalCost = 0;
+      const startTime = Date.now();
+      
+      // Process images in batches
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const batchStart = batchIndex * batchSize;
+        const batchEnd = Math.min(batchStart + batchSize, totalImages);
+        const batch = images.slice(batchStart, batchEnd);
+        
+        this.logger.info(`🔄 Processing batch ${batchIndex + 1}/${totalBatches} (${batch.length} images)...`);
+        
+        // Process batch with HookSlideAnalyzer (normal API)
+        const analyzer = new HookSlideAnalyzer();
+        const batchResults = await analyzer.process(batch.map(img => ({
+          imageId: img.id,
+          postId: img.post_id,
+          imagePath: img.image_path
+        })));
+        
+        // Store results in images table (not separate hook_slides table)
+        for (const result of batchResults) {
+          try {
+            // Update the specific image by its unique ID
+            const { data, error: updateError } = await this.databaseStorage.db.client
+              .from('images')
+              .update({
+                is_cover_slide: result.is_hook_slide,
+                cover_slide_text: result.text_detected
+              })
+              .eq('id', result.imageId)
+              .select('id, post_id, is_cover_slide, cover_slide_text');
+              
+            if (updateError) {
+              this.logger.error(`❌ Failed to update image ${result.imageId}: ${updateError.message}`);
+              this.logger.error(`Full error details:`, updateError);
+            } else if (data && data.length > 0) {
+              if (result.is_hook_slide) {
+                totalHookSlides++;
+                this.logger.info(`✅ Hook slide stored: ${result.imageId} (post ${result.postId}) - "${result.text_detected}"`);
+              } else {
+                this.logger.info(`✅ Not hook slide stored: ${result.imageId} (post ${result.postId})`);
+              }
+            } else {
+              this.logger.error(`❌ No rows updated for image_id: ${result.imageId} (might not exist)`);
+            }
+          } catch (err) {
+            this.logger.error(`❌ Exception updating image ${result.imageId}: ${err.message}`);
+            this.logger.error(`Full exception:`, err);
+          }
+        }
+        
+        totalProcessed += batch.length;
+        totalCost += batch.length * costPerImage;
+        
+        // Calculate progress and time estimates
+        const elapsedTime = (Date.now() - startTime) / 1000; // seconds
+        const avgTimePerImage = elapsedTime / totalProcessed;
+        const remainingImages = totalImages - totalProcessed;
+        const estimatedTimeRemaining = remainingImages * avgTimePerImage;
+        
+        this.logger.info(`📈 Progress: ${totalProcessed}/${totalImages} (${Math.round((totalProcessed/totalImages)*100)}%)`);
+        this.logger.info(`⏱️  Estimated time remaining: ${Math.round(estimatedTimeRemaining/60)} minutes`);
+        this.logger.info(`💰 Cost so far: $${totalCost.toFixed(4)} / $${projectedCost.toFixed(4)}`);
+        this.logger.info(`🎯 Hook slides found so far: ${totalHookSlides}`);
+        
+        // Small delay between batches to avoid rate limits
+        if (batchIndex < totalBatches - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      const totalTime = (Date.now() - startTime) / 1000;
+      this.logger.info(`🎉 Hook slide detection completed!`);
+      this.logger.info(`   📊 Images processed: ${totalProcessed}`);
+      this.logger.info(`   🎯 Hook slides found: ${totalHookSlides}`);
+      this.logger.info(`   ⏱️  Total time: ${Math.round(totalTime/60)} minutes`);
+      this.logger.info(`   💰 Total cost: $${totalCost.toFixed(4)}`);
+      
       return {
-        processed: images.length,
-        found: hookStats.stored,
-        cost: this.hookSlideAnalyzer.totalCost
+        processed: totalProcessed,
+        hookSlides: totalHookSlides,
+        cost: totalCost,
+        timeSeconds: totalTime
       };
-
+      
     } catch (error) {
-      this.logger.error(`❌ Hook slide detection failed: ${error.message}`);
+      this.logger.error(`❌ Error in hook slide detection: ${error.message}`);
       throw error;
     }
   }

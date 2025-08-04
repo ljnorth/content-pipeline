@@ -1,0 +1,42 @@
+# Real Accounts Only for Content Generation
+
+## 🎯 Content Generation Rules
+
+When generating content or posts, **ONLY** use real accounts from the `account_profiles` table with actual scraped data.
+
+### ✅ Real Account Sources
+- `account_profiles` table only
+- Accounts with complete profiles and strategies
+- Verified accounts with `is_active: true`
+- Examples: `3fashionicon3` (199 images), `miaslife_09` (167 images), `my.darling.g` (164 images)
+
+### ❌ Never Use
+- Test accounts
+- Dummy accounts
+- Placeholder usernames
+- Non-existent accounts
+- Accounts without scraped data
+- **General `accounts` table for content generation**
+
+### 🔍 Verification Process
+1. Check available accounts: `node check-available-accounts.js`
+2. Query `account_profiles` table for accounts with complete data
+3. Verify account has substantial image collection (50+ images minimum)
+4. Ensure account exists in `account_profiles` with `is_active: true`
+5. Use accounts with good aesthetic variety
+
+### 📝 Content Generation Workflow
+1. **Check Account Profiles**: Query `account_profiles` table only
+2. **Select Real Account**: Choose from accounts with most images
+3. **Verify Profile Data**: Ensure account has complete profile in `account_profiles`
+4. **Generate Content**: Use only verified real accounts from `account_profiles`
+5. **No Test Creation**: Never create test accounts for generation
+6. **No Raw Accounts**: Never use `accounts` table for content generation
+
+### 🚨 Error Handling
+If account profile not found in `account_profiles`:
+- Check if account exists in `account_profiles` table
+- Use `node check-available-accounts.js` to find real accounts
+- Only use accounts that appear in `account_profiles` with complete data
+- Never create test account profiles
+- Never fall back to `accounts` table
