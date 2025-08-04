@@ -95,7 +95,7 @@ export default async function handler(req, res) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Content Preview - @${batch.account_username} | easypost.fun (${timestamp})</title>
-    <!-- DEPLOYMENT ID: ${Date.now()}-${Math.random().toString(36).substring(7)} - Force fresh deployment -->    
+    
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
@@ -526,7 +526,7 @@ export default async function handler(req, res) {
                     alert('✅ Successfully replaced ' + selectedImageIds.length + ' images!');
                     console.log('🔄 Reloading page to show new images...');
                     // Force a hard reload to bypass cache
-                    window.location.href = window.location.href + "?v=" + Date.now();
+                    window.location.reload(true);
                 } else {
                     alert('❌ Failed to replace images: ' + (result.error || 'Unknown error'));
                 }
@@ -580,7 +580,7 @@ export default async function handler(req, res) {
                     alert('✅ Successfully rerolled all content!');
                     console.log('🔄 Reloading page to show new images...');
                     // Force a hard reload to bypass cache
-                    window.location.href = window.location.href + "?v=" + Date.now();
+                    window.location.reload(true);
                 } else {
                     alert('❌ Failed to reroll content: ' + (result.error || 'Unknown error'));
                 }

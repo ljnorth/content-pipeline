@@ -1,4 +1,4 @@
-import { SupabaseClient } from '../../src/database/supabase-client.js';
+import { SupabaseClient } from '../src/database/supabase-client.js';
 
 const db = new SupabaseClient();
 
@@ -59,14 +59,7 @@ export default async function handler(req, res) {
     const { error: updateError } = await db.client
       .from('preview_batches')
       .update({
-        posts: [updatedPost],
-        reroll_count: (batch.reroll_count || 0) + 1,
-        reroll_history: [...(batch.reroll_history || []), {
-          timestamp: new Date().toISOString(),
-          replaced_image_ids: imageIds,
-          new_image_ids: newImages.map(img => img.id),
-          account_username: accountUsername
-        }]
+        posts: [updatedPost]
       })
       .eq('preview_id', batchId);
 
@@ -81,7 +74,7 @@ export default async function handler(req, res) {
     res.json({
       success: true,
       updatedPost,
-      rerollCount: (batch.reroll_count || 0) + 1,
+      rerollCount: 1, // Default to 1 since we don't have tracking yet
       replacedImageIds: imageIds,
       newImageIds: newImages.map(img => img.id)
     });

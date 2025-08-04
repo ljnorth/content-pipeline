@@ -1813,6 +1813,189 @@ app.post('/api/upload-workflow-to-tiktok', async (req, res) => {
   }
 });
 
+// Reroll API endpoint
+app.post('/api/reroll-images', async (req, res) => {
+  try {
+    const { batchId, imageIds, accountUsername } = req.body;
+
+    if (!batchId || !imageIds || !accountUsername) {
+      return res.status(400).json({ error: 'Missing required parameters' });
+    }
+
+    logger.info(`🔄 Rerolling ${imageIds.length} images for batch ${batchId}`);
+
+    // Step 1: Load existing post
+    const { data: batch, error: batchError } = await db.client
+      .from('preview_batches')
+      .select('*')
+      .eq('preview_id', batchId)
+      .single();
+
+    if (batchError || !batch) {
+      return res.status(404).json({ error: 'Batch not found' });
+    }
+
+    logger.info(`✅ Found existing batch with ${batch.posts[0].images.length} images`);
+
+    // Step 2: Get account profile
+    const { data: accountProfile, error: profileError } = await db.client
+      .from('account_profiles')
+      .select('*')
+      .eq('username', accountUsername)
+      .single();
+
+    if (profileError || !accountProfile) {
+      return res.status(404).json({ error: 'Account profile not found' });
+    }
+
+    const accountAesthetics = accountProfile.content_strategy?.aestheticFocus || ['streetwear', 'casual', 'aesthetic'];
+    logger.info(`🎯 Account aesthetics: ${accountAesthetics.join(', ')}`);
+
+    // Step 3: Generate new images for selected slots
+    const newImages = await generateReplacementImages(accountUsername, imageIds.length, batch.posts[0], accountAesthetics);
+
+    if (newImages.length === 0) {
+      return res.status(500).json({ error: 'Failed to generate replacement images' });
+    }
+
+    logger.info(`✅ Generated ${newImages.length} replacement images`);
+
+    // Step 4: Replace selected images in the post
+    const updatedPost = replaceImagesInPost(batch.posts[0], imageIds, newImages);
+
+    // Step 5: Update database
+    const { error: updateError } = await db.client
+      .from('preview_batches')
+      .update({
+        posts: [updatedPost]
+      })
+      .eq('preview_id', batchId);
+
+    if (updateError) {
+      logger.error('❌ Failed to update batch:', updateError);
+      return res.status(500).json({ error: 'Failed to update batch' });
+    }
+
+    logger.info('✅ Successfully updated batch with new images');
+
+    // Step 6: Return updated post data
+    res.json({
+      success: true,
+      updatedPost,
+      rerollCount: 1, // Default to 1 since we don't have tracking yet
+      replacedImageIds: imageIds,
+      newImageIds: newImages.map(img => img.id)
+    });
+
+  } catch (error) {
+    logger.error('❌ Reroll error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper functions for reroll API
+async function generateReplacementImages(accountUsername, count, existingPost, accountAesthetics) {
+  logger.info(`🎨 Generating ${count} replacement images...`);
+
+  try {
+    // Get ALL images using pagination
+    let allImages = [];
+    let from = 0;
+    const pageSize = 1000;
+    
+    while (true) {
+      const { data: pageImages, error: pageError } = await db.client
+        .from('images')
+        .select('*')
+        .range(from, from + pageSize - 1);
+      
+      if (pageError || !pageImages || pageImages.length === 0) {
+        break;
+      }
+      
+      allImages = allImages.concat(pageImages);
+      from += pageSize;
+      
+      if (pageImages.length < pageSize) {
+        break;
+      }
+    }
+
+    logger.info(`📸 Found ${allImages.length} total images`);
+
+    // Filter by account aesthetics
+    const matchingImages = allImages.filter(img => {
+      if (!img.aesthetic) return false;
+      
+      const imgAesthetic = img.aesthetic.toLowerCase();
+      return accountAesthetics.some(targetAesthetic => 
+        imgAesthetic.includes(targetAesthetic.toLowerCase()) ||
+        targetAesthetic.toLowerCase().includes(imgAesthetic)
+      );
+    });
+
+    logger.info(`✅ Found ${matchingImages.length} images matching account aesthetics`);
+
+    // If we don't have enough matching images, use all images
+    if (matchingImages.length < count * 2) {
+      logger.info('⚠️ Not enough matching images, using all images');
+      matchingImages.push(...allImages);
+    }
+
+    // Get existing image IDs to avoid duplicates
+    const existingImageIds = existingPost.images.map(img => img.id);
+    logger.info(`🚫 Excluding ${existingImageIds.length} existing image IDs`);
+
+    // Filter out existing images and randomly select new ones
+    const availableImages = matchingImages.filter(img => !existingImageIds.includes(img.id));
+    const shuffledImages = availableImages.sort(() => Math.random() - 0.5);
+    const selectedImages = shuffledImages.slice(0, count);
+
+    logger.info(`✅ Selected ${selectedImages.length} unique replacement images`);
+
+    // Format the new images
+    return selectedImages.map(img => ({
+      id: img.id,
+      imagePath: img.image_path,
+      aesthetic: img.aesthetic || 'mixed',
+      colors: img.colors || ['neutral'],
+      season: img.season || 'any',
+      occasion: img.occasion || 'casual',
+      selection_score: 100 + Math.random() * 50,
+      is_cover_slide: false
+    }));
+
+  } catch (error) {
+    logger.error('❌ Error generating replacement images:', error);
+    return [];
+  }
+}
+
+function replaceImagesInPost(post, imageIdsToReplace, newImages) {
+  logger.info(`🔄 Replacing ${imageIdsToReplace.length} images in post...`);
+
+  const updatedImages = [...post.images];
+  let newImageIndex = 0;
+
+  // Replace selected images with new ones
+  for (let i = 0; i < updatedImages.length; i++) {
+    if (imageIdsToReplace.includes(updatedImages[i].id)) {
+      if (newImageIndex < newImages.length) {
+        logger.info(`🔄 Replacing image ${updatedImages[i].id} with ${newImages[newImageIndex].id}`);
+        updatedImages[i] = newImages[newImageIndex];
+        newImageIndex++;
+      }
+    }
+  }
+
+  return {
+    ...post,
+    images: updatedImages,
+    rerolledAt: new Date().toISOString(),
+    rerollCount: (post.rerollCount || 0) + 1
+  };
+}
+
 app.get('/tos', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'tos.html'));
 });
