@@ -1,4 +1,4 @@
-import { SupabaseClient } from '../../src/database/supabase-client.js';
+import { SupabaseClient } from '../src/database/supabase-client.js';
 
 const db = new SupabaseClient();
 
