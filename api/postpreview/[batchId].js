@@ -1,8 +1,8 @@
-const { SupabaseClient } = require('../../src/database/supabase-client.js');
+import { SupabaseClient } from '../../src/database/supabase-client.js';
 
 const db = new SupabaseClient();
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   // Extract batchId from URL path for Vercel dynamic routes
   let batchId;
   try {
