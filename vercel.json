@@ -48,11 +48,15 @@
     },
     {
       "src": "/api/postpreview/download/([^/]+)",
-      "dest": "/api/postpreview/download/$1.js"
+      "dest": "/api/postpreview/download/[batchId].js"
+    },
+    {
+      "src": "/api/postpreview/download-selected/([^/]+)",
+      "dest": "/api/postpreview/download-selected/[batchId].js"
     },
     {
       "src": "/postpreview/([^/]+)",
-      "dest": "/api/postpreview/$1.js"
+      "dest": "/api/postpreview/[batchId].js"
     },
     {
       "src": "/auth/tiktok/callback",
@@ -61,6 +65,10 @@
     {
       "src": "/auth/tiktok/callback/",
       "dest": "api/index.js"
+    },
+    {
+      "src": "/api/reroll-images",
+      "dest": "/api/reroll-images.js"
     },
     {
       "src": "/api/(.*)",
@@ -74,4 +82,4 @@
   "env": {
     "NODE_ENV": "production"
   }
-} 
+}
