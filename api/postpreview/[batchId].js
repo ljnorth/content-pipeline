@@ -29,6 +29,39 @@ export default async function handler(req, res) {
     return;
   }
 
+  // Check if this is a data request (for client-side loading)
+  if (req.query.format === 'json' || req.url.includes('?format=json')) {
+    try {
+      // Get batch data from database
+      const { data: batch, error } = await db.client
+        .from('preview_batches')
+        .select('*')
+        .eq('preview_id', batchId)
+        .single();
+
+      if (error || !batch) {
+        res.status(404).json({ error: 'Batch not found' });
+        return;
+      }
+
+      // Return clean JSON data
+      res.status(200).json({
+        success: true,
+        batch: {
+          id: batch.preview_id,
+          accountUsername: batch.account_username,
+          createdAt: batch.created_at,
+          posts: batch.posts || []
+        }
+      });
+      return;
+    } catch (error) {
+      console.error('Preview data error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+      return;
+    }
+  }
+
   if (!batchId) {
     res.status(400).send(`
       <!DOCTYPE html>

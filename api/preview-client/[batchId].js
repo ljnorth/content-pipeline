@@ -394,7 +394,7 @@ export default async function handler(req, res) {
         // Load batch data from API
         async function loadBatchData() {
             try {
-                const response = await fetch('/api/preview-data/${batchId}');
+                const response = await fetch('/postpreview/${batchId}?format=json');
                 const data = await response.json();
 
                 if (data.success && data.batch) {
