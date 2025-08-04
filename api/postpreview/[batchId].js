@@ -439,88 +439,99 @@ module.exports = async function handler(req, res) {
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const imageCheckboxes = document.querySelectorAll('.image-checkbox');
+        // Global functions for onclick handlers
+        function updateSelectedCount() {
+            const selected = document.querySelectorAll('.image-checkbox:checked').length;
             const selectedCountSpan = document.getElementById('selected-count');
-
-            function updateSelectedCount() {
-                const selected = document.querySelectorAll('.image-checkbox:checked').length;
+            if (selectedCountSpan) {
                 selectedCountSpan.textContent = selected + ' image' + (selected === 1 ? '' : 's') + ' selected';
             }
+        }
 
-            function selectAllImages() {
-                imageCheckboxes.forEach(checkbox => checkbox.checked = true);
-                updateSelectedCount();
+        function selectAllImages() {
+            const imageCheckboxes = document.querySelectorAll('.image-checkbox');
+            imageCheckboxes.forEach(checkbox => checkbox.checked = true);
+            updateSelectedCount();
+        }
+
+        function deselectAllImages() {
+            const imageCheckboxes = document.querySelectorAll('.image-checkbox');
+            imageCheckboxes.forEach(checkbox => checkbox.checked = false);
+            updateSelectedCount();
+        }
+
+        function downloadSelectedImages() {
+            const selectedImageIds = Array.from(document.querySelectorAll('.image-checkbox:checked'))
+                .map(checkbox => checkbox.value);
+
+            if (selectedImageIds.length === 0) {
+                alert('Please select at least one image to download.');
+                return;
             }
 
-            function deselectAllImages() {
-                imageCheckboxes.forEach(checkbox => checkbox.checked = false);
-                updateSelectedCount();
+            const url = '/api/postpreview/download-selected/${batchId}?imageIds=' + selectedImageIds.join(',');
+            window.location.href = url;
+        }
+
+        async function rerollSelectedImages() {
+            const selectedImageIds = Array.from(document.querySelectorAll('.image-checkbox:checked'))
+                .map(checkbox => checkbox.value);
+
+            if (selectedImageIds.length === 0) {
+                alert('Please select at least one image to replace.');
+                return;
             }
 
-            function downloadSelectedImages() {
-                const selectedImageIds = Array.from(document.querySelectorAll('.image-checkbox:checked'))
-                    .map(checkbox => checkbox.value);
-
-                if (selectedImageIds.length === 0) {
-                    alert('Please select at least one image to download.');
-                    return;
-                }
-
-                const url = '/api/postpreview/download-selected/${batchId}?imageIds=' + selectedImageIds.join(',');
-                window.location.href = url;
-            }
-
-            async function rerollSelectedImages() {
-                const selectedImageIds = Array.from(document.querySelectorAll('.image-checkbox:checked'))
-                    .map(checkbox => checkbox.value);
-
-                if (selectedImageIds.length === 0) {
-                    alert('Please select at least one image to replace.');
-                    return;
-                }
-
-                // Show loading state
-                const rerollStatus = document.getElementById('reroll-status');
-                const rerollBtn = document.querySelector('.reroll-btn');
-                rerollStatus.style.display = 'flex';
+            // Show loading state
+            const rerollStatus = document.getElementById('reroll-status');
+            const rerollBtn = document.querySelector('.reroll-btn');
+            if (rerollStatus) rerollStatus.style.display = 'flex';
+            if (rerollBtn) {
                 rerollBtn.disabled = true;
                 rerollBtn.textContent = '🔄 Replacing...';
+            }
 
-                try {
-                    const response = await fetch('/api/reroll-images', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            batchId: '${batchId}',
-                            imageIds: selectedImageIds,
-                            accountUsername: '${batch.account_username}'
-                        })
-                    });
+            try {
+                const response = await fetch('/api/reroll-images', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        batchId: '${batchId}',
+                        imageIds: selectedImageIds,
+                        accountUsername: '${batch.account_username}'
+                    })
+                });
 
-                    const result = await response.json();
+                const result = await response.json();
 
-                    if (result.success) {
-                        // Show success message
-                        alert('✅ Successfully replaced ' + selectedImageIds.length + ' images!');
-                        // Reload the page to show new images
-                        location.reload();
-                    } else {
-                        alert('❌ Failed to replace images: ' + (result.error || 'Unknown error'));
-                    }
-                } catch (error) {
-                    console.error('Reroll error:', error);
-                    alert('❌ Failed to replace images. Please try again.');
-                } finally {
-                    // Hide loading state
-                    rerollStatus.style.display = 'none';
+                if (result.success) {
+                    // Show success message
+                    alert('✅ Successfully replaced ' + selectedImageIds.length + ' images!');
+                    // Reload the page to show new images
+                    location.reload();
+                } else {
+                    alert('❌ Failed to replace images: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Reroll error:', error);
+                alert('❌ Failed to replace images. Please try again.');
+            } finally {
+                // Hide loading state
+                if (rerollStatus) rerollStatus.style.display = 'none';
+                if (rerollBtn) {
                     rerollBtn.disabled = false;
                     rerollBtn.textContent = '🚨 REROLL SELECTED IMAGES NOW';
                 }
             }
+        }
 
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            const imageCheckboxes = document.querySelectorAll('.image-checkbox');
+            
+            // Add event listeners to checkboxes
             imageCheckboxes.forEach(checkbox => {
                 checkbox.addEventListener('change', updateSelectedCount);
             });
