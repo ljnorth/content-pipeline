@@ -71,6 +71,14 @@
       "dest": "/api/reroll-images.js"
     },
     {
+      "src": "/api/preview-data/([^/]+)",
+      "dest": "/api/preview-data/[batchId].js"
+    },
+    {
+      "src": "/preview-client/([^/]+)",
+      "dest": "/api/preview-client/[batchId].js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "api/index.js"
     },
