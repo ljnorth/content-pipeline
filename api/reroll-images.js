@@ -1,8 +1,8 @@
-const { SupabaseClient } = require('../../src/database/supabase-client.js');
+import { SupabaseClient } from '../../src/database/supabase-client.js';
 
 const db = new SupabaseClient();
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
