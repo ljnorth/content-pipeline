@@ -402,7 +402,7 @@ export default async function handler(req, res) {
                         <div class="post-images">
                             ${post.images.map(img => `
                                 <div class="image-container">
-                                    <img src="${img.imagePath || img.image_path || '#'}" 
+                                    <img src="${img.imagePath || img.image_path || '#'}?cb=${Date.now()}" 
                                          alt="Post image" 
                                          class="post-image"
                                          onerror="this.style.display='none'">
