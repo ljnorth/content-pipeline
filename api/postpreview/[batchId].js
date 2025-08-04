@@ -414,8 +414,8 @@ module.exports = async function handler(req, res) {
                 <button class="select-btn" onclick="selectAllImages()">Select All</button>
                 <button class="select-btn" onclick="deselectAllImages()">Deselect All</button>
                 <button class="select-btn" onclick="downloadSelectedImages()">Download Selected</button>
-                <button class="select-btn reroll-btn" onclick="rerollSelectedImages()" style="background: #28a745; border-color: #28a745;">
-                    🔄 Replace Selected Images
+                <button class="select-btn reroll-btn" onclick="rerollSelectedImages()" style="background: #ff6b35; border-color: #ff6b35; font-weight: bold; font-size: 1.2em; padding: 15px 25px; box-shadow: 0 4px 15px rgba(255, 107, 53, 0.4);">
+                    🚨 REROLL SELECTED IMAGES NOW
                 </button>
             </div>
         </div>
@@ -517,7 +517,7 @@ module.exports = async function handler(req, res) {
                     // Hide loading state
                     rerollStatus.style.display = 'none';
                     rerollBtn.disabled = false;
-                    rerollBtn.textContent = '🔄 Replace Selected Images';
+                    rerollBtn.textContent = '🚨 REROLL SELECTED IMAGES NOW';
                 }
             }
 
