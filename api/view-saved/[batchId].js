@@ -159,7 +159,7 @@ export default async function handler(req, res) {
             <p>Viewing saved content for @${username}</p>
             <div class="batch-info">Batch ID: ${batchId}</div>
             <div class="action-buttons">
-                <a href="/instant-preview/${username}" class="action-btn">
+                <a href="/preview/${username}" class="action-btn">
                     🎨 Create New Post
                 </a>
                 <button class="action-btn download-btn" onclick="downloadAllImages()">

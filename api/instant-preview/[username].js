@@ -1,11 +1,33 @@
+import { SupabaseClient } from '../../src/database/supabase-client.js';
+
 export default async function handler(req, res) {
-  const { username } = req.query;
+  const { username, batchId } = req.query;
 
   if (!username) {
     return res.status(400).json({ error: 'Username is required' });
   }
 
-  const html = `<!DOCTYPE html>
+  let initialPost = null;
+  let initialSaved = false;
+
+  if (batchId) {
+    try {
+      const db = new SupabaseClient();
+      const { data, error } = await db.client
+        .from('preview_batches')
+        .select('*')
+        .eq('preview_id', batchId)
+        .single();
+      if (!error && data) {
+        initialPost = data.posts[0];
+        initialSaved = true;
+      }
+    } catch(err) {
+      // ignore, fall back to generate mode
+    }
+  }
+
+  const html = `<!DOCTYPE html>`
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -279,6 +301,8 @@ export default async function handler(req, res) {
     </div>
 
     <script>
+        const initialPost = typeof __INITIAL_POST__ !== 'undefined' ? __INITIAL_POST__ : null;
+        const initialSaved = typeof __INITIAL_SAVED__ !== 'undefined' ? __INITIAL_SAVED__ : false;
         // Global state
         let currentPost = null;
         let isSaved = false;
@@ -530,7 +554,7 @@ export default async function handler(req, res) {
         // Common download function
         async function downloadImages(images, type) {
             clearMessages();
-            showSuccessMessage(\`Preparing download of \${images.length} images...\`);
+            showSuccessMessage('Preparing download of ' + images.length + ' images...');
 
             try {
                 const response = await fetch('/api/download-images', {
@@ -578,12 +602,28 @@ export default async function handler(req, res) {
 
         // Initialize on page load
         window.onload = function() {
-            generateNewPost();
+            if (typeof initialPost !== 'undefined' && initialPost) {
+                currentPost = initialPost;
+                isSaved = initialSaved;
+                renderPost();
+                if (isSaved) {
+                    hideSaveButton();
+                    updateSavedIndicator();
+                } else {
+                    showSaveButton();
+                }
+            } else {
+                generateNewPost();
+            }
         };
     </script>
 </body>
 </html>`;
 
+  const finalHtml = html
+    .replace('__INITIAL_POST__', JSON.stringify(initialPost))
+    .replace('__INITIAL_SAVED__', initialSaved);
+
   res.setHeader('Content-Type', 'text/html');
-  res.status(200).send(html);
+  res.status(200).send(finalHtml);
 }

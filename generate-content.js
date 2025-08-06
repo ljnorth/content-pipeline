@@ -152,7 +152,7 @@ async function pushToSlack(batchId, accountUsername, post) {
         fields: [
           {
             title: 'Preview URL',
-            value: `https://easypost.fun/view-saved/${batchId}`,
+            value: `https://easypost.fun/preview/${username.substring(1)}?batchId=${batchId}`,
             short: false
           },
           {
@@ -260,9 +260,9 @@ async function main() {
       const saveResult = await savePost(result.post, cleanUsername);
       batchId = saveResult.batchId;
       logger.info(`✅ Saved with batch ID: ${batchId}`);
-      logger.info(`🔗 View at: https://easypost.fun/view-saved/${batchId}`);
+      logger.info(`🔗 View at: https://easypost.fun/preview/${username.substring(1)}?batchId=${batchId}`);
     } else {
-      logger.info(`🔗 Preview at: http://localhost:3000/instant-preview/${cleanUsername}`);
+      logger.info(`🔗 Preview at: http://localhost:3000/preview/${cleanUsername}`);
       logger.info('💡 Tip: Use --save to save this post permanently');
     }
     

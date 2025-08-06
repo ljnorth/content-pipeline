@@ -3153,7 +3153,7 @@ app.post('/api/download-images', async (req, res) => {
   }
 });
 
-app.get('/instant-preview/:username', async (req, res) => {
+app.get('/preview/:username', async (req, res) => {
   const { username } = req.params;
   
   if (!username) {
@@ -3165,7 +3165,7 @@ app.get('/instant-preview/:username', async (req, res) => {
   instantPreviewHandler({ query: { username } }, res);
 });
 
-// Route for viewing saved posts
+// Redirect old view-saved links to new preview URL
 app.get('/view-saved/:batchId', async (req, res) => {
   const { batchId } = req.params;
   
@@ -3173,9 +3173,23 @@ app.get('/view-saved/:batchId', async (req, res) => {
     return res.status(400).send('Batch ID is required');
   }
 
-  // Import and execute the handler
-  const viewSavedHandler = (await import('../../api/view-saved/[batchId].js')).default;
-  viewSavedHandler({ query: { batchId } }, res);
+    try {
+    const { SupabaseClient } = await import('../database/supabase-client.js');
+    const db = new SupabaseClient();
+    const { data, error } = await db.client
+      .from('preview_batches')
+      .select('account_username')
+      .eq('preview_id', batchId)
+      .single();
+
+    if (error || !data) {
+      return res.status(302).redirect('/'); // fallback home
+    }
+    const username = data.account_username;
+    return res.redirect(301, `/preview/${username}?batchId=${batchId}`);
+  } catch (err) {
+    return res.status(302).redirect('/');
+  }
 });
 
 app.get('/tos', (req, res) => {
