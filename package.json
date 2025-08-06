@@ -1,49 +1,13 @@
 {
-  "name": "fashion-data-pipeline",
+  "name": "minimal-api",
   "version": "1.0.0",
-  "description": "A data collection and analysis pipeline for fashion/aesthetic data from social media",
-  "main": "src/index.js",
-  "scripts": {
-    "start": "node src/web/server.js",
-    "dev": "nodemon src/web/server.js",
-    "setup": "node setup-env.js",
-    "web": "node src/web/server.js",
-    "pipeline": "node run-pipeline.js",
-    "pipeline:new": "node run-pipeline.js --new-account",
-    "pipeline:update": "node run-pipeline.js --update-all",
-    "collect": "node run-data-collection.js --delta-only",
-    "generate": "node generate-content.js",
-    "tiktok:setup": "node setup-tiktok-oauth.js"
-  },
+  "description": "Minimal API for content preview",
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
-    "adm-zip": "^0.5.16",
-    "apify-client": "^2.12.6",
-    "archiver": "^7.0.1",
-    "axios": "^1.6.0",
-    "cors": "^2.8.5",
-    "csv-parser": "^3.0.0",
-    "dotenv": "^16.6.1",
-    "express": "^4.18.2",
-    "fs-extra": "^11.3.0",
     "jszip": "^3.10.1",
-    "node-fetch": "^3.3.2",
-    "openai": "^4.20.0",
-    "sharp": "^0.32.6"
+    "node-fetch": "^3.3.0"
   },
-  "devDependencies": {
-    "nodemon": "^3.0.2"
-  },
-  "keywords": [
-    "fashion",
-    "data",
-    "pipeline",
-    "tiktok",
-    "analysis"
-  ],
   "engines": {
     "node": "18.x"
-  },
-  "author": "Your Name",
-  "license": "MIT"
+  }
 }
