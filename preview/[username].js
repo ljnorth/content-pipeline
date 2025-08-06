@@ -1,38 +1,16 @@
-import { SupabaseClient } from '../../src/database/supabase-client.js';
-
 export default async function handler(req, res) {
-  const { username, batchId } = req.query;
+  const { username } = req.query;
 
   if (!username) {
     return res.status(400).json({ error: 'Username is required' });
   }
 
-  let initialPost = null;
-  let initialSaved = false;
-
-  if (batchId) {
-    try {
-      const db = new SupabaseClient();
-      const { data, error } = await db.client
-        .from('preview_batches')
-        .select('*')
-        .eq('preview_id', batchId)
-        .single();
-      if (!error && data) {
-        initialPost = data.posts[0];
-        initialSaved = true;
-      }
-    } catch(err) {
-      // ignore, fall back to generate mode
-    }
-  }
-
-  const html = `<!DOCTYPE html>`
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Instant Preview - @${username} | easypost.fun</title>
+    <title>Preview - @${username} | easypost.fun</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -87,12 +65,6 @@ export default async function handler(req, res) {
             background: #764ba2;
             transform: translateY(-2px);
         }
-        .save-btn {
-            background: #28a745;
-        }
-        .save-btn:hover {
-            background: #218838;
-        }
         .generate-btn {
             background: #667eea;
         }
@@ -100,19 +72,22 @@ export default async function handler(req, res) {
             background: #ff6b35;
         }
         .reroll-btn:hover {
-            background: #ff5722;
+            background: #e85a2b;
         }
         .loading {
             text-align: center;
-            padding: 50px;
-            color: white;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 60px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         }
         .spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top: 4px solid white;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
             border-radius: 50%;
+            width: 40px;
+            height: 40px;
             animation: spin 1s linear infinite;
             margin: 0 auto 20px;
         }
@@ -125,77 +100,72 @@ export default async function handler(req, res) {
             backdrop-filter: blur(10px);
             border-radius: 15px;
             padding: 30px;
-            margin-bottom: 30px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         }
         .post-caption {
-            font-size: 1.2em;
-            color: #333;
-            margin-bottom: 20px;
-            padding: 15px;
-            background: rgba(103, 126, 234, 0.1);
-            border-radius: 10px;
-        }
-        .images-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        .image-container {
-            position: relative;
             background: #f8f9fa;
-            border-radius: 10px;
-            overflow: hidden;
-            aspect-ratio: 1;
-        }
-        .post-image {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transition: transform 0.3s ease;
-        }
-        .post-image:hover {
-            transform: scale(1.05);
-        }
-        .image-checkbox {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 25px;
-            height: 25px;
-            cursor: pointer;
-            z-index: 10;
-        }
-        .image-info {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
-            color: white;
-            padding: 15px 10px 10px;
-            font-size: 0.85em;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+            font-size: 1.1em;
+            line-height: 1.6;
         }
         .selection-controls {
-            background: rgba(255, 255, 255, 0.9);
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 20px;
             flex-wrap: wrap;
             gap: 15px;
         }
         .selection-info {
-            font-size: 1.1em;
-            color: #666;
+            display: flex;
+            align-items: center;
+            font-weight: 600;
+            color: #667eea;
         }
         .selection-buttons {
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
+        }
+        .images-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .image-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .image-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        .image-card img {
+            width: 100%;
+            height: 300px;
+            object-fit: cover;
+        }
+        .image-info {
+            padding: 15px;
+            background: #f8f9fa;
+        }
+        .image-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9em;
+            color: #666;
+        }
+        .image-checkbox {
+            margin-right: 10px;
+            transform: scale(1.2);
         }
         .select-btn {
             background: #6c757d;
@@ -239,28 +209,16 @@ export default async function handler(req, res) {
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
-        .saved-indicator {
-            background: #28a745;
-            color: white;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.9em;
-            display: inline-block;
-            margin-left: 10px;
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎨 Instant Content Preview</h1>
+            <h1>🎨 Content Preview</h1>
             <p>Generate and preview content for @${username}</p>
             <div class="action-buttons">
                 <button class="action-btn generate-btn" onclick="generateNewPost()">
                     🎲 Generate New Post
-                </button>
-                <button class="action-btn save-btn" onclick="saveCurrentPost()" style="display: none;" id="saveBtn">
-                    💾 Save This Post
                 </button>
             </div>
         </div>
@@ -276,7 +234,6 @@ export default async function handler(req, res) {
             <div class="selection-controls">
                 <div class="selection-info">
                     <span id="selected-count">0 images selected</span>
-                    <span id="saved-indicator" class="saved-indicator" style="display: none;">✓ Saved</span>
                 </div>
                 <div class="selection-buttons">
                     <button class="select-btn" onclick="selectAllImages()">Select All</button>
@@ -301,19 +258,13 @@ export default async function handler(req, res) {
     </div>
 
     <script>
-        const initialPost = typeof __INITIAL_POST__ !== 'undefined' ? __INITIAL_POST__ : null;
-        const initialSaved = typeof __INITIAL_SAVED__ !== 'undefined' ? __INITIAL_SAVED__ : false;
         // Global state
         let currentPost = null;
-        let isSaved = false;
 
         // Generate a new post
         async function generateNewPost() {
             showLoading(true);
-            hideSaveButton();
             clearMessages();
-            isSaved = false;
-            updateSavedIndicator();
 
             try {
                 const response = await fetch('/api/generate-preview', {
@@ -332,7 +283,6 @@ export default async function handler(req, res) {
                 if (result.success) {
                     currentPost = result.post;
                     renderPost();
-                    showSaveButton();
                     showSuccessMessage('✨ New post generated successfully!');
                 } else {
                     showErrorMessage('Failed to generate post: ' + (result.error || 'Unknown error'));
@@ -348,46 +298,46 @@ export default async function handler(req, res) {
         // Render the current post
         function renderPost() {
             if (!currentPost) return;
-
+            
+            document.getElementById('post-container').style.display = 'block';
             document.getElementById('post-caption').textContent = currentPost.caption;
             
             const imagesGrid = document.getElementById('images-grid');
-            imagesGrid.innerHTML = currentPost.images.map((img, index) => \`
-                <div class="image-container">
-                    <img src="\${img.imagePath}" 
-                         alt="Post image" 
-                         class="post-image"
-                         onerror="this.style.display='none'">
-                    <input type="checkbox" 
-                           class="image-checkbox" 
-                           value="\${img.id}"
-                           onchange="updateSelectedCount()">
+            imagesGrid.innerHTML = '';
+            
+            currentPost.images.forEach(image => {
+                const imageCard = document.createElement('div');
+                imageCard.className = 'image-card';
+                imageCard.innerHTML = \`
+                    <img src="\${image.imagePath || image.image_path}" alt="Fashion image" loading="lazy" />
                     <div class="image-info">
-                        \${img.aesthetic || 'Mixed'}
+                        <div class="image-meta">
+                            <label>
+                                <input type="checkbox" class="image-checkbox" value="\${image.id}" onchange="updateSelectedCount()">
+                                ID: \${image.id}
+                            </label>
+                            <span>Aesthetic: \${image.aesthetic || 'N/A'}</span>
+                        </div>
                     </div>
-                </div>
-            \`).join('');
+                \`;
+                imagesGrid.appendChild(imageCard);
+            });
 
-            document.getElementById('post-container').style.display = 'block';
             updateSelectedCount();
         }
 
-        // Reroll selected images instantly
+        // Reroll selected images
         async function rerollSelectedImages() {
-            const selectedCheckboxes = document.querySelectorAll('.image-checkbox:checked');
-            const selectedImageIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value));
+            const selectedImageIds = Array.from(document.querySelectorAll('.image-checkbox:checked'))
+                .map(cb => parseInt(cb.value));
 
             if (selectedImageIds.length === 0) {
                 showErrorMessage('Please select at least one image to replace.');
                 return;
             }
 
-            clearMessages();
-            isSaved = false;
-            updateSavedIndicator();
-
-            // Get all current image IDs
             const allImageIds = currentPost.images.map(img => img.id);
+            clearMessages();
 
             try {
                 const response = await fetch('/api/reroll-images-instant', {
@@ -416,7 +366,7 @@ export default async function handler(req, res) {
 
                     // Re-render the post
                     renderPost();
-                    showSuccessMessage(\`✅ Successfully replaced \${selectedImageIds.length} images!\`);
+                    showSuccessMessage('✅ Successfully replaced ' + selectedImageIds.length + ' images!');
                 } else {
                     showErrorMessage('Failed to replace images: ' + (result.error || 'Unknown error'));
                 }
@@ -426,62 +376,70 @@ export default async function handler(req, res) {
             }
         }
 
-        // Save the current post
-        async function saveCurrentPost() {
-            if (!currentPost) {
-                showErrorMessage('No post to save.');
+        // Download functions
+        async function downloadSelectedImages() {
+            const selectedImages = getSelectedImages();
+            if (selectedImages.length === 0) {
+                showErrorMessage('Please select at least one image to download.');
                 return;
             }
+            downloadImages(selectedImages, 'selected');
+        }
 
-            if (isSaved) {
-                showErrorMessage('This post has already been saved.');
+        async function downloadAllImages() {
+            if (!currentPost || !currentPost.images) {
+                showErrorMessage('No images available to download.');
                 return;
             }
+            downloadImages(currentPost.images, 'all');
+        }
 
-            clearMessages();
+        async function downloadImages(images, type) {
+            showSuccessMessage('Preparing download of ' + images.length + ' images...');
 
             try {
-                const response = await fetch('/api/save-post', {
+                const response = await fetch('/api/download-images', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        post: currentPost,
-                        accountUsername: '${username}'
+                        images: images,
+                        accountUsername: '${username}',
+                        type: type
                     })
                 });
 
-                const result = await response.json();
-
-                if (result.success) {
-                    isSaved = true;
-                    updateSavedIndicator();
-                    showSuccessMessage(\`✅ Post saved successfully! Batch ID: \${result.batchId}\`);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = '${username}_' + type + '_images_' + Date.now() + '.zip';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    showSuccessMessage('✅ Download started!');
                 } else {
-                    showErrorMessage('Failed to save post: ' + (result.error || 'Unknown error'));
+                    showErrorMessage('Failed to download images. Please try again.');
                 }
             } catch (error) {
-                console.error('Save error:', error);
-                showErrorMessage('Failed to save post. Please try again.');
+                console.error('Download error:', error);
+                showErrorMessage('Failed to download images. Please try again.');
             }
+        }
+
+        function getSelectedImages() {
+            const selectedIds = Array.from(document.querySelectorAll('.image-checkbox:checked'))
+                .map(cb => parseInt(cb.value));
+            return currentPost.images.filter(img => selectedIds.includes(img.id));
         }
 
         // UI Helper functions
         function showLoading(show) {
             document.getElementById('loading').style.display = show ? 'block' : 'none';
-        }
-
-        function showSaveButton() {
-            document.getElementById('saveBtn').style.display = 'inline-block';
-        }
-
-        function hideSaveButton() {
-            document.getElementById('saveBtn').style.display = 'none';
-        }
-
-        function updateSavedIndicator() {
-            document.getElementById('saved-indicator').style.display = isSaved ? 'inline-block' : 'none';
         }
 
         function selectAllImages() {
@@ -510,13 +468,14 @@ export default async function handler(req, res) {
         function showMessage(message, type) {
             const container = document.getElementById('message-container');
             const messageDiv = document.createElement('div');
-            messageDiv.className = type + '-message message';
+            messageDiv.className = \`message \${type}-message\`;
             messageDiv.textContent = message;
+            container.innerHTML = '';
             container.appendChild(messageDiv);
             
             setTimeout(() => {
-                if (messageDiv.parentNode) {
-                    messageDiv.remove();
+                if (container.contains(messageDiv)) {
+                    container.removeChild(messageDiv);
                 }
             }, 5000);
         }
@@ -525,105 +484,14 @@ export default async function handler(req, res) {
             document.getElementById('message-container').innerHTML = '';
         }
 
-        // Download selected images
-        async function downloadSelectedImages() {
-            const selectedCheckboxes = document.querySelectorAll('.image-checkbox:checked');
-            const selectedImages = Array.from(selectedCheckboxes).map(cb => {
-                const imageId = parseInt(cb.value);
-                return currentPost.images.find(img => img.id === imageId);
-            }).filter(img => img);
-
-            if (selectedImages.length === 0) {
-                showErrorMessage('Please select at least one image to download.');
-                return;
-            }
-
-            await downloadImages(selectedImages, 'selected');
-        }
-
-        // Download all images
-        async function downloadAllImages() {
-            if (!currentPost || !currentPost.images || currentPost.images.length === 0) {
-                showErrorMessage('No images to download.');
-                return;
-            }
-
-            await downloadImages(currentPost.images, 'all');
-        }
-
-        // Common download function
-        async function downloadImages(images, type) {
-            clearMessages();
-            showSuccessMessage('Preparing download of ' + images.length + ' images...');
-
-            try {
-                const response = await fetch('/api/download-images', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        images: images,
-                        accountUsername: '${username}',
-                        type: type
-                    })
-                });
-
-                if (!response.ok) {
-                    const error = await response.json();
-                    showErrorMessage('Failed to download images: ' + (error.error || 'Unknown error'));
-                    return;
-                }
-
-                // Get the blob from the response
-                const blob = await response.blob();
-                
-                // Create a download link
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = \`\${type}_images_\${Date.now()}.zip\`;
-                
-                // Trigger download
-                document.body.appendChild(a);
-                a.click();
-                
-                // Cleanup
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-                
-                showSuccessMessage(\`✅ Successfully downloaded \${images.length} images!\`);
-            } catch (error) {
-                console.error('Download error:', error);
-                showErrorMessage('Failed to download images. Please try again.');
-            }
-        }
-
         // Initialize on page load
         window.onload = function() {
-            if (typeof initialPost !== 'undefined' && initialPost) {
-                currentPost = initialPost;
-                isSaved = initialSaved;
-                renderPost();
-                if (isSaved) {
-                    hideSaveButton();
-                    updateSavedIndicator();
-                } else {
-                    showSaveButton();
-                }
-            } else {
-                generateNewPost();
-            }
+            generateNewPost();
         };
     </script>
 </body>
 </html>`;
 
-  const finalHtml = html
-    .replace('__INITIAL_POST__', JSON.stringify(initialPost))
-    .replace('__INITIAL_SAVED__', initialSaved);
-
   res.setHeader('Content-Type', 'text/html');
-  res.status(200).send(finalHtml);
+  res.status(200).send(html);
 }

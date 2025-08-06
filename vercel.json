@@ -1,8 +1,11 @@
 {
   "version": 2,
   "functions": {
-    "api/**/*.js": {
-      "runtime": "@vercel/node"
-    }
-  }
+    "api/**/*.js": { "runtime": "@vercel/node" }
+  },
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1.js" },
+    { "src": "/preview/(.*)", "dest": "/preview/[username].js" },
+    { "src": "/(.*)", "dest": "/api/ping.js" }
+  ]
 }
