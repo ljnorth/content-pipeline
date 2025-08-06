@@ -1,8 +1,5 @@
 import JSZip from 'jszip';
 import fetch from 'node-fetch';
-import { SupabaseClient } from '../src/database/supabase-client.js';
-
-const db = new SupabaseClient();
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

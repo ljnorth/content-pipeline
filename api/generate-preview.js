@@ -1,18 +1,16 @@
-import { SupabaseClient } from '../src/database/supabase-client.js';
-import { Logger } from '../src/utils/logger.js';
+import { createClient } from '@supabase/supabase-js';
 
-const logger = new Logger();
-let db = null;
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-try {
-  db = new SupabaseClient();
-} catch (error) {
-  logger.error('❌ Failed to initialize database:', error.message);
+function log(message) {
+  console.log(`[${new Date().toISOString()}] ${message}`);
 }
 
 // Helper function for instant preview image generation
 async function generateImagesForPreview(accountUsername, count, accountAesthetics) {
-  logger.info(`🎨 Selecting ${count} images for preview...`);
+  log(`🎨 Selecting ${count} images for preview...`);
 
   try {
     // Get ALL images using pagination
@@ -21,7 +19,7 @@ async function generateImagesForPreview(accountUsername, count, accountAesthetic
     const pageSize = 1000;
     
     while (true) {
-      const { data: pageImages, error: pageError } = await db.client
+      const { data: pageImages, error: pageError } = await supabase
         .from('images')
         .select('*')
         .range(from, from + pageSize - 1);
@@ -38,7 +36,7 @@ async function generateImagesForPreview(accountUsername, count, accountAesthetic
       }
     }
 
-    logger.info(`📸 Found ${allImages.length} total images`);
+    log(`📸 Found ${allImages.length} total images`);
 
     // Filter by account aesthetics
     const matchingImages = allImages.filter(img => {
@@ -51,11 +49,11 @@ async function generateImagesForPreview(accountUsername, count, accountAesthetic
       );
     });
 
-    logger.info(`✅ Found ${matchingImages.length} images matching account aesthetics`);
+    log(`✅ Found ${matchingImages.length} images matching account aesthetics`);
 
     // If we don't have enough matching images, use all images
     if (matchingImages.length < count) {
-      logger.info('⚠️ Not enough matching images, using all images');
+      log('⚠️ Not enough matching images, using all images');
       matchingImages.push(...allImages);
     }
 
@@ -63,7 +61,7 @@ async function generateImagesForPreview(accountUsername, count, accountAesthetic
     const shuffledImages = matchingImages.sort(() => Math.random() - 0.5);
     const selectedImages = shuffledImages.slice(0, count);
 
-    logger.info(`✅ Selected ${selectedImages.length} unique images`);
+    log(`✅ Selected ${selectedImages.length} unique images`);
 
     // Format the images
     return selectedImages.map((img, index) => ({
@@ -79,7 +77,7 @@ async function generateImagesForPreview(accountUsername, count, accountAesthetic
     }));
 
   } catch (error) {
-    logger.error('❌ Error generating preview images:', error);
+    log('❌ Error generating preview images: ' + error.message);
     return [];
   }
 }
@@ -113,10 +111,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    logger.info(`🎨 Generating preview for @${accountUsername} with ${imageCount} images`);
+    log(`🎨 Generating preview for @${accountUsername} with ${imageCount} images`);
 
     // Get account profile
-    const { data: accountProfile, error: profileError } = await db.client
+    const { data: accountProfile, error: profileError } = await supabase
       .from('account_profiles')
       .select('*')
       .eq('username', accountUsername)
@@ -127,7 +125,7 @@ export default async function handler(req, res) {
     }
 
     const accountAesthetics = accountProfile.content_strategy?.aestheticFocus || ['streetwear', 'casual', 'aesthetic'];
-    logger.info(`🎯 Account aesthetics: ${accountAesthetics.join(', ')}`);
+    log(`🎯 Account aesthetics: ${accountAesthetics.join(', ')}`);
 
     // Generate images for the post
     const images = await generateImagesForPreview(accountUsername, imageCount, accountAesthetics);
@@ -136,7 +134,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to generate images' });
     }
 
-    logger.info(`✅ Generated ${images.length} images for preview`);
+    log(`✅ Generated ${images.length} images for preview`);
 
     // Generate caption
     const caption = generateSimpleCaption(accountProfile, images[0]);
@@ -163,7 +161,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    logger.error('❌ Preview generation error:', error);
+    log('❌ Preview generation error: ' + error.message);
     res.status(500).json({ error: error.message });
   }
 }
