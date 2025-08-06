@@ -1,10 +1,12 @@
 // Simple API Server for Content Pipeline
 // Fixed for Vercel deployment
 
-const express = require('express');
-const path = require('path');
+import express from 'express';
+import path from 'path';
 
 const app = express();
+
+import { SupabaseClient } from '../src/database/supabase-client.js';
 
 // Database client - initialize later to avoid top-level await
 let db = null;
@@ -12,7 +14,6 @@ let db = null;
 // Initialize database connection
 async function initializeDatabase() {
   try {
-    const { SupabaseClient } = require('../src/database/supabase-client.js');
     db = new SupabaseClient();
     console.log('✅ Database connected successfully');
   } catch (error) {

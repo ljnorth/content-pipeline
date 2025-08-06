@@ -50,10 +50,7 @@
       "src": "/api/postpreview/download/([^/]+)",
       "dest": "/api/postpreview/download/[batchId].js"
     },
-    {
-      "src": "/api/postpreview/download-selected/([^/]+)",
-      "dest": "/api/postpreview/download-selected/[batchId].js"
-    },
+
     {
       "src": "/postpreview/([^/]+)",
       "dest": "/api/postpreview/[batchId].js"

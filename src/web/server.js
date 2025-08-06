@@ -642,14 +642,22 @@ app.get('/preview-client/:batchId', async (req, res) => {
                 if (result.success) {
                     // Update the current posts with new data
                     if (result.updatedPost) {
-                        // Find and update the post that was modified
+                        // Since the images have been replaced, we should update the entire post
+                        // Find the post that contains any of the new image IDs
                         const postIndex = currentPosts.findIndex(post => 
-                            post.images && post.images.some(img => selectedImageIds.includes(img.id.toString()))
+                            post.images && post.images.some(img => 
+                                result.newImageIds && result.newImageIds.includes(img.id)
+                            )
                         );
                         
                         if (postIndex !== -1) {
+                            // Update with the new post data
                             currentPosts[postIndex] = result.updatedPost;
                             renderContent(); // Re-render with updated data
+                        } else {
+                            // If we can't find the post by new image IDs, just reload the data
+                            console.log('🔄 Reloading batch data to get fresh content...');
+                            await loadBatchData();
                         }
                     }
                     
@@ -1436,6 +1444,7 @@ app.post('/api/pipeline/run', async (req, res) => {
             const analyzed = await analyzer.process(images.map(img => ({
               postId: img.post_id,
               imagePath: img.image_path,
+      image_path: img.image_path, // Include both formats
               metadata: { post_id: img.post_id, username: img.username }
             })));
             
@@ -2699,6 +2708,7 @@ async function generateReplacementImages(accountUsername, count, existingPost, a
     return selectedImages.map(img => ({
       id: img.id,
       imagePath: img.image_path,
+      image_path: img.image_path, // Include both formats
       aesthetic: img.aesthetic || 'mixed',
       colors: img.colors || ['neutral'],
       season: img.season || 'any',
@@ -2737,6 +2747,423 @@ function replaceImagesInPost(post, imageIdsToReplace, newImages) {
     rerollCount: (post.rerollCount || 0) + 1
   };
 }
+
+// Helper function for instant preview image generation
+async function generateImagesForPreview(accountUsername, count, accountAesthetics) {
+  logger.info(`🎨 Selecting ${count} images for preview...`);
+
+  try {
+    // Get ALL images using pagination
+    let allImages = [];
+    let from = 0;
+    const pageSize = 1000;
+    
+    while (true) {
+      const { data: pageImages, error: pageError } = await db.client
+        .from('images')
+        .select('*')
+        .range(from, from + pageSize - 1);
+      
+      if (pageError || !pageImages || pageImages.length === 0) {
+        break;
+      }
+      
+      allImages = allImages.concat(pageImages);
+      from += pageSize;
+      
+      if (pageImages.length < pageSize) {
+        break;
+      }
+    }
+
+    logger.info(`📸 Found ${allImages.length} total images`);
+
+    // Filter by account aesthetics
+    const matchingImages = allImages.filter(img => {
+      if (!img.aesthetic) return false;
+      
+      const imgAesthetic = img.aesthetic.toLowerCase();
+      return accountAesthetics.some(targetAesthetic => 
+        imgAesthetic.includes(targetAesthetic.toLowerCase()) ||
+        targetAesthetic.toLowerCase().includes(imgAesthetic)
+      );
+    });
+
+    logger.info(`✅ Found ${matchingImages.length} images matching account aesthetics`);
+
+    // If we don't have enough matching images, use all images
+    if (matchingImages.length < count) {
+      logger.info('⚠️ Not enough matching images, using all images');
+      matchingImages.push(...allImages);
+    }
+
+    // Randomly select images
+    const shuffledImages = matchingImages.sort(() => Math.random() - 0.5);
+    const selectedImages = shuffledImages.slice(0, count);
+
+    logger.info(`✅ Selected ${selectedImages.length} unique images`);
+
+    // Format the images
+    return selectedImages.map((img, index) => ({
+      id: img.id,
+      imagePath: img.image_path,
+      image_path: img.image_path, // Include both formats
+      image_path: img.image_path, // Include both formats
+      aesthetic: img.aesthetic || 'mixed',
+      colors: img.colors || ['neutral'],
+      season: img.season || 'any',
+      occasion: img.occasion || 'casual',
+      selection_score: 100 + Math.random() * 50,
+      is_cover_slide: index === 0 // First image is cover
+    }));
+
+  } catch (error) {
+    logger.error('❌ Error generating preview images:', error);
+    return [];
+  }
+}
+
+// Helper function for instant reroll
+async function generateInstantReplacementImages(accountUsername, count, existingImageIds, accountAesthetics) {
+  logger.info(`🎨 Generating ${count} replacement images...`);
+
+  try {
+    // Get ALL images using pagination
+    let allImages = [];
+    let from = 0;
+    const pageSize = 1000;
+    
+    while (true) {
+      const { data: pageImages, error: pageError } = await db.client
+        .from('images')
+        .select('*')
+        .range(from, from + pageSize - 1);
+      
+      if (pageError || !pageImages || pageImages.length === 0) {
+        break;
+      }
+      
+      allImages = allImages.concat(pageImages);
+      from += pageSize;
+      
+      if (pageImages.length < pageSize) {
+        break;
+      }
+    }
+
+    logger.info(`📸 Found ${allImages.length} total images`);
+
+    // Filter by account aesthetics
+    const matchingImages = allImages.filter(img => {
+      if (!img.aesthetic) return false;
+      
+      const imgAesthetic = img.aesthetic.toLowerCase();
+      return accountAesthetics.some(targetAesthetic => 
+        imgAesthetic.includes(targetAesthetic.toLowerCase()) ||
+        targetAesthetic.toLowerCase().includes(imgAesthetic)
+      );
+    });
+
+    logger.info(`✅ Found ${matchingImages.length} images matching account aesthetics`);
+
+    // If we don't have enough matching images, use all images
+    if (matchingImages.length < count * 2) {
+      logger.info('⚠️ Not enough matching images, using all images');
+      matchingImages.push(...allImages);
+    }
+
+    logger.info(`🚫 Excluding ${existingImageIds.length} existing image IDs`);
+
+    // Filter out existing images and randomly select new ones
+    const availableImages = matchingImages.filter(img => !existingImageIds.includes(img.id));
+    const shuffledImages = availableImages.sort(() => Math.random() - 0.5);
+    const selectedImages = shuffledImages.slice(0, count);
+
+    logger.info(`✅ Selected ${selectedImages.length} unique replacement images`);
+
+    // Format the new images
+    return selectedImages.map(img => ({
+      id: img.id,
+      imagePath: img.image_path,
+      image_path: img.image_path, // Include both formats
+      aesthetic: img.aesthetic || 'mixed',
+      colors: img.colors || ['neutral'],
+      season: img.season || 'any',
+      occasion: img.occasion || 'casual',
+      selection_score: 100 + Math.random() * 50,
+      is_cover_slide: false
+    }));
+
+  } catch (error) {
+    logger.error('❌ Error generating replacement images:', error);
+    return [];
+  }
+}
+
+// Simple caption generator
+function generateSimpleCaption(accountProfile, coverImage) {
+  const aesthetics = accountProfile.content_strategy?.aestheticFocus || ['streetwear'];
+  const aesthetic = coverImage?.aesthetic || aesthetics[0];
+  
+  // Simple caption generation based on aesthetic
+  const captions = {
+    streetwear: "Street style vibes 🔥 Which fit is your fave?",
+    minimalist: "Less is more ✨ Minimalist fashion inspo",
+    vintage: "Vintage finds that never go out of style 📸",
+    casual: "Effortless everyday looks 💫",
+    aesthetic: "Aesthetic fashion moments 🌸"
+  };
+  
+  return captions[aesthetic.toLowerCase()] || "Fashion inspiration for you 💕";
+}
+
+// New instant preview endpoints
+app.post('/api/generate-preview', async (req, res) => {
+  const { accountUsername, imageCount = 10 } = req.body;
+
+  if (!accountUsername) {
+    return res.status(400).json({ error: 'Account username is required' });
+  }
+
+  try {
+    logger.info(`🎨 Generating preview for @${accountUsername} with ${imageCount} images`);
+
+    // Get account profile
+    const { data: accountProfile, error: profileError } = await db.client
+      .from('account_profiles')
+      .select('*')
+      .eq('username', accountUsername)
+      .single();
+
+    if (profileError || !accountProfile) {
+      return res.status(404).json({ error: 'Account profile not found' });
+    }
+
+    const accountAesthetics = accountProfile.content_strategy?.aestheticFocus || ['streetwear', 'casual', 'aesthetic'];
+    logger.info(`🎯 Account aesthetics: ${accountAesthetics.join(', ')}`);
+
+    // Generate images for the post
+    const images = await generateImagesForPreview(accountUsername, imageCount, accountAesthetics);
+
+    if (images.length === 0) {
+      return res.status(500).json({ error: 'Failed to generate images' });
+    }
+
+    logger.info(`✅ Generated ${images.length} images for preview`);
+
+    // Generate caption
+    const caption = generateSimpleCaption(accountProfile, images[0]);
+
+    // Create a temporary post object (not saved to database)
+    const post = {
+      id: `temp_${Date.now()}`,
+      postNumber: 1,
+      images: images,
+      caption: caption,
+      account_username: accountUsername,
+      created_at: new Date().toISOString(),
+      is_temporary: true
+    };
+
+    // Return the generated post
+    res.json({
+      success: true,
+      post: post,
+      account: {
+        username: accountUsername,
+        aesthetics: accountAesthetics
+      }
+    });
+
+  } catch (error) {
+    logger.error('❌ Preview generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/reroll-images-instant', async (req, res) => {
+  const { imageIds, accountUsername, existingImageIds } = req.body;
+
+  if (!imageIds || !accountUsername || !existingImageIds) {
+    return res.status(400).json({ error: 'Missing required parameters' });
+  }
+
+  try {
+    logger.info(`🔄 Instantly rerolling ${imageIds.length} images for @${accountUsername}`);
+
+    // Get account profile
+    const { data: accountProfile, error: profileError } = await db.client
+      .from('account_profiles')
+      .select('*')
+      .eq('username', accountUsername)
+      .single();
+
+    if (profileError || !accountProfile) {
+      return res.status(404).json({ error: 'Account profile not found' });
+    }
+
+    const accountAesthetics = accountProfile.content_strategy?.aestheticFocus || ['streetwear', 'casual', 'aesthetic'];
+    logger.info(`🎯 Account aesthetics: ${accountAesthetics.join(', ')}`);
+
+    // Generate new images, excluding existing ones
+    const newImages = await generateInstantReplacementImages(accountUsername, imageIds.length, existingImageIds, accountAesthetics);
+
+    if (newImages.length === 0) {
+      return res.status(500).json({ error: 'Failed to generate replacement images' });
+    }
+
+    logger.info(`✅ Generated ${newImages.length} replacement images`);
+
+    // Return the new images
+    res.json({
+      success: true,
+      replacedImageIds: imageIds,
+      newImages: newImages
+    });
+
+  } catch (error) {
+    logger.error('❌ Instant reroll error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/save-post', async (req, res) => {
+  const { post, accountUsername } = req.body;
+
+  if (!post || !accountUsername) {
+    return res.status(400).json({ error: 'Missing required parameters' });
+  }
+
+  try {
+    logger.info(`💾 Saving post for @${accountUsername}`);
+
+    // Generate a unique batch ID
+    const batchId = `saved_${Date.now()}_${accountUsername}`;
+
+    // Create the batch object
+    const batch = {
+      preview_id: batchId,
+      account_username: accountUsername,
+      posts: [post],
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // Expires in 7 days
+    };
+
+    // Save to database
+    const { data, error } = await db.client
+      .from('preview_batches')
+      .insert(batch)
+      .select()
+      .single();
+
+    if (error) {
+      logger.error('❌ Failed to save post:', error);
+      return res.status(500).json({ error: 'Failed to save post' });
+    }
+
+    logger.info(`✅ Successfully saved post with ID: ${batchId}`);
+
+    res.json({
+      success: true,
+      batchId: batchId,
+      savedPost: data
+    });
+
+  } catch (error) {
+    logger.error('❌ Save post error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/download-images', async (req, res) => {
+  const { images, accountUsername, type = 'selected' } = req.body;
+
+  if (!images || !Array.isArray(images) || images.length === 0) {
+    return res.status(400).json({ error: 'No images provided' });
+  }
+
+  if (!accountUsername) {
+    return res.status(400).json({ error: 'Account username is required' });
+  }
+
+  try {
+    logger.info(`📥 Preparing to download ${images.length} images for @${accountUsername}`);
+
+    // Create a new zip file
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+    const folder = zip.folder(`${accountUsername}_${type}_${Date.now()}`);
+
+    // Process each image
+    for (let i = 0; i < images.length; i++) {
+      const image = images[i];
+      logger.info(`📥 Processing image ${i + 1}/${images.length}: ${image.id}`);
+
+      try {
+        // The imagePath is already a full URL
+        const fullImageUrl = image.imagePath || image.image_path;
+        
+        // Ensure we have a valid URL
+        if (!fullImageUrl || !fullImageUrl.startsWith('http')) {
+          logger.error(`❌ Invalid image URL for image ${image.id}`);
+          continue;
+        }
+
+        // Fetch the image
+        const response = await fetch(fullImageUrl);
+        
+        if (!response.ok) {
+          logger.error(`❌ Failed to fetch image ${image.id}: ${response.status}`);
+          continue;
+        }
+
+        const imageBuffer = await response.arrayBuffer();
+        
+        // Determine file extension from path or default to jpg
+        const extension = image.imagePath.split('.').pop() || 'jpg';
+        const fileName = `${i + 1}_${image.aesthetic || 'image'}_${image.id}.${extension}`;
+
+        // Add image to zip
+        folder.file(fileName, Buffer.from(imageBuffer));
+        logger.info(`✅ Added ${fileName} to zip`);
+
+      } catch (error) {
+        logger.error(`❌ Error processing image ${image.id}:`, error.message);
+        // Continue with other images even if one fails
+      }
+    }
+
+    // Generate the zip file
+    const zipBuffer = await zip.generateAsync({ 
+      type: 'nodebuffer',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 }
+    });
+
+    logger.info(`✅ Successfully created zip file with ${images.length} images`);
+
+    // Send the zip file
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${accountUsername}_${type}_images_${Date.now()}.zip"`);
+    res.status(200).send(zipBuffer);
+
+  } catch (error) {
+    logger.error('❌ Download error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/instant-preview/:username', async (req, res) => {
+  const { username } = req.params;
+  
+  if (!username) {
+    return res.status(400).send('Username is required');
+  }
+
+  // Import and execute the handler
+  const instantPreviewHandler = (await import('../../api/instant-preview/[username].js')).default;
+  instantPreviewHandler({ query: { username } }, res);
+});
 
 app.get('/tos', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'tos.html'));
