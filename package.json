@@ -42,6 +42,9 @@
     "tiktok",
     "analysis"
   ],
+  "engines": {
+    "node": "18.x"
+  },
   "author": "Your Name",
   "license": "MIT"
 }
