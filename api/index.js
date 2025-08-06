@@ -41,8 +41,8 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve static files
-app.use(express.static(path.join(__dirname, '../src/web/public')));
+// Serve static files (simplified for serverless)
+// app.use(express.static(path.join(__dirname, '../src/web/public')));
 
 // ========================================
 // CORE ENDPOINTS
@@ -174,7 +174,7 @@ app.get('/api/content-data', async (req, res) => {
 
 // Root route - serve the dashboard
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../src/web/public/index.html'));
+      res.send(`<html><body><h1>API Server</h1><p>Content pipeline API is running</p></body></html>`);
 });
 
 // TikTok OAuth callback
