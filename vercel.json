@@ -19,9 +19,9 @@
       "dest": "api/index.js"
     },
     {
-      "src": "/preview/(.*)",
-      "dest": "api/index.js"
-    },
+    "src": "/preview/(.*)",
+    "dest": "api/preview/$1"
+  },
     {
       "src": "/(.*)",
       "dest": "api/index.js"
