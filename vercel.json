@@ -16,7 +16,7 @@
   "routes": [
     {
       "src": "/preview/(.*)",
-      "dest": "/api/preview.js?username=$1"
+      "dest": "/api/instant-preview/[username].js"
     },
     {
       "src": "/api/(.*)",
