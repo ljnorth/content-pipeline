@@ -3165,6 +3165,19 @@ app.get('/instant-preview/:username', async (req, res) => {
   instantPreviewHandler({ query: { username } }, res);
 });
 
+// Route for viewing saved posts
+app.get('/view-saved/:batchId', async (req, res) => {
+  const { batchId } = req.params;
+  
+  if (!batchId) {
+    return res.status(400).send('Batch ID is required');
+  }
+
+  // Import and execute the handler
+  const viewSavedHandler = (await import('../../api/view-saved/[batchId].js')).default;
+  viewSavedHandler({ query: { batchId } }, res);
+});
+
 app.get('/tos', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'tos.html'));
 });
