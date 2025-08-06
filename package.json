@@ -1,7 +1,6 @@
 {
   "name": "fashion-data-pipeline",
   "version": "1.0.0",
-  "type": "module",
   "description": "A data collection and analysis pipeline for fashion/aesthetic data from social media",
   "main": "src/index.js",
   "scripts": {
