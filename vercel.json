@@ -15,68 +15,11 @@
   ],
   "routes": [
     {
-      "src": "/api/generated-posts",
-      "dest": "/api/generated-posts.js"
-    },
-    {
-      "src": "/api/account-profiles", 
-      "dest": "/api/account-profiles.js"
-    },
-    {
-      "src": "/api/tiktok-status",
-      "dest": "/api/tiktok-status.js"
-    },
-    {
-      "src": "/api/content-data",
-      "dest": "/api/content-data.js"
-    },
-    {
-      "src": "/api/upload-to-tiktok",
-      "dest": "/api/upload-to-tiktok.js"
-    },
-    {
-      "src": "/api/upload-workflow-to-tiktok",
-      "dest": "/api/upload-workflow-to-tiktok.js"
-    },
-    {
-      "src": "/api/upload-workflow-to-slack",
-      "dest": "/api/upload-workflow-to-slack.js"
-    },
-    {
-      "src": "/api/postpreview/store",
-      "dest": "/api/postpreview/store.js"
-    },
-    {
-      "src": "/api/postpreview/download/([^/]+)",
-      "dest": "/api/postpreview/download/[batchId].js"
-    },
-
-    {
-      "src": "/postpreview/([^/]+)",
-      "dest": "/api/postpreview/[batchId].js"
-    },
-    {
-      "src": "/auth/tiktok/callback",
-      "dest": "api/index.js"
-    },
-    {
-      "src": "/auth/tiktok/callback/",
-      "dest": "api/index.js"
-    },
-    {
-      "src": "/api/reroll-images",
-      "dest": "/api/reroll-images.js"
-    },
-    {
-      "src": "/api/preview-data/([^/]+)",
-      "dest": "/api/preview-data/[batchId].js"
-    },
-    {
-      "src": "/preview-client/([^/]+)",
-      "dest": "/api/preview-client/[batchId].js"
-    },
-    {
       "src": "/api/(.*)",
+      "dest": "api/index.js"
+    },
+    {
+      "src": "/preview/(.*)",
       "dest": "api/index.js"
     },
     {
