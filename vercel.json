@@ -2,25 +2,26 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/index.js",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": ["src/**", "*.js", "*.json", "*.md", "*.sql"]
-      }
-    },
-    {
       "src": "api/**/*.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
+      "src": "/api/test",
+      "dest": "/api/test.js"
+    },
+    {
+      "src": "/preview/(.*)",
+      "dest": "/api/instant-preview/[username].js"
+    },
+    {
       "src": "/api/(.*)",
-      "dest": "api/index.js"
+      "dest": "/api/$1.js"
     },
     {
       "src": "/(.*)",
-      "dest": "api/index.js"
+      "dest": "/api/test.js"
     }
   ],
   "env": {
