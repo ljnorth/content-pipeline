@@ -6,15 +6,16 @@ import path from 'path';
 
 const app = express();
 
-import { SupabaseClient } from '../src/database/supabase-client.js';
+import { createClient } from '@supabase/supabase-js';
 
-// Database client - initialize later to avoid top-level await
-let db = null;
+// Database client - Supabase connection
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+const db = createClient(supabaseUrl, supabaseKey);
 
-// Initialize database connection
+// Initialize database connection (simplified)
 async function initializeDatabase() {
   try {
-    db = new SupabaseClient();
     console.log('✅ Database connected successfully');
   } catch (error) {
     console.error('❌ Database connection failed:', error);
