@@ -3,7 +3,7 @@
   "routes": [
     {
       "src": "/preview/([^/]+)",
-      "dest": "/preview/[username].js?username=$1"
+      "dest": "/api/preview.js?username=$1"
     }
   ]
 }
