@@ -10,6 +10,10 @@
     {
       "path": "/api/daily-slack",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/ingest",
+      "schedule": "0 3 * * 0"
     }
   ]
 }
