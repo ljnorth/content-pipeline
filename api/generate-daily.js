@@ -1,12 +1,10 @@
 import { SupabaseClient } from '../src/database/supabase-client.js';
-import { ContentGenerator } from '../src/automation/content-generator.js';
 import { EnhancedSlackAPI } from '../src/slack/enhanced.js';
 import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req, res) {
   try {
     const db = new SupabaseClient();
-    const generator = new ContentGenerator();
     const slack = new EnhancedSlackAPI();
 
     const username = req.method === 'POST' ? req.body?.username : req.query?.username;
@@ -26,6 +24,12 @@ export default async function handler(req, res) {
     const results = [];
 
     const useFallback = !process.env.OPENAI_API_KEY;
+    let generator = null;
+    if (!useFallback) {
+      const mod = await import('../src/automation/content-generator.js');
+      const { ContentGenerator } = mod;
+      generator = new ContentGenerator();
+    }
     const supabaseLite = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
     // Helper: simple random images selector
