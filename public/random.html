@@ -4,20 +4,30 @@
   <meta charset="utf-8" />
   <title>Random Post Generator</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/style.css">
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 20px; color: #222; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
     img { width: 100%; border-radius: 8px; height: 260px; object-fit: cover; }
     .controls { display: flex; gap: 8px; margin-bottom: 12px; }
-    button { background:#667eea; color:#fff; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; }
-    button.secondary { background:#888; }
   </style>
 </head>
 <body>
+  <header class="nav"><div class="nav-inner">
+    <div class="brand"><span class="dot"></span> EasyPost</div>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/accounts.html">Accounts</a>
+      <a href="/random.html">Random</a>
+      <a href="/docs.html">Docs</a>
+    </div>
+  </div></header>
+  <main>
   <h2>Random Post Generator</h2>
   <div class="controls">
-    <button id="generate">Generate</button>
-    <button id="rerollSelected" class="secondary">Reroll Selected</button>
+    <button id="generate" class="btn btn-primary">Generate</button>
+    <button id="rerollSelected" class="btn btn-outline">Reroll Selected</button>
   </div>
   <div id="caption" style="margin:8px 0 12px"></div>
   <div id="grid" class="grid"></div>
@@ -64,6 +74,7 @@
     document.getElementById('generate').onclick = generate;
     document.getElementById('rerollSelected').onclick = rerollSelected;
   </script>
+</main>
 </body>
 </html>
 
