@@ -105,7 +105,7 @@
 
     // Auth guard
     const cfg = await loadConfig();
-    const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+    const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true } });
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       document.getElementById('authStatus').textContent = 'Not logged in. Redirecting to login…';

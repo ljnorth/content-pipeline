@@ -15,7 +15,7 @@
     }
     window.addEventListener('DOMContentLoaded', async () => {
       const cfg = await loadConfig();
-      const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+      const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true } });
       document.getElementById('signup').onclick = async () => {
         const email = document.getElementById('email').value;
         const code = document.getElementById('invite').value;
@@ -23,7 +23,7 @@
           document.getElementById('status').textContent = 'Invalid invite code';
           return;
         }
-        const { error } = await supabase.auth.signInWithOtp({ email });
+        const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: `${location.origin}/auth-callback.html` } });
         document.getElementById('status').textContent = error ? error.message : 'Check your email for the magic link';
       };
     });

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Logging out…</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/style.css">
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    async function loadConfig(){ const r = await fetch('/api/public-config'); return await r.json(); }
+    (async () => {
+      const cfg = await loadConfig();
+      const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true } });
+      await supabase.auth.signOut();
+      location.replace('/');
+    })();
+  </script>
+</head>
+<body class="center" style="min-height:100dvh">
+  <div class="card white" style="width:400px;max-width:92%">
+    <h3>Logging out…</h3>
+  </div>
+</body>
+</html>
+
+

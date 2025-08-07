@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Signing you in…</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/style.css">
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    async function loadConfig(){ const r = await fetch('/api/public-config'); return await r.json(); }
+    (async () => {
+      const cfg = await loadConfig();
+      const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true } });
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get('code') || (url.hash.includes('code=') ? new URLSearchParams(url.hash.slice(1)).get('code') : null);
+      try {
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) throw error;
+        }
+      } catch (e) {
+        console.error('Auth callback error', e);
+      } finally {
+        window.location.replace('/accounts.html');
+      }
+    })();
+  </script>
+</head>
+<body class="center" style="min-height:100dvh">
+  <div class="card white" style="width:400px;max-width:92%">
+    <h3>Signing you in…</h3>
+    <p class="muted">Please wait.</p>
+  </div>
+</body>
+</html>
+
+
