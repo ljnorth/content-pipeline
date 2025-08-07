@@ -12,32 +12,29 @@ function pickRandom(arr, n) {
 }
 
 export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
   try {
-    const imageCount = Math.max(1, Math.min(12, Number(req.body?.imageCount) || 10));
+    const { imageIds = [], allImageIds = [] } = req.body || {};
+    const count = imageIds.length || 1;
+
     const { data: rows, error } = await supabase
       .from('images')
       .select('*')
       .limit(5000);
     if (error) throw error;
 
-    const selected = pickRandom(rows || [], imageCount).map((img, idx) => ({
+    const exclude = new Set(allImageIds);
+    const candidates = (rows || []).filter(r => !exclude.has(r.id));
+    const selected = pickRandom(candidates, count).map(img => ({
       id: img.id,
       imagePath: img.image_path,
       image_path: img.image_path,
       aesthetic: img.aesthetic || 'mixed',
-      is_cover_slide: idx === 0
+      is_cover_slide: false
     }));
 
-    const post = {
-      id: `temp_${Date.now()}`,
-      postNumber: 1,
-      images: selected,
-      caption: 'Random inspiration ✨',
-      created_at: new Date().toISOString(),
-      is_temporary: true
-    };
-
-    res.json({ success: true, post });
+    res.json({ success: true, newImages: selected });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
