@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Saved Posts – EasyPost</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/style.css">
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    async function loadConfig(){ const r = await fetch('/api/public-config'); return await r.json(); }
+    async function loadItems(){
+      const cfg = await loadConfig();
+      const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession:true }});
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return location.replace('/login.html');
+      const email = session.user.email;
+      const res = await fetch(`/api/saved-posts?owner_email=${encodeURIComponent(email)}`);
+      const data = await res.json();
+      const tbody = document.getElementById('rows'); tbody.innerHTML = '';
+      (data.items||[]).forEach(item=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${item.name}</td><td>${new Date(item.created_at).toLocaleString()}</td><td>${(item.images||[]).length}</td>
+          <td>
+            <a class="btn btn-outline" href="/saved-view.html?id=${item.id}">Open</a>
+            <button class="btn btn-outline del" data-id="${item.id}">Delete</button>
+          </td>`;
+        tbody.appendChild(tr);
+      });
+      document.querySelectorAll('.del').forEach(btn=>{
+        btn.onclick=async()=>{ await fetch(`/api/saved-posts/${btn.dataset.id}?owner_email=${encodeURIComponent(email)}`,{method:'DELETE'}); location.reload(); };
+      });
+    }
+    window.addEventListener('DOMContentLoaded', loadItems);
+  </script>
+</head>
+<body>
+  <header class="nav"><div class="nav-inner">
+    <div class="brand"><span class="dot"></span> EasyPost</div>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/accounts.html">Accounts</a>
+      <a href="/random.html">Random</a>
+      <a href="/saved.html">Saved</a>
+      <a href="/docs.html">Docs</a>
+    </div>
+  </div></header>
+  <main>
+    <h2>Saved Posts</h2>
+    <table>
+      <thead><tr><th>Name</th><th>Created</th><th>Images</th><th>Actions</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </main>
+</body>
+</html>
+
+

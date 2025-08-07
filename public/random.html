@@ -30,12 +30,14 @@
     <button id="rerollSelected" class="btn btn-outline">Reroll Selected</button>
     <button id="downloadSelected" class="btn btn-outline">Download Selected</button>
     <button id="downloadAll" class="btn btn-outline">Download All</button>
+    <button id="saveSelected" class="btn btn-primary">Save Selected as Post</button>
   </div>
   <div id="caption" style="margin:8px 0 12px"></div>
   <div id="grid" class="grid"></div>
 
   <script>
     let currentPost = null;
+    let currentUserEmail = null;
 
     function render() {
       const grid = document.getElementById('grid');
@@ -107,10 +109,39 @@
       await downloadImages(currentPost.images, 'all');
     }
 
+    async function ensureAuth() {
+      const cfg = await (await fetch('/api/public-config')).json();
+      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+      const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true } });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { location.href = '/login.html'; return null; }
+      return session.user.email;
+    }
+
+    async function saveSelected() {
+      if (!currentPost) return;
+      const selectedIds = Array.from(document.querySelectorAll('.sel:checked')).map(cb => parseInt(cb.value));
+      const selected = currentPost.images.filter(img => selectedIds.includes(img.id));
+      if (selected.length === 0) return;
+      if (!currentUserEmail) currentUserEmail = await ensureAuth();
+      if (!currentUserEmail) return;
+      const name = prompt('Name this post:');
+      if (!name) return;
+      const caption = prompt('Optional caption:') || '';
+      const res = await fetch('/api/saved-posts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, caption, images: selected, owner_email: currentUserEmail }) });
+      const data = await res.json();
+      if (data?.success) {
+        if (confirm('Saved! Open it now?')) location.href = `/saved-view.html?id=${data.id}`;
+      } else {
+        alert(data?.error || 'Save failed');
+      }
+    }
+
     document.getElementById('generate').onclick = generate;
     document.getElementById('rerollSelected').onclick = rerollSelected;
     document.getElementById('downloadSelected').onclick = downloadSelected;
     document.getElementById('downloadAll').onclick = downloadAll;
+    document.getElementById('saveSelected').onclick = saveSelected;
   </script>
 </main>
 </body>

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Saved Post – EasyPost</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/style.css">
+  <style>.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px} img{width:100%;border-radius:8px;height:240px;object-fit:cover}</style>
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    async function loadConfig(){ const r = await fetch('/api/public-config'); return await r.json(); }
+    async function load(){
+      const cfg = await loadConfig();
+      const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth:{persistSession:true} });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return location.replace('/login.html');
+      const email=session.user.email;
+      const id=new URL(location.href).searchParams.get('id');
+      const res=await fetch(`/api/saved-posts/${id}?owner_email=${encodeURIComponent(email)}`);
+      const post=await res.json();
+      document.getElementById('name').textContent=post.name;
+      document.getElementById('caption').textContent=post.caption||'';
+      const grid=document.getElementById('grid');
+      (post.images||[]).forEach(img=>{
+        const d=document.createElement('div');
+        d.innerHTML=`<img src="${img.imagePath||img.image_path}" alt="">`;
+        grid.appendChild(d);
+      });
+      document.getElementById('downloadAll').onclick=()=>downloadImages(post.images,'all',post.name);
+    }
+    async function downloadImages(images,type,name){
+      const response = await fetch('/api/download-images',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({images,accountUsername:name||'saved',type})});
+      if(response.ok){const blob=await response.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${name||'saved'}_${type}_images_${Date.now()}.zip`;document.body.appendChild(a);a.click();URL.revokeObjectURL(url);a.remove();}
+    }
+    window.addEventListener('DOMContentLoaded',load);
+  </script>
+</head>
+<body>
+  <header class="nav"><div class="nav-inner">
+    <div class="brand"><span class="dot"></span> EasyPost</div>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/accounts.html">Accounts</a>
+      <a href="/random.html">Random</a>
+      <a href="/saved.html">Saved</a>
+    </div>
+  </div></header>
+  <main>
+    <div class="row"><div><h2 id="name">Saved Post</h2><p id="caption" class="muted"></p></div>
+    <div style="margin-left:auto"><button id="downloadAll" class="btn btn-outline">Download All</button></div></div>
+    <div id="grid" class="grid"></div>
+  </main>
+</body>
+</html>
+
+
