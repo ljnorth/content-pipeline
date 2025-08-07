@@ -165,7 +165,8 @@ export class EnhancedSlackAPI {
       }
     ];
 
-    return { channel: this.channel, blocks };
+    // Some Slack webhook configs require 'text' fallback
+    return { channel: this.channel, text: `Content for @${accountUsername} – ${posts.length} posts`, blocks };
   }
 
   /**

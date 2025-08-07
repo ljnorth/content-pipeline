@@ -1,6 +1,7 @@
 import { SupabaseClient } from '../src/database/supabase-client.js';
 import { ContentGenerator } from '../src/automation/content-generator.js';
 import { EnhancedSlackAPI } from '../src/slack/enhanced.js';
+import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req, res) {
   try {
@@ -23,11 +24,48 @@ export default async function handler(req, res) {
     }
 
     const results = [];
+
+    const useFallback = !process.env.OPENAI_API_KEY;
+    const supabaseLite = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+
+    // Helper: simple random images selector
+    async function pickRandomImages(count) {
+      const { data: rows } = await supabaseLite.from('images').select('*').limit(5000);
+      const arr = rows || [];
+      // shuffle
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr.slice(0, count).map((img, idx) => ({
+        id: img.id,
+        imagePath: img.image_path,
+        image_path: img.image_path,
+        aesthetic: img.aesthetic || 'mixed',
+        is_cover_slide: idx === 0
+      }));
+    }
+
     for (const acc of accounts) {
       try {
-        const posts = await generator.generateContentForAccount(acc);
+        let posts;
+        if (useFallback) {
+          // Generate 3 simple posts with 5 random images each
+          posts = [];
+          for (let i = 1; i <= 3; i++) {
+            const images = await pickRandomImages(5);
+            posts.push({
+              postNumber: i,
+              caption: `Daily content for @${acc.username}`,
+              images
+            });
+          }
+        } else {
+          posts = await generator.generateContentForAccount(acc);
+        }
+
         await slack.sendAccountConsolidated({ account: acc.username, posts });
-        results.push({ account: acc.username, success: true, posts: posts.length });
+        results.push({ account: acc.username, success: true, posts: posts.length, fallback: useFallback });
       } catch (e) {
         results.push({ account: acc.username, success: false, error: e.message });
       }
