@@ -16,6 +16,7 @@
 </head>
 <body>
   <h2>Accounts</h2>
+  <div id="authStatus" style="margin-bottom:8px;color:#666">Checking session…</div>
 
   <div class="row" style="margin:12px 0">
     <input id="username" placeholder="@username"/>
@@ -25,6 +26,8 @@
     <input id="ownerDisplayName" placeholder="Owner display name"/>
     <label><input type="checkbox" id="autogenEnabled"/> Auto-Gen</label>
     <button id="add">Add / Update</button>
+    <button id="ingestAll" class="secondary">Run Ingestion (All)</button>
+    <button id="genAll" class="secondary">Generate Daily Now (All enabled)</button>
   </div>
 
   <table>
@@ -41,7 +44,10 @@
     <tbody id="rows"></tbody>
   </table>
 
-  <script>
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    async function loadConfig(){ const r = await fetch('/api/public-config'); return await r.json(); }
+
     async function loadAccounts() {
       const res = await fetch('/api/accounts');
       const data = await res.json();
@@ -50,16 +56,16 @@
       data.forEach(a => {
         const tr = document.createElement('tr');
         const cs = a.content_strategy || {};
-        tr.innerHTML = `
-          <td>@${a.username}</td>
-          <td>${a.owner_display_name || ''} ${a.owner_slack_id ? '('+a.owner_slack_id+')' : ''}</td>
-          <td>${cs.goal || ''}</td>
-          <td>${cs.audience || ''}</td>
-          <td><input type="checkbox" ${cs.autogenEnabled ? 'checked' : ''} data-u="${a.username}" class="toggle"/></td>
-          <td>
-            <button class="secondary" data-prev="${a.username}">Preview</button>
-          </td>
-        `;
+        tr.innerHTML = '<td>@'+a.username+'</td>'+
+          '<td>'+(a.owner_display_name||'')+(a.owner_slack_id? ' ('+a.owner_slack_id+')':'' )+'</td>'+
+          '<td>'+(cs.goal||'')+'</td>'+
+          '<td>'+(cs.audience||'')+'</td>'+
+          '<td><input type="checkbox" '+(cs.autogenEnabled?'checked':'')+' data-u="'+a.username+'" class="toggle"/></td>'+
+          '<td>'+
+            '<button class="secondary" data-prev="'+a.username+'">Preview</button> '+
+            '<button class="secondary ingest" data-u="'+a.username+'">Ingest</button> '+
+            '<button class="secondary gen" data-u="'+a.username+'">Generate</button>'+
+          '</td>';
         tbody.appendChild(tr);
       });
 
@@ -70,8 +76,10 @@
       });
 
       document.querySelectorAll('button.secondary').forEach(btn => {
-        btn.onclick = () => window.open('/preview/' + btn.dataset.prev, '_blank');
+        if (btn.dataset.prev) btn.onclick = () => window.open('/preview/' + btn.dataset.prev, '_blank');
       });
+      document.querySelectorAll('button.ingest').forEach(btn => { btn.onclick = async () => { await fetch('/api/ingest?mode=delta&username='+encodeURIComponent(btn.dataset.u)); }; });
+      document.querySelectorAll('button.gen').forEach(btn => { btn.onclick = async () => { await fetch('/api/generate-daily?username='+encodeURIComponent(btn.dataset.u)); }; });
     }
 
     document.getElementById('add').onclick = async () => {
@@ -87,7 +95,20 @@
       await loadAccounts();
     };
 
-    loadAccounts();
+    document.getElementById('ingestAll').onclick = async () => { await fetch('/api/ingest?mode=all'); };
+    document.getElementById('genAll').onclick = async () => { await fetch('/api/generate-daily'); };
+
+    // Auth guard
+    const cfg = await loadConfig();
+    const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      document.getElementById('authStatus').textContent = 'Not logged in. Redirecting to login…';
+      setTimeout(()=> location.href = '/login.html', 800);
+    } else {
+      document.getElementById('authStatus').textContent = `Logged in as ${session.user.email}`;
+      loadAccounts();
+    }
   </script>
 </body>
 </html>

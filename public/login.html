@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Log in – EasyPost</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 20px; color: #222; }
+    input { padding: 10px; border:1px solid #ddd; border-radius:8px; width: 320px; max-width: 100%; }
+    button { background:#667eea; color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; }
+  </style>
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    async function loadConfig(){
+      const res = await fetch('/api/public-config');
+      return await res.json();
+    }
+    window.addEventListener('DOMContentLoaded', async () => {
+      const cfg = await loadConfig();
+      const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+      document.getElementById('login').onclick = async () => {
+        const email = document.getElementById('email').value;
+        const { error } = await supabase.auth.signInWithOtp({ email });
+        document.getElementById('status').textContent = error ? error.message : 'Check your email for the magic link';
+      };
+    });
+  </script>
+</head>
+<body>
+  <h2>Log in</h2>
+  <p>Enter your email. We’ll send you a magic link.</p>
+  <input id="email" type="email" placeholder="you@company.com"/>
+  <button id="login">Send magic link</button>
+  <div id="status" style="margin-top:8px;color:#666"></div>
+</body>
+</html>
+
+

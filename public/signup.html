@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Sign up – EasyPost</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 20px; color: #222; }
+    input { padding: 10px; border:1px solid #ddd; border-radius:8px; width: 320px; max-width: 100%; }
+    button { background:#667eea; color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; }
+  </style>
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    async function loadConfig(){
+      const res = await fetch('/api/public-config');
+      return await res.json();
+    }
+    window.addEventListener('DOMContentLoaded', async () => {
+      const cfg = await loadConfig();
+      const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+      document.getElementById('signup').onclick = async () => {
+        const email = document.getElementById('email').value;
+        const code = document.getElementById('invite').value;
+        if (cfg.inviteCode && code !== cfg.inviteCode) {
+          document.getElementById('status').textContent = 'Invalid invite code';
+          return;
+        }
+        const { error } = await supabase.auth.signInWithOtp({ email });
+        document.getElementById('status').textContent = error ? error.message : 'Check your email for the magic link';
+      };
+    });
+  </script>
+</head>
+<body>
+  <h2>Sign up</h2>
+  <p>Invite-only. Enter your email and invite code.</p>
+  <input id="email" type="email" placeholder="you@company.com"/>
+  <input id="invite" placeholder="Invite code"/>
+  <button id="signup">Send magic link</button>
+  <div id="status" style="margin-top:8px;color:#666"></div>
+</body>
+</html>
+
+

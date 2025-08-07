@@ -65,7 +65,7 @@ export class EnhancedSlackAPI {
       }
       
       // Create consolidated Slack message
-      const payload = await this.buildConsolidatedPayload(account, posts, batchId, accountProfile);
+    const payload = await this.buildConsolidatedBlocksPayload(account, posts, batchId, accountProfile);
 
       const response = await fetch(this.webhookUrl, {
         method: 'POST',
@@ -130,7 +130,7 @@ export class EnhancedSlackAPI {
   /**
    * Build consolidated Slack message payload
    */
-  async buildConsolidatedPayload(accountUsername, posts, batchId, accountProfile = null) {
+  async buildConsolidatedBlocksPayload(accountUsername, posts, batchId, accountProfile = null) {
     const totalImages = posts.reduce((sum, post) => sum + post.images.length, 0);
     const aesthetics = [...new Set(posts.map(post => post.images[0]?.aesthetic).filter(a => a))];
     const previewUrl = `${this.previewBaseUrl}/postpreview/${batchId}`;
@@ -150,62 +150,22 @@ export class EnhancedSlackAPI {
              `   📸 ${imageCount} images • 🎨 ${aesthetic}`;
     }).join('\n\n');
 
-    const attachment = {
-      color: '#667eea',
-      title: `🎨 Content Generated for @${accountUsername}`,
-      title_link: previewUrl,
-      text: `${ownerTag}Generated ${posts.length} posts with ${totalImages} total images\n\n${postSummaries}`,
-      footer: 'Content Pipeline • Click title to view full preview',
-      ts: Math.floor(Date.now() / 1000),
-      fields: [
-        { 
-          title: 'Posts Generated', 
-          value: posts.length.toString(), 
-          short: true 
-        },
-        { 
-          title: 'Total Images', 
-          value: totalImages.toString(), 
-          short: true 
-        },
-        { 
-          title: 'Aesthetics', 
-          value: aesthetics.join(', ') || 'Mixed', 
-          short: true 
-        },
-        { 
-          title: 'Live Preview', 
-          value: `<${previewUrl}|View & Download All>`, 
-          short: true 
-        }
-      ],
-      actions: [
-        {
-          type: 'button',
-          text: '👀 View Preview',
-          url: previewUrl,
-          style: 'primary'
-        },
-        {
-          type: 'button', 
-          text: '📥 Download All',
-          url: `${previewUrl.replace('/postpreview/', '/api/postpreview/download/')}`,
-          style: 'default'
-        }
-      ]
-    };
+    const firstImage = posts[0]?.images?.[0]?.imagePath;
+    const blocks = [
+      { type: 'header', text: { type: 'plain_text', text: `🎨 Content for @${accountUsername}` } },
+      { type: 'section', text: { type: 'mrkdwn', text: `${ownerTag}Generated *${posts.length} posts* with *${totalImages} images*\nAesthetics: ${aesthetics.join(', ') || 'Mixed'}` } },
+      ...(firstImage ? [{ type: 'image', image_url: firstImage, alt_text: 'cover' }] : []),
+      { type: 'section', text: { type: 'mrkdwn', text: postSummaries } },
+      {
+        type: 'actions',
+        elements: [
+          { type: 'button', text: { type: 'plain_text', text: '👀 Preview & Download' }, url: previewUrl, style: 'primary' },
+          { type: 'button', text: { type: 'plain_text', text: '📥 Download All' }, url: `${previewUrl.replace('/postpreview/', '/api/postpreview/download/')}` }
+        ]
+      }
+    ];
 
-    // Add first image as thumbnail if available
-    if (posts[0]?.images?.[0]?.imagePath) {
-      attachment.thumb_url = posts[0].images[0].imagePath;
-    }
-
-    return {
-      channel: this.channel,
-      username: 'Content Pipeline Bot',
-      icon_emoji: '🎨',
-      attachments: [attachment]
-    };
+    return { channel: this.channel, blocks };
   }
 
   /**

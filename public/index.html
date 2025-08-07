@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Content Pipeline Dashboard</title>
+  <title>EasyPost – Automate your TikTok content</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 20px; color: #222; }
@@ -11,6 +11,8 @@
     h1 { margin: 0 0 8px; }
     small { color: #666; }
     a.button { display: inline-block; margin-top: 12px; background: #667eea; color: #fff; padding: 10px 14px; border-radius: 8px; text-decoration: none; }
+    .hero { display:flex; flex-direction:column; gap:8px; margin-bottom:16px }
+    .cta { display:flex; gap:8px; flex-wrap:wrap }
   </style>
   <script defer>
     async function loadMetrics() {
@@ -26,13 +28,41 @@
         document.getElementById('trending').textContent = 'Error loading trending';
       }
     }
+    async function loadSeries() {
+      try {
+        const res = await fetch('/api/metrics-series?days=30');
+        const data = await res.json();
+        const labels = data.postsByDay.map(p=>p.date);
+        const ctx = document.getElementById('chart').getContext('2d');
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              { label: 'Posts', data: data.postsByDay.map(p=>p.count), borderColor:'#667eea' },
+              { label: 'Images', data: data.imagesByDay.map(p=>p.count), borderColor:'#ff6b35' }
+            ]
+          },
+          options: { responsive: true, scales: { y: { beginAtZero: true } } }
+        });
+      } catch(e) {}
+    }
     window.addEventListener('DOMContentLoaded', loadMetrics);
+    window.addEventListener('DOMContentLoaded', loadSeries);
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   
 </head>
 <body>
-  <h1>Content Pipeline</h1>
-  <small>Live overview</small>
+  <div class="hero">
+    <h1>EasyPost</h1>
+    <small>Automated content creation for TikTok teams</small>
+    <div class="cta">
+      <a class="button" href="/signup.html">Sign up</a>
+      <a class="button" href="/login.html" style="background:#764ba2">Log in</a>
+      <a class="button" href="/accounts.html" style="background:#333">Accounts</a>
+    </div>
+  </div>
 
   <div class="row" style="margin-top:16px">
     <div class="card">
@@ -42,6 +72,13 @@
     <div class="card">
       <h3>Trending Categories</h3>
       <div id="trending">Loading…</div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:16px">
+    <div class="card" style="flex:1 1 100%">
+      <h3>Last 30 days</h3>
+      <canvas id="chart" height="90"></canvas>
     </div>
   </div>
 
