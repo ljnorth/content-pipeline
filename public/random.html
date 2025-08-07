@@ -28,6 +28,8 @@
   <div class="controls">
     <button id="generate" class="btn btn-primary">Generate</button>
     <button id="rerollSelected" class="btn btn-outline">Reroll Selected</button>
+    <button id="downloadSelected" class="btn btn-outline">Download Selected</button>
+    <button id="downloadAll" class="btn btn-outline">Download All</button>
   </div>
   <div id="caption" style="margin:8px 0 12px"></div>
   <div id="grid" class="grid"></div>
@@ -71,8 +73,44 @@
       }
     }
 
+    async function downloadImages(images, type) {
+      if (!images || images.length === 0) return;
+      const accountUsername = 'random';
+      const response = await fetch('/api/download-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images, accountUsername, type })
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `${accountUsername}_${type}_images_${Date.now()}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    }
+
+    async function downloadSelected() {
+      if (!currentPost) return;
+      const selectedIds = Array.from(document.querySelectorAll('.sel:checked')).map(cb => parseInt(cb.value));
+      const selected = currentPost.images.filter(img => selectedIds.includes(img.id));
+      await downloadImages(selected, 'selected');
+    }
+
+    async function downloadAll() {
+      if (!currentPost) return;
+      await downloadImages(currentPost.images, 'all');
+    }
+
     document.getElementById('generate').onclick = generate;
     document.getElementById('rerollSelected').onclick = rerollSelected;
+    document.getElementById('downloadSelected').onclick = downloadSelected;
+    document.getElementById('downloadAll').onclick = downloadAll;
   </script>
 </main>
 </body>
