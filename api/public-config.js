@@ -4,6 +4,7 @@ export default async function handler(req, res) {
       supabaseUrl: process.env.SUPABASE_URL || '',
       supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
       previewBaseUrl: process.env.PREVIEW_BASE_URL || 'https://www.easypost.fun',
+      authRedirectBaseUrl: process.env.AUTH_REDIRECT_BASE_URL || process.env.PREVIEW_BASE_URL || 'https://www.easypost.fun',
       authMode: 'invite',
       brand: {
         name: 'EasyPost',

@@ -23,7 +23,8 @@
           document.getElementById('status').textContent = 'Invalid invite code';
           return;
         }
-        const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: `${location.origin}/auth-callback.html` } });
+        const base = cfg.authRedirectBaseUrl || location.origin;
+        const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: `${base}/auth-callback.html` } });
         document.getElementById('status').textContent = error ? error.message : 'Check your email for the magic link';
       };
     });
