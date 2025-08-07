@@ -24,8 +24,14 @@
         if (!email || !password || !confirm || !invite) { document.getElementById('status').textContent='All fields required'; return; }
         if (password !== confirm) { document.getElementById('status').textContent='Passwords do not match'; return; }
         // Create via server (invite-only)
-        const resp = await fetch('/api/auth/create-user', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password, inviteCode: invite }) });
-        const out = await resp.json();
+        let out = { success:false };
+        try {
+          const resp = await fetch('/api/auth/create-user', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password, inviteCode: invite }) });
+          out = await resp.json();
+        } catch (e) {
+          document.getElementById('status').textContent = 'Network error creating user';
+          return;
+        }
         if (!out.success) { document.getElementById('status').textContent = out.error || 'Signup failed'; return; }
         // Then sign in
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });

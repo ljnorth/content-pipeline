@@ -10,7 +10,14 @@ export default async function handler(req, res) {
     if (inviteCode !== (process.env.INVITE_MASTER_PASSWORD || 'Aesthetic2025')) return res.status(403).json({ error: 'Invalid invite code' });
 
     const { data, error } = await supabaseAdmin.auth.admin.createUser({ email, password, email_confirm: true });
-    if (error) return res.status(400).json({ error: error.message });
+    if (error) {
+      // If user already exists, treat as soft success so client can log in
+      if (String(error.message || '').toLowerCase().includes('already')) {
+        await supabaseAdmin.from('user_profiles').upsert({ user_id: null, email, role: 'user', last_login: new Date().toISOString() });
+        return res.json({ success: true, alreadyExists: true });
+      }
+      return res.status(400).json({ error: error.message });
+    }
     // Upsert user profile
     await supabaseAdmin.from('user_profiles').upsert({ user_id: data.user.id, email, role: 'user', last_login: new Date().toISOString() });
     return res.json({ success: true });
