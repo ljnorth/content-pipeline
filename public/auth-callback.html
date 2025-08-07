@@ -13,12 +13,18 @@
     (async () => {
       const cfg = await loadConfig();
       const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true } });
-      const url = new URL(window.location.href);
-      const code = url.searchParams.get('code') || (url.hash.includes('code=') ? new URLSearchParams(url.hash.slice(1)).get('code') : null);
       try {
-        if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
+        // Handle both hash-based magic links and PKCE code links
+        if (location.hash && (location.hash.includes('access_token=') || location.hash.includes('refresh_token='))) {
+          const { error } = await supabase.auth.getSessionFromUrl({ storeSession: true });
           if (error) throw error;
+        } else {
+          const url = new URL(window.location.href);
+          const code = url.searchParams.get('code');
+          if (code) {
+            const { error } = await supabase.auth.exchangeCodeForSession(code);
+            if (error) throw error;
+          }
         }
       } catch (e) {
         console.error('Auth callback error', e);

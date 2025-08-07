@@ -15,7 +15,7 @@
     }
     window.addEventListener('DOMContentLoaded', async () => {
       const cfg = await loadConfig();
-      const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true } });
+      const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true, detectSessionInUrl: true } });
       document.getElementById('signup').onclick = async () => {
         const email = document.getElementById('email').value;
         const code = document.getElementById('invite').value;
