@@ -18,14 +18,22 @@
       const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true, detectSessionInUrl: true } });
       document.getElementById('signup').onclick = async () => {
         const email = document.getElementById('email').value;
-        const code = document.getElementById('invite').value;
-        if (cfg.inviteCode && code !== cfg.inviteCode) {
-          document.getElementById('status').textContent = 'Invalid invite code';
-          return;
+        const password = document.getElementById('password').value;
+        const confirm = document.getElementById('confirm').value;
+        const invite = document.getElementById('invite').value;
+        if (!email || !password || !confirm || !invite) { document.getElementById('status').textContent='All fields required'; return; }
+        if (password !== confirm) { document.getElementById('status').textContent='Passwords do not match'; return; }
+        // Create via server (invite-only)
+        const resp = await fetch('/api/auth/create-user', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password, inviteCode: invite }) });
+        const out = await resp.json();
+        if (!out.success) { document.getElementById('status').textContent = out.error || 'Signup failed'; return; }
+        // Then sign in
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        document.getElementById('status').textContent = error ? error.message : 'Success';
+        if (!error) {
+          await fetch('/api/auth/sync-profile', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ user_id: data.user.id, email }) });
+          location.replace('/accounts.html');
         }
-        const base = cfg.authRedirectBaseUrl || location.origin;
-        const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: `${base}/auth-callback.html` } });
-        document.getElementById('status').textContent = error ? error.message : 'Check your email for the magic link';
       };
     });
   </script>
@@ -33,13 +41,13 @@
 <body class="center" style="min-height:100dvh">
   <div class="card white" style="width:400px;max-width:92%">
     <h2 style="margin:0 0 6px">Sign up</h2>
-    <p class="muted" style="margin:0 0 12px">Invite-only. Enter your email and invite code.</p>
-    <div class="row" style="gap:8px">
-      <input id="email" type="email" placeholder="you@company.com" style="flex:1"/>
-      <input id="invite" placeholder="Invite code" style="flex:1"/>
-    </div>
-    <div class="row" style="gap:8px;margin-top:8px">
-      <button id="signup" class="btn btn-primary" style="width:100%">Send link</button>
+    <p class="muted" style="margin:0 0 12px">Invite-only. Enter your email, password, and team access password.</p>
+    <div class="row" style="gap:8px;flex-direction:column">
+      <input id="email" type="email" placeholder="you@company.com"/>
+      <input id="password" type="password" placeholder="Password"/>
+      <input id="confirm" type="password" placeholder="Confirm password"/>
+      <input id="invite" placeholder="Team access password"/>
+      <button id="signup" class="btn btn-primary" style="width:100%">Create account</button>
     </div>
     <div id="status" class="muted" style="margin-top:8px"></div>
   </div>

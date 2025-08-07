@@ -18,9 +18,13 @@
       const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true, detectSessionInUrl: true } });
       document.getElementById('login').onclick = async () => {
         const email = document.getElementById('email').value;
-        const base = cfg.authRedirectBaseUrl || location.origin;
-        const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: `${base}/auth-callback.html` } });
-        document.getElementById('status').textContent = error ? error.message : 'Check your email for the magic link';
+        const password = document.getElementById('password').value;
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        document.getElementById('status').textContent = error ? error.message : 'Success';
+        if (!error) {
+          await fetch('/api/auth/sync-profile', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ user_id: data.user.id, email }) });
+          location.replace('/accounts.html');
+        }
       };
     });
   </script>
@@ -28,10 +32,11 @@
 <body class="center" style="min-height:100dvh">
   <div class="card white" style="width:400px;max-width:92%">
     <h2 style="margin:0 0 6px">Log in</h2>
-    <p class="muted" style="margin:0 0 12px">Enter your email. We’ll send you a magic link.</p>
-    <div class="row" style="gap:8px">
-      <input id="email" type="email" placeholder="you@company.com" style="flex:1"/>
-      <button id="login" class="btn btn-primary">Send link</button>
+    <p class="muted" style="margin:0 0 12px">Enter your email and password.</p>
+    <div class="row" style="gap:8px;flex-direction:column">
+      <input id="email" type="email" placeholder="you@company.com"/>
+      <input id="password" type="password" placeholder="Password"/>
+      <button id="login" class="btn btn-primary" style="width:100%">Log in</button>
     </div>
     <div id="status" class="muted" style="margin-top:8px"></div>
   </div>
