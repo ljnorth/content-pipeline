@@ -4,16 +4,9 @@
   <meta charset="utf-8" />
   <title>EasyPost – Automate your TikTok content</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 20px; color: #222; }
-    .row { display: flex; gap: 16px; flex-wrap: wrap; }
-    .card { flex: 1 1 240px; background: #f7f7fb; border-radius: 12px; padding: 16px; }
-    h1 { margin: 0 0 8px; }
-    small { color: #666; }
-    a.button { display: inline-block; margin-top: 12px; background: #667eea; color: #fff; padding: 10px 14px; border-radius: 8px; text-decoration: none; }
-    .hero { display:flex; flex-direction:column; gap:8px; margin-bottom:16px }
-    .cta { display:flex; gap:8px; flex-wrap:wrap }
-  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/style.css">
   <script defer>
     async function loadMetrics() {
       try {
@@ -54,41 +47,56 @@
   
 </head>
 <body>
-  <div class="hero">
-    <h1>EasyPost</h1>
-    <small>Automated content creation for TikTok teams</small>
-    <div class="cta">
-      <a class="button" href="/signup.html">Sign up</a>
-      <a class="button" href="/login.html" style="background:#764ba2">Log in</a>
-      <a class="button" href="/accounts.html" style="background:#333">Accounts</a>
+  <header class="nav">
+    <div class="nav-inner">
+      <div class="brand"><span class="dot"></span> EasyPost</div>
+      <div class="nav-links">
+        <a href="/">Home</a>
+        <a href="/accounts.html">Accounts</a>
+        <a href="/random.html">Random</a>
+        <a href="/docs.html">Docs</a>
+        <a href="/login.html">Log in</a>
+      </div>
     </div>
-  </div>
+  </header>
+  <main>
+    <div class="hero">
+      <div>
+        <h1 class="title">Automate your TikTok content</h1>
+        <p class="subtitle">Generate daily posts, preview & reroll, and track trends—all in one place.</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="/signup.html">Sign up</a>
+          <a class="btn btn-outline" href="/preview/testuser" target="_blank">Try demo</a>
+        </div>
+      </div>
+    </div>
 
-  <div class="row" style="margin-top:16px">
-    <div class="card">
+  <div class="row section fade-up">
+    <div class="card white">
       <h3>Totals</h3>
       <div id="totals">Loading…</div>
     </div>
-    <div class="card">
+    <div class="card white">
       <h3>Trending Categories</h3>
       <div id="trending">Loading…</div>
     </div>
   </div>
 
-  <div class="row" style="margin-top:16px">
-    <div class="card" style="flex:1 1 100%">
+  <div class="row section fade-up">
+    <div class="card white" style="flex:1 1 100%">
       <h3>Last 30 days</h3>
       <canvas id="chart" height="90"></canvas>
     </div>
   </div>
 
-  <div class="row" style="margin-top:16px">
-    <div class="card">
+  <div class="row section fade-up">
+    <div class="card white">
       <h3>Instant Preview</h3>
       <p>Open the live preview page. Replace “testuser” with any onboarded account username.</p>
-      <a class="button" href="/preview/testuser" target="_blank">Open Preview</a>
+      <a class="btn btn-secondary" href="/preview/testuser" target="_blank">Open Preview</a>
     </div>
   </div>
+  </main>
 
 </body>
 </html>

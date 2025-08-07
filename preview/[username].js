@@ -11,20 +11,13 @@ export default async function handler(req, res) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Preview - @${username} | easypost.fun</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            line-height: 1.6; 
-            color: #333; 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }
-        .container { 
-            max-width: 1200px; 
-            margin: 0 auto; 
-            padding: 20px; 
-        }
+        * { box-sizing: border-box; }
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
         .header {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
@@ -212,6 +205,14 @@ export default async function handler(req, res) {
     </style>
 </head>
 <body>
+    <header class="nav"><div class="nav-inner">
+      <div class="brand"><span class="dot"></span> EasyPost</div>
+      <div class="nav-links">
+        <a href="/">Home</a>
+        <a href="/accounts.html">Accounts</a>
+        <a href="/random.html">Random</a>
+      </div>
+    </div></header>
     <div class="container">
         <div class="header">
             <h1>🎨 Content Preview</h1>

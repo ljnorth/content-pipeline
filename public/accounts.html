@@ -4,30 +4,35 @@
   <meta charset="utf-8" />
   <title>Accounts</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 20px; color: #222; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; }
-    input, select { padding: 8px; border: 1px solid #ddd; border-radius: 6px; }
-    button { background:#667eea; color:#fff; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; }
-    .secondary { background: #888; }
-    .row { display:flex; gap:8px; flex-wrap:wrap; }
-  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
+  <header class="nav"><div class="nav-inner">
+    <div class="brand"><span class="dot"></span> EasyPost</div>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/accounts.html">Accounts</a>
+      <a href="/random.html">Random</a>
+      <a href="/docs.html">Docs</a>
+      <a href="/logout.html">Logout</a>
+    </div>
+  </div></header>
+  <main>
   <h2>Accounts</h2>
   <div id="authStatus" style="margin-bottom:8px;color:#666">Checking session…</div>
 
-  <div class="row" style="margin:12px 0">
+  <div class="row section">
     <input id="username" placeholder="@username"/>
     <input id="goal" placeholder="Goal (plain text)"/>
     <input id="audience" placeholder="Audience (plain text)"/>
     <input id="ownerSlackId" placeholder="Owner Slack ID (U...)"/>
     <input id="ownerDisplayName" placeholder="Owner display name"/>
-    <label><input type="checkbox" id="autogenEnabled"/> Auto-Gen</label>
-    <button id="add">Add / Update</button>
-    <button id="ingestAll" class="secondary">Run Ingestion (All)</button>
-    <button id="genAll" class="secondary">Generate Daily Now (All enabled)</button>
+    <label class="muted"><input type="checkbox" id="autogenEnabled"/> Auto-Gen</label>
+    <button id="add" class="btn btn-primary">Add / Update</button>
+    <button id="ingestAll" class="btn btn-outline">Run Ingestion (All)</button>
+    <button id="genAll" class="btn btn-outline">Generate Daily Now (All enabled)</button>
   </div>
 
   <table>
@@ -62,9 +67,9 @@
           '<td>'+(cs.audience||'')+'</td>'+
           '<td><input type="checkbox" '+(cs.autogenEnabled?'checked':'')+' data-u="'+a.username+'" class="toggle"/></td>'+
           '<td>'+
-            '<button class="secondary" data-prev="'+a.username+'">Preview</button> '+
-            '<button class="secondary ingest" data-u="'+a.username+'">Ingest</button> '+
-            '<button class="secondary gen" data-u="'+a.username+'">Generate</button>'+
+            '<button class="btn btn-outline" data-prev="'+a.username+'">Preview</button> '+
+            '<button class="btn btn-outline ingest" data-u="'+a.username+'">Ingest</button> '+
+            '<button class="btn btn-outline gen" data-u="'+a.username+'">Generate</button>'+
           '</td>';
         tbody.appendChild(tr);
       });
