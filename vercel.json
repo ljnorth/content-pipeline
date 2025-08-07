@@ -5,5 +5,11 @@
       "src": "/preview/([^/]+)",
       "dest": "/api/preview.js?username=$1"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/daily-slack",
+      "schedule": "0 9 * * *"
+    }
   ]
 }

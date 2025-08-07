@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Content Pipeline Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 20px; color: #222; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; }
+    .card { flex: 1 1 240px; background: #f7f7fb; border-radius: 12px; padding: 16px; }
+    h1 { margin: 0 0 8px; }
+    small { color: #666; }
+    a.button { display: inline-block; margin-top: 12px; background: #667eea; color: #fff; padding: 10px 14px; border-radius: 8px; text-decoration: none; }
+  </style>
+  <script defer>
+    async function loadMetrics() {
+      try {
+        const res = await fetch('/api/metrics');
+        const data = await res.json();
+        document.getElementById('totals').textContent =
+          `Images: ${data.images} • Posts: ${data.posts} • Accounts: ${data.accounts}`;
+        document.getElementById('trending').innerHTML =
+          (data.trending || []).map(t => `<div>${t.name} — ${t.count}</div>`).join('') || 'No data';
+      } catch (e) {
+        document.getElementById('totals').textContent = 'Error loading metrics';
+        document.getElementById('trending').textContent = 'Error loading trending';
+      }
+    }
+    window.addEventListener('DOMContentLoaded', loadMetrics);
+  </script>
+  
+</head>
+<body>
+  <h1>Content Pipeline</h1>
+  <small>Live overview</small>
+
+  <div class="row" style="margin-top:16px">
+    <div class="card">
+      <h3>Totals</h3>
+      <div id="totals">Loading…</div>
+    </div>
+    <div class="card">
+      <h3>Trending Categories</h3>
+      <div id="trending">Loading…</div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:16px">
+    <div class="card">
+      <h3>Instant Preview</h3>
+      <p>Open the live preview page. Replace “testuser” with any onboarded account username.</p>
+      <a class="button" href="/preview/testuser" target="_blank">Open Preview</a>
+    </div>
+  </div>
+
+</body>
+</html>
+
+
