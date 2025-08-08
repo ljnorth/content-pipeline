@@ -68,8 +68,19 @@ export default async function handler(req, res) {
           posts = await generator.generateContentForAccount(acc);
         }
 
-        await slack.sendAccountConsolidated({ account: acc.username, posts });
-        results.push({ account: acc.username, success: true, posts: posts.length, fallback: useFallback });
+        // If Slack is not configured, report this clearly
+        if (!slack.enabled) {
+          results.push({ account: acc.username, success: false, posts: posts.length, fallback: useFallback, error: 'Slack webhook not configured' });
+        } else {
+          const slackResult = await slack.sendAccountConsolidated({ account: acc.username, posts });
+          results.push({
+            account: acc.username,
+            success: slackResult?.success === true,
+            posts: posts.length,
+            fallback: useFallback,
+            slack: slackResult
+          });
+        }
       } catch (e) {
         results.push({ account: acc.username, success: false, error: e.message });
       }

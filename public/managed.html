@@ -65,8 +65,7 @@
           '<td><input type="checkbox" '+(cs.autogenEnabled?'checked':'')+' data-u="'+a.username+'" class="toggle"/></td>'+
           '<td>'+
             '<button class="btn btn-outline" data-prev="'+a.username+'">Preview</button> '+
-            '<button class="btn btn-outline gen" data-u="'+a.username+'">Generate</button> '+
-            '<a class="btn btn-outline" href="/saved.html">Saved</a>'+
+            '<button class="btn btn-outline gen" data-u="'+a.username+'">Generate</button>'+
           '</td>';
         tbody.appendChild(tr);
       });
@@ -89,7 +88,13 @@
             const res = await fetch('/api/generate-daily?username=' + encodeURIComponent(username));
             const json = await res.json().catch(() => ({}));
             if (!res.ok || json.success === false) throw new Error(json.error || 'Request failed');
-            const posts = json?.results?.[0]?.posts;
+            const r = Array.isArray(json.results) ? json.results[0] : null;
+            if (!r) throw new Error('No result returned');
+            if (r.success !== true) {
+              const err = r.error || (r.slack && r.slack.error) || 'Slack delivery failed';
+              throw new Error(err);
+            }
+            const posts = r.posts;
             setStatus(`Sent ${posts ?? ''} posts to Slack for @${username}.`, 'ok');
           } catch (e) {
             setStatus(`Error generating for @${username}: ${e.message}`, 'err');
