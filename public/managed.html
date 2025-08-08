@@ -24,6 +24,7 @@
   <main>
   <h2>Managed Accounts</h2>
   <div id="authStatus" class="muted" style="margin-bottom:8px">Checking session…</div>
+  <div id="actionStatus" class="muted" style="margin:-4px 0 12px 0"></div>
 
   <div class="row section">
     <input id="username" placeholder="@username"/>
@@ -79,7 +80,24 @@
       document.querySelectorAll('button.btn').forEach(btn => {
         if (btn.dataset.prev) btn.onclick = () => window.open('/preview/' + btn.dataset.prev, '_blank');
       });
-      document.querySelectorAll('button.gen').forEach(btn => { btn.onclick = async () => { await fetch('/api/generate-daily?username='+encodeURIComponent(btn.dataset.u)); }; });
+      document.querySelectorAll('button.gen').forEach(btn => {
+        btn.onclick = async () => {
+          const username = btn.dataset.u;
+          setStatus(`Generating for @${username}…`);
+          btn.disabled = true;
+          try {
+            const res = await fetch('/api/generate-daily?username=' + encodeURIComponent(username));
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok || json.success === false) throw new Error(json.error || 'Request failed');
+            const posts = json?.results?.[0]?.posts;
+            setStatus(`Sent ${posts ?? ''} posts to Slack for @${username}.`, 'ok');
+          } catch (e) {
+            setStatus(`Error generating for @${username}: ${e.message}`, 'err');
+          } finally {
+            btn.disabled = false;
+          }
+        };
+      });
     }
 
     document.getElementById('add').onclick = async () => {
@@ -95,7 +113,22 @@
       await loadProfiles();
     };
 
-    document.getElementById('genAll').onclick = async () => { await fetch('/api/generate-daily'); };
+    document.getElementById('genAll').onclick = async () => {
+      const btn = document.getElementById('genAll');
+      setStatus('Triggering daily generation for all enabled accounts…');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/generate-daily');
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || json.success === false) throw new Error(json.error || 'Request failed');
+        const count = Array.isArray(json.results) ? json.results.length : (json.count ?? '');
+        setStatus(`Triggered Slack messages for ${count} account(s).`, 'ok');
+      } catch (e) {
+        setStatus('Error triggering generation: ' + e.message, 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    };
 
     // Auth guard
     const cfg = await loadConfig();
@@ -103,6 +136,12 @@
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { document.getElementById('authStatus').textContent = 'Not logged in. Redirecting to login…'; setTimeout(()=> location.href = '/login.html', 800); }
     else { document.getElementById('authStatus').textContent = `Logged in as ${session.user.email}`; loadProfiles(); }
+
+    function setStatus(text, kind) {
+      const el = document.getElementById('actionStatus');
+      el.textContent = text;
+      el.style.color = kind === 'err' ? '#b00020' : (kind === 'ok' ? '#2e7d32' : '#666');
+    }
   </script>
   </main>
 </body>
