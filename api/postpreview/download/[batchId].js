@@ -14,7 +14,8 @@ export default async function handler(req, res) {
     if (error || !batch) return res.status(404).json({ error: 'Batch not found' });
 
     const accountUsername = batch.account_username;
-    const images = (batch.posts?.[0]?.images) || [];
+    const postIndex = Math.max(1, Math.min(99, parseInt(req.query.post, 10) || 1)) - 1;
+    const images = (batch.posts?.[postIndex]?.images) || [];
     if (images.length === 0) return res.status(400).json({ error: 'No images to download' });
 
     const JSZip = (await import('jszip')).default;

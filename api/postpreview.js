@@ -47,6 +47,9 @@ function renderPage(batchId, username, posts) {
     body { background: linear-gradient(135deg,#667eea 0%,#764ba2 100%); }
     .container { max-width: 1100px; margin: 24px auto; padding: 16px; }
     .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 8px 28px rgba(0,0,0,.08); }
+    .tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px }
+    .tab { padding:8px 12px; border-radius:8px; background:#eee; cursor:pointer; font-weight:600; }
+    .tab.active { background:#667eea; color:#fff }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap: 16px; }
     .thumb { width: 100%; height: 280px; object-fit: cover; border-radius: 10px; }
     .bar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
@@ -71,6 +74,7 @@ function renderPage(batchId, username, posts) {
     <div class="card" style="margin-bottom:16px">
       <h2>Preview for @${username}</h2>
       <p class="muted">Batch: ${batchId}</p>
+      <div class="tabs" id="postTabs"></div>
       <div class="bar" style="margin-top:8px">
         <button class="pill" id="downloadAll">📦 Download All</button>
         <button class="pill" id="downloadSelected">📥 Download Selected</button>
@@ -90,11 +94,30 @@ function renderPage(batchId, username, posts) {
   <script>
     const batchId = ${JSON.stringify(batchId)};
     const username = ${JSON.stringify(username)};
+    const posts = ${JSON.stringify(posts)};
+    let currentIndex = 0;
     function setStatus(t, kind){ const el=document.getElementById('status'); el.textContent=t; el.style.color = kind==='err'?'#b00020':'#666'; }
     function allCheckboxes(){ return Array.from(document.querySelectorAll('.imgcb')); }
+    function renderTabs(){
+      const tabs = document.getElementById('postTabs');
+      tabs.innerHTML = '';
+      posts.forEach((p, i) => {
+        const b = document.createElement('button');
+        b.className = 'tab' + (i===currentIndex ? ' active' : '');
+        b.textContent = 'Post ' + (i+1);
+        b.onclick = () => { currentIndex = i; renderPost(); renderTabs(); };
+        tabs.appendChild(b);
+      });
+    }
+    function renderPost(){
+      const post = posts[currentIndex] || { caption: 'Post '+(currentIndex+1), images: [] };
+      document.getElementById('caption').textContent = post.caption || 'Post ' + (currentIndex+1);
+      const grid = document.getElementById('grid');
+      grid.innerHTML = (post.images||[]).map(img => ${renderImage.toString()}(img)).join('');
+    }
     document.getElementById('selectAll').onclick = ()=>{ allCheckboxes().forEach(cb=>cb.checked=true); setStatus('Selected '+allCheckboxes().length+' images'); };
     document.getElementById('clearAll').onclick = ()=>{ allCheckboxes().forEach(cb=>cb.checked=false); setStatus('Cleared selection'); };
-    document.getElementById('downloadAll').onclick = ()=>{ window.location.href = '/api/postpreview/download/'+encodeURIComponent(batchId); };
+    document.getElementById('downloadAll').onclick = ()=>{ window.location.href = '/api/postpreview/download/'+encodeURIComponent(batchId)+'?post='+(currentIndex+1); };
     document.getElementById('downloadSelected').onclick = ()=>{
       const ids = allCheckboxes().filter(cb=>cb.checked).map(cb=>parseInt(cb.value));
       if(ids.length===0){ setStatus('Select at least one image to download','err'); return; }
@@ -113,6 +136,8 @@ function renderPage(batchId, username, posts) {
         setStatus('Replaced '+ids.length+' images');
       } catch(e){ setStatus('Error: '+e.message,'err'); }
     };
+    renderTabs();
+    renderPost();
   </script>
  </body>
  </html>`;
