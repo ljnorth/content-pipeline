@@ -7,7 +7,7 @@
     },
     {
       "src": "/postpreview/([^/]+)",
-      "dest": "/api/postpreview/$1.js"
+      "dest": "/api/postpreview.js?batchId=$1"
     }
   ],
   "crons": [
