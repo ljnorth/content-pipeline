@@ -73,6 +73,7 @@ function renderPage(batchId, username, posts) {
       <p class="muted">Batch: ${batchId}</p>
       <div class="bar" style="margin-top:8px">
         <button class="pill" id="downloadAll">📦 Download All</button>
+        <button class="pill" id="downloadSelected">📥 Download Selected</button>
         <button class="pill secondary" id="selectAll">Select All</button>
         <button class="pill secondary" id="clearAll">Clear</button>
         <button class="pill warn" id="rerollSelected">🔄 Replace Selected</button>
@@ -94,6 +95,11 @@ function renderPage(batchId, username, posts) {
     document.getElementById('selectAll').onclick = ()=>{ allCheckboxes().forEach(cb=>cb.checked=true); setStatus('Selected '+allCheckboxes().length+' images'); };
     document.getElementById('clearAll').onclick = ()=>{ allCheckboxes().forEach(cb=>cb.checked=false); setStatus('Cleared selection'); };
     document.getElementById('downloadAll').onclick = ()=>{ window.location.href = '/api/postpreview/download/'+encodeURIComponent(batchId); };
+    document.getElementById('downloadSelected').onclick = ()=>{
+      const ids = allCheckboxes().filter(cb=>cb.checked).map(cb=>parseInt(cb.value));
+      if(ids.length===0){ setStatus('Select at least one image to download','err'); return; }
+      window.location.href = '/api/postpreview/download-selected/'+encodeURIComponent(batchId)+'?imageIds='+ids.join(',');
+    };
     document.getElementById('rerollSelected').onclick = async ()=>{
       const ids = allCheckboxes().filter(cb=>cb.checked).map(cb=>parseInt(cb.value));
       if(ids.length===0){ setStatus('Select at least one image to replace','err'); return; }

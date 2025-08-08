@@ -54,10 +54,10 @@ export default async function handler(req, res) {
       try {
         let posts;
         if (useFallback) {
-          // Generate 3 simple posts with 5 random images each
+          // Generate 3 simple posts with 10 images each
           posts = [];
           for (let i = 1; i <= 3; i++) {
-            const images = await pickRandomImages(5);
+            const images = await pickRandomImages(10);
             posts.push({
               postNumber: i,
               caption: `Daily content for @${acc.username}`,
