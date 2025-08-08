@@ -1,0 +1,42 @@
+import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+
+export default async function handler(req, res) {
+  try {
+    if (req.method === 'GET') {
+      const { active } = req.query;
+      let q = supabase.from('accounts').select('*').order('username');
+      if (active === 'true') q = q.eq('active', true);
+      const { data, error } = await q;
+      if (error) throw error;
+      return res.json(data || []);
+    }
+    if (req.method === 'POST') {
+      const { username, url, tags = [], active = true } = req.body || {};
+      if (!username) return res.status(400).json({ error: 'username required' });
+      const { error } = await supabase.from('accounts').upsert({ username, url, tags, active });
+      if (error) throw error;
+      return res.json({ success: true });
+    }
+    if (req.method === 'PATCH') {
+      const { username, active } = req.body || {};
+      if (!username) return res.status(400).json({ error: 'username required' });
+      const { error } = await supabase.from('accounts').update({ active }).eq('username', username);
+      if (error) throw error;
+      return res.json({ success: true });
+    }
+    if (req.method === 'DELETE') {
+      const { username } = req.query || {};
+      if (!username) return res.status(400).json({ error: 'username required' });
+      const { error } = await supabase.from('accounts').delete().eq('username', username);
+      if (error) throw error;
+      return res.json({ success: true });
+    }
+    res.setHeader('Allow','GET,POST,PATCH,DELETE');
+    return res.status(405).json({ error: 'Method not allowed' });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Source Accounts</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <header class="nav"><div class="nav-inner">
+    <div class="brand"><span class="dot"></span> EasyPost</div>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/managed.html">Managed</a>
+      <a href="/sources.html">Sources</a>
+      <a href="/random.html">Random</a>
+      <a href="/saved.html">Saved</a>
+      <a href="/docs.html">Docs</a>
+      <a href="/logout.html">Logout</a>
+    </div>
+  </div></header>
+  <main>
+    <h2>Source Accounts</h2>
+    <div id="authStatus" class="muted" style="margin-bottom:8px">Checking session…</div>
+
+    <div class="row section">
+      <input id="susername" placeholder="@username"/>
+      <input id="surl" placeholder="Profile URL (optional)"/>
+      <input id="stags" placeholder="Tags (comma separated)"/>
+      <label class="muted"><input type="checkbox" id="sactive" checked/> Active</label>
+      <button id="addSource" class="btn btn-primary">Add / Update Source</button>
+      <button id="ingestAll" class="btn btn-outline">Ingest All (Delta)</button>
+    </div>
+
+    <table>
+      <thead><tr><th>Username</th><th>URL</th><th>Tags</th><th>Active</th><th>Actions</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+
+    <script type="module">
+      import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+      async function loadConfig(){ const r = await fetch('/api/public-config'); return await r.json(); }
+
+      async function loadSources(){
+        const res = await fetch('/api/sources');
+        const data = await res.json();
+        const tbody = document.getElementById('rows'); tbody.innerHTML='';
+        (data||[]).forEach(a=>{
+          const tr = document.createElement('tr');
+          const tags = Array.isArray(a.tags) ? a.tags.join(', ') : '';
+          tr.innerHTML = `<td>@${a.username}</td><td>${a.url||''}</td><td>${tags}</td><td>${a.active?'Yes':'No'}</td>
+            <td>
+              <button class="btn btn-outline ingest" data-u="${a.username}">Ingest Delta</button>
+              <button class="btn btn-outline ingest-new" data-u="${a.username}">Ingest New</button>
+              <button class="btn btn-outline toggle" data-u="${a.username}" data-active="${a.active}">${a.active?'Pause':'Resume'}</button>
+              <button class="btn btn-outline del" data-u="${a.username}">Remove</button>
+            </td>`;
+          tbody.appendChild(tr);
+        });
+        document.querySelectorAll('button.ingest').forEach(btn=>{ btn.onclick=async()=>{ await fetch('/api/ingest?mode=delta&username='+encodeURIComponent(btn.dataset.u)); }; });
+        document.querySelectorAll('button.ingest-new').forEach(btn=>{ btn.onclick=async()=>{ await fetch('/api/ingest?mode=new&username='+encodeURIComponent(btn.dataset.u)); }; });
+        document.querySelectorAll('button.toggle').forEach(btn=>{ btn.onclick=async()=>{ await fetch('/api/sources',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:btn.dataset.u,active:!(btn.dataset.active==='true')})}); loadSources(); }; });
+        document.querySelectorAll('button.del').forEach(btn=>{ btn.onclick=async()=>{ await fetch('/api/sources?username='+encodeURIComponent(btn.dataset.u),{method:'DELETE'}); loadSources(); }; });
+      }
+
+      document.getElementById('addSource').onclick = async ()=>{
+        const username = document.getElementById('susername').value.replace('@','');
+        const url = document.getElementById('surl').value; const tags = document.getElementById('stags').value.split(',').map(s=>s.trim()).filter(Boolean);
+        const active = document.getElementById('sactive').checked;
+        await fetch('/api/sources',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,url,tags,active})});
+        loadSources();
+      };
+
+      document.getElementById('ingestAll').onclick = async ()=>{ await fetch('/api/ingest?mode=all'); };
+
+      // Auth guard
+      const cfg = await loadConfig();
+      const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true } });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { document.getElementById('authStatus').textContent = 'Not logged in. Redirecting to login…'; setTimeout(()=> location.href = '/login.html', 800); }
+      else { document.getElementById('authStatus').textContent = `Logged in as ${session.user.email}`; loadSources(); }
+    </script>
+  </main>
+</body>
+</html>
+
+

@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Accounts</title>
+  <title>Managed Accounts</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -16,13 +16,14 @@
       <a href="/managed.html">Managed</a>
       <a href="/sources.html">Sources</a>
       <a href="/random.html">Random</a>
+      <a href="/saved.html">Saved</a>
       <a href="/docs.html">Docs</a>
       <a href="/logout.html">Logout</a>
     </div>
   </div></header>
   <main>
-  <h2>Accounts</h2>
-  <div id="authStatus" style="margin-bottom:8px;color:#666">Checking session…</div>
+  <h2>Managed Accounts</h2>
+  <div id="authStatus" class="muted" style="margin-bottom:8px">Checking session…</div>
 
   <div class="row section">
     <input id="username" placeholder="@username"/>
@@ -32,19 +33,13 @@
     <input id="ownerDisplayName" placeholder="Owner display name"/>
     <label class="muted"><input type="checkbox" id="autogenEnabled"/> Auto-Gen</label>
     <button id="add" class="btn btn-primary">Add / Update</button>
-    <button id="ingestAll" class="btn btn-outline">Run Ingestion (All)</button>
     <button id="genAll" class="btn btn-outline">Generate Daily Now (All enabled)</button>
   </div>
 
   <table>
     <thead>
       <tr>
-        <th>Username</th>
-        <th>Owner</th>
-        <th>Goal</th>
-        <th>Audience</th>
-        <th>Auto-Gen</th>
-        <th>Actions</th>
+        <th>Username</th><th>Owner</th><th>Goal</th><th>Audience</th><th>Auto-Gen</th><th>Actions</th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
@@ -54,7 +49,7 @@
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     async function loadConfig(){ const r = await fetch('/api/public-config'); return await r.json(); }
 
-    async function loadAccounts() {
+    async function loadProfiles() {
       const res = await fetch('/api/accounts');
       const data = await res.json();
       const tbody = document.getElementById('rows');
@@ -69,8 +64,8 @@
           '<td><input type="checkbox" '+(cs.autogenEnabled?'checked':'')+' data-u="'+a.username+'" class="toggle"/></td>'+
           '<td>'+
             '<button class="btn btn-outline" data-prev="'+a.username+'">Preview</button> '+
-            '<button class="btn btn-outline ingest" data-u="'+a.username+'">Ingest</button> '+
-            '<button class="btn btn-outline gen" data-u="'+a.username+'">Generate</button>'+
+            '<button class="btn btn-outline gen" data-u="'+a.username+'">Generate</button> '+
+            '<a class="btn btn-outline" href="/saved.html">Saved</a>'+
           '</td>';
         tbody.appendChild(tr);
       });
@@ -81,10 +76,9 @@
         };
       });
 
-      document.querySelectorAll('button.secondary').forEach(btn => {
+      document.querySelectorAll('button.btn').forEach(btn => {
         if (btn.dataset.prev) btn.onclick = () => window.open('/preview/' + btn.dataset.prev, '_blank');
       });
-      document.querySelectorAll('button.ingest').forEach(btn => { btn.onclick = async () => { await fetch('/api/ingest?mode=delta&username='+encodeURIComponent(btn.dataset.u)); }; });
       document.querySelectorAll('button.gen').forEach(btn => { btn.onclick = async () => { await fetch('/api/generate-daily?username='+encodeURIComponent(btn.dataset.u)); }; });
     }
 
@@ -98,24 +92,19 @@
         autogenEnabled: document.getElementById('autogenEnabled').checked
       };
       await fetch('/api/accounts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-      await loadAccounts();
+      await loadProfiles();
     };
 
-    document.getElementById('ingestAll').onclick = async () => { await fetch('/api/ingest?mode=all'); };
     document.getElementById('genAll').onclick = async () => { await fetch('/api/generate-daily'); };
 
     // Auth guard
     const cfg = await loadConfig();
     const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true } });
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      document.getElementById('authStatus').textContent = 'Not logged in. Redirecting to login…';
-      setTimeout(()=> location.href = '/login.html', 800);
-    } else {
-      document.getElementById('authStatus').textContent = `Logged in as ${session.user.email}`;
-      loadAccounts();
-    }
+    if (!session) { document.getElementById('authStatus').textContent = 'Not logged in. Redirecting to login…'; setTimeout(()=> location.href = '/login.html', 800); }
+    else { document.getElementById('authStatus').textContent = `Logged in as ${session.user.email}`; loadProfiles(); }
   </script>
+  </main>
 </body>
 </html>
 
