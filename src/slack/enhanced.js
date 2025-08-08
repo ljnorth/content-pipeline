@@ -5,7 +5,7 @@ export class EnhancedSlackAPI {
   constructor() {
     this.logger = new Logger();
     this.webhookUrl = process.env.SLACK_WEBHOOK_URL;
-    this.channel = process.env.SLACK_CHANNEL || '#content-pipeline';
+    this.channel = process.env.SLACK_CHANNEL || '#content-bot';
     this.previewBaseUrl = process.env.PREVIEW_BASE_URL || 'https://www.easypost.fun';
     this.enabled = !!this.webhookUrl;
     this.db = new SupabaseClient();
