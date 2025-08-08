@@ -2,6 +2,8 @@
 
 A comprehensive content generation and management system for social media automation.
 
+Note: Deployment ping to refresh env vars.
+
 ## 🏗️ New Architecture
 
 The codebase has been refactored into a clean, modular structure:
