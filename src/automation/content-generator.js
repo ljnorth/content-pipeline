@@ -69,6 +69,21 @@ export class ContentGenerator {
       this.logger.info(`📝 Generating post ${i}/3 for ${account.username}`);
       
       const post = await this.generateSinglePost(account, strategy, i);
+      // Track image usage per source
+      try {
+        const { SupabaseClient } = await import('../database/supabase-client.js');
+        const db = new SupabaseClient();
+        const updates = post.images.map(img => ({
+          image_id: img.id,
+          source_username: img.username || img.account_username || account.username,
+          used_count: 1,
+          last_used: new Date().toISOString()
+        }));
+        for (const u of updates) {
+          await db.client.from('image_usage').upsert({ image_id: u.image_id, source_username: u.source_username, last_used: u.last_used, used_count: u.used_count }, { onConflict: 'image_id' });
+          await db.client.rpc('increment_image_usage', { img_id: u.image_id });
+        }
+      } catch (_) { /* best effort */ }
       posts.push(post);
       
       // Small delay between posts to vary content

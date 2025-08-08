@@ -31,6 +31,7 @@
       <input id="stags" placeholder="Tags (comma separated)"/>
       <label class="muted"><input type="checkbox" id="sactive" checked/> Active</label>
       <button id="addSource" class="btn btn-primary">Add / Update Source</button>
+      <button id="bulk" class="btn btn-outline">Bulk Add</button>
       <button id="ingestAll" class="btn btn-outline">Ingest All (Delta)</button>
     </div>
 
@@ -38,6 +39,13 @@
       <thead><tr><th>Username</th><th>URL</th><th>Tags</th><th>Active</th><th>Actions</th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
+
+    <div class="section">
+      <div class="card white">
+        <h3>Top Source Usage</h3>
+        <div id="usage" class="muted">Loading…</div>
+      </div>
+    </div>
 
     <script type="module">
       import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -75,12 +83,32 @@
 
       document.getElementById('ingestAll').onclick = async ()=>{ await fetch('/api/ingest?mode=all'); };
 
+      // Bulk Add UI (simple prompt for now)
+      document.getElementById('bulk').onclick = async ()=>{
+        const pasted = prompt('Paste one per line: @username, url?, tags? (comma separated tags)');
+        if (!pasted) return;
+        const lines = pasted.split('\n').map(l=>l.trim()).filter(Boolean);
+        for (const line of lines) {
+          const parts = line.split(',').map(s=>s.trim());
+          const username = parts[0].replace('@','');
+          const url = parts[1] || '';
+          const tags = parts.slice(2).filter(Boolean);
+          await fetch('/api/sources',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,url,tags,active:true})});
+        }
+        loadSources();
+      };
+
       // Auth guard
       const cfg = await loadConfig();
       const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true } });
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { document.getElementById('authStatus').textContent = 'Not logged in. Redirecting to login…'; setTimeout(()=> location.href = '/login.html', 800); }
-      else { document.getElementById('authStatus').textContent = `Logged in as ${session.user.email}`; loadSources(); }
+      else { 
+        document.getElementById('authStatus').textContent = `Logged in as ${session.user.email}`; 
+        loadSources();
+        const u = await (await fetch('/api/analytics/source-usage?limit=10')).json();
+        document.getElementById('usage').innerHTML = (u||[]).map(x=>`@${x.source_username}: ${x.used_count}`).join('<br>') || 'No usage yet';
+      }
     </script>
   </main>
 </body>
