@@ -1,10 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   try {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(500).json({ error: 'Server auth not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.' });
+    }
+    const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
     const { email, password, inviteCode } = req.body || {};
     if (!email || !password || !inviteCode) return res.status(400).json({ error: 'email, password, inviteCode required' });
     if (inviteCode !== (process.env.INVITE_MASTER_PASSWORD || 'Aesthetic2025')) return res.status(403).json({ error: 'Invalid invite code' });
@@ -22,7 +24,7 @@ export default async function handler(req, res) {
     await supabaseAdmin.from('user_profiles').upsert({ user_id: data.user.id, email, role: 'user', last_login: new Date().toISOString() });
     return res.json({ success: true });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return res.status(500).json({ error: e?.message || 'Unknown server error' });
   }
 }
 
