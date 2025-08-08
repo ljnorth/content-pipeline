@@ -4,6 +4,10 @@
     {
       "src": "/preview/([^/]+)",
       "dest": "/api/preview.js?username=$1"
+    },
+    {
+      "src": "/postpreview/([^/]+)",
+      "dest": "/api/postpreview/$1.js"
     }
   ],
   "crons": [
