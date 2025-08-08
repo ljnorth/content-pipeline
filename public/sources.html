@@ -36,9 +36,18 @@
     </div>
 
     <table>
-      <thead><tr><th>Username</th><th>URL</th><th>Tags</th><th>Active</th><th>Actions</th></tr></thead>
+      <thead><tr>
+        <th><input type="checkbox" id="selectAll"/></th>
+        <th>Username</th><th>URL</th><th>Tags</th><th>Active</th><th>Actions</th>
+      </tr></thead>
       <tbody id="rows"></tbody>
     </table>
+
+    <div class="row section">
+      <button id="pauseSel" class="btn btn-outline">Pause Selected</button>
+      <button id="resumeSel" class="btn btn-outline">Resume Selected</button>
+      <button id="ingestSel" class="btn btn-outline">Ingest Selected (Delta)</button>
+    </div>
 
     <div class="section">
       <div class="card white">
@@ -58,7 +67,8 @@
         (data||[]).forEach(a=>{
           const tr = document.createElement('tr');
           const tags = Array.isArray(a.tags) ? a.tags.join(', ') : '';
-          tr.innerHTML = `<td>@${a.username}</td><td>${a.url||''}</td><td>${tags}</td><td>${a.active?'Yes':'No'}</td>
+          tr.innerHTML = `<td><input type="checkbox" class="sel" data-u="${a.username}"></td>`+
+            `<td>@${a.username}</td><td>${a.url||''}</td><td>${tags}</td><td>${a.active?'Yes':'No'}</td>
             <td>
               <button class="btn btn-outline ingest" data-u="${a.username}">Ingest Delta</button>
               <button class="btn btn-outline ingest-new" data-u="${a.username}">Ingest New</button>
@@ -69,7 +79,11 @@
         });
         document.querySelectorAll('button.ingest').forEach(btn=>{ btn.onclick=async()=>{ await fetch('/api/ingest?mode=delta&username='+encodeURIComponent(btn.dataset.u)); }; });
         document.querySelectorAll('button.ingest-new').forEach(btn=>{ btn.onclick=async()=>{ await fetch('/api/ingest?mode=new&username='+encodeURIComponent(btn.dataset.u)); }; });
-        document.querySelectorAll('button.toggle').forEach(btn=>{ btn.onclick=async()=>{ await fetch('/api/sources',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:btn.dataset.u,active:!(btn.dataset.active==='true')})}); loadSources(); }; });
+        document.querySelectorAll('button.toggle').forEach(btn=>{ btn.onclick=async()=>{
+            const makeActive = /resume/i.test(btn.textContent);
+            await fetch('/api/sources',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:btn.dataset.u,active:makeActive})});
+            loadSources();
+        }; });
         document.querySelectorAll('button.del').forEach(btn=>{ btn.onclick=async()=>{ await fetch('/api/sources?username='+encodeURIComponent(btn.dataset.u),{method:'DELETE'}); loadSources(); }; });
       }
 
@@ -109,6 +123,27 @@
         const u = await (await fetch('/api/analytics/source-usage?limit=10')).json();
         document.getElementById('usage').innerHTML = (u||[]).map(x=>`@${x.source_username}: ${x.used_count}`).join('<br>') || 'No usage yet';
       }
+
+      // Bulk select helpers
+      document.getElementById('selectAll').onclick = () => {
+        const on = document.getElementById('selectAll').checked;
+        document.querySelectorAll('.sel').forEach(cb => cb.checked = on);
+      };
+      function selected() { return Array.from(document.querySelectorAll('.sel:checked')).map(cb => cb.dataset.u); }
+      document.getElementById('pauseSel').onclick = async () => {
+        const users = selected(); if (users.length===0) return;
+        await Promise.all(users.map(u => fetch('/api/sources',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,active:false})})));
+        loadSources();
+      };
+      document.getElementById('resumeSel').onclick = async () => {
+        const users = selected(); if (users.length===0) return;
+        await Promise.all(users.map(u => fetch('/api/sources',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,active:true})})));
+        loadSources();
+      };
+      document.getElementById('ingestSel').onclick = async () => {
+        const users = selected(); if (users.length===0) return;
+        for (const u of users) await fetch('/api/ingest?mode=delta&username='+encodeURIComponent(u));
+      };
     </script>
   </main>
 </body>
