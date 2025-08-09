@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Dashboard – EasyPost</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/style.css">
+  <script defer>
+    async function loadMetrics() {
+      try {
+        const res = await fetch('/api/metrics');
+        const data = await res.json();
+        document.getElementById('totals').textContent =
+          `Images: ${data.images} • Posts: ${data.posts} • Accounts: ${data.accounts}`;
+        document.getElementById('trending').innerHTML =
+          (data.trending || []).map(t => `<div>${t.name} — ${t.count}</div>`).join('') || 'No data';
+      } catch (e) {
+        document.getElementById('totals').textContent = 'Error loading metrics';
+        document.getElementById('trending').textContent = 'Error loading trending';
+      }
+    }
+    async function loadSeries() {
+      try {
+        const res = await fetch('/api/metrics-series?days=30');
+        const data = await res.json();
+        const labels = data.postsByDay.map(p=>p.date);
+        const ctx = document.getElementById('chart').getContext('2d');
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              { label: 'Posts', data: data.postsByDay.map(p=>p.count), borderColor:'#667eea' },
+              { label: 'Images', data: data.imagesByDay.map(p=>p.count), borderColor:'#ff6b35' }
+            ]
+          },
+          options: { responsive: true, scales: { y: { beginAtZero: true } } }
+        });
+      } catch(e) {}
+    }
+    window.addEventListener('DOMContentLoaded', loadMetrics);
+    window.addEventListener('DOMContentLoaded', loadSeries);
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header class="nav">
+    <div class="nav-inner">
+      <div class="brand"><span class="dot"></span> EasyPost</div>
+      <div class="nav-links">
+        <a href="/dashboard.html">Dashboard</a>
+        <a href="/managed.html">Managed</a>
+        <a href="/sources.html">Sources</a>
+        <a href="/random.html">Random</a>
+        <a href="/saved.html">Saved</a>
+        <a href="/docs.html">Docs</a>
+        <a href="/logout.html">Logout</a>
+      </div>
+    </div>
+  </header>
+  <main>
+    <div id="authStatus" class="muted" style="margin-bottom:16px">Checking session…</div>
+    
+    <div class="hero">
+      <div>
+        <h1 class="title">Dashboard</h1>
+        <p class="subtitle">Live metrics and activity across your content pipeline.</p>
+      </div>
+    </div>
+
+    <div class="row section fade-up">
+      <div class="card white" style="flex:1 1 340px">
+        <h3>Totals</h3>
+        <div id="totals">Loading…</div>
+      </div>
+      <div class="card white" style="flex:1 1 340px">
+        <h3>Trending Categories</h3>
+        <div id="trending">Loading…</div>
+      </div>
+      <div class="card white" style="flex:1 1 340px">
+        <h3>Quick Actions</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <a class="btn btn-primary" href="/managed.html">Manage Accounts</a>
+          <a class="btn btn-outline" href="/random.html">Generate Random</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="row section fade-up">
+      <div class="card white" style="flex:1 1 100%">
+        <div class="section-header"><h3>Last 30 days</h3><div class="section-sub">Activity across images and posts</div></div>
+        <canvas id="chart" height="90"></canvas>
+      </div>
+    </div>
+  </main>
+
+  <footer class="center" style="gap:12px;margin:24px 0">
+    <a href="/privacy.html">Privacy</a>
+    <span class="muted">•</span>
+    <a href="/tos.html">Terms</a>
+  </footer>
+
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    async function loadConfig(){ const r = await fetch('/api/public-config'); return await r.json(); }
+
+    // Auth guard
+    const cfg = await loadConfig();
+    const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true } });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { 
+      document.getElementById('authStatus').textContent = 'Not logged in. Redirecting to login…'; 
+      setTimeout(()=> location.href = '/login.html', 800); 
+    } else { 
+      document.getElementById('authStatus').textContent = `Logged in as ${session.user.email}`; 
+    }
+  </script>
+</body>
+</html>
