@@ -21,6 +21,40 @@ main{max-width:1200px;margin:0 auto;padding:2rem 1rem}
 footer a{color:var(--brand-600);text-decoration:none}
 footer a:hover{text-decoration:underline}
 
+/* Landing-only additions */
+.gradient-hero{background:linear-gradient(135deg,#667eea 0%,#764ba2 45%,#8b5cf6 100%);color:#fff;border-radius:16px;padding:40px 28px;box-shadow:0 10px 35px rgba(67,56,202,.25)}
+.gradient-hero .title{font-size:42px;line-height:1.1;margin:0 0 10px}
+.gradient-hero .subtitle{color:#E9EAFB;max-width:720px}
+.hero-ctas{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.btn-white{background:#fff;color:#4338CA;border:2px solid transparent}
+.btn-glass{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25)}
+.badge{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.28);padding:6px 10px;border-radius:9999px;font-weight:600;font-size:13px}
+
+.section-header{margin:26px 0 10px}
+.section-header h3{margin:0;font-size:22px}
+.section-sub{color:var(--gray-500);margin-top:4px}
+
+.logo-row{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+.logo-pill{background:#fff;border:1px solid #eee;border-radius:9999px;padding:8px 12px;font-weight:700;color:#374151;box-shadow:var(--shadow)}
+
+.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.feature-card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 12px 28px rgba(17,24,39,.08)}
+.feature-card h4{margin:8px 0}
+.feature-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#EEF2FF;color:#4338CA;font-weight:800}
+
+.comparison{width:100%;border-collapse:separate;border-spacing:0 8px}
+.comparison th,.comparison td{padding:10px 12px;background:#fff}
+.comparison th{background:#F3F4F6;text-align:left}
+.comparison tr{box-shadow:0 1px 0 #eee}
+.yes{color:#10B981;font-weight:700}
+.no{color:#EF4444;font-weight:700}
+
+.faq{display:grid;gap:10px}
+.faq-item{background:#fff;border:1px solid #eee;border-radius:10px}
+.faq-q{margin:0;padding:12px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-weight:600}
+.faq-a{margin:0;padding:0 14px 14px 14px;color:var(--gray-700);display:none}
+.faq-item.open .faq-a{display:block}
+
 /* Cards & layout */
 .row{display:flex;gap:16px;flex-wrap:wrap}
 .card{flex:1 1 240px;background:var(--gray-100);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}

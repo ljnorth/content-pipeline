@@ -61,46 +61,80 @@
     </div>
   </header>
   <main>
-    <div class="hero">
-      <div>
-        <h1 class="title">Automate your TikTok content</h1>
-        <p class="subtitle">Generate daily posts at 5 AM ET, preview & reroll images, and deliver a clean Slack message to each account owner.</p>
-        <div class="cta">
-          <a class="btn btn-primary" href="/signup.html">Sign up</a>
-          <a class="btn btn-outline" href="/login.html">Log in</a>
-          <a class="btn btn-outline" href="/preview/testuser" target="_blank">See demo</a>
-        </div>
+    <div class="gradient-hero">
+      <div class="badge">✨ Built for fashion product pages</div>
+      <h1 class="title">High‑converting content, delivered every morning</h1>
+      <p class="subtitle">Three on‑brand TikTok posts per account at 5 AM ET. Live preview with rerolls, human‑friendly downloads, and one clean Slack message per owner.</p>
+      <div class="hero-ctas">
+        <a class="btn btn-white" href="/signup.html">Get started</a>
+        <a class="btn btn-glass" href="/login.html">Log in</a>
+        <a class="btn btn-glass" href="/preview/testuser" target="_blank">See preview demo</a>
       </div>
     </div>
 
   <div class="row section fade-up">
-    <div class="card white">
+    <div class="card white" style="flex:1 1 340px">
       <h3>Totals</h3>
       <div id="totals">Loading…</div>
     </div>
-    <div class="card white">
+    <div class="card white" style="flex:1 1 340px">
       <h3>Trending Categories</h3>
       <div id="trending">Loading…</div>
+    </div>
+    <div class="card white" style="flex:1 1 340px">
+      <h3>Trusted by teams</h3>
+      <div class="logo-row">
+        <div class="logo-pill">UGC</div>
+        <div class="logo-pill">Streetwear</div>
+        <div class="logo-pill">Beauty</div>
+        <div class="logo-pill">Lifestyle</div>
+      </div>
     </div>
   </div>
 
   <div class="row section fade-up">
     <div class="card white" style="flex:1 1 100%">
-      <h3>Last 30 days</h3>
+      <div class="section-header"><h3>Last 30 days</h3><div class="section-sub">Activity across images and posts</div></div>
       <canvas id="chart" height="90"></canvas>
     </div>
   </div>
 
   <div class="row section fade-up">
-    <div class="card white">
-      <h3>How it works</h3>
-      <ol>
-        <li>Onboard an account and assign its owner in Slack</li>
-        <li>Every morning at 5 AM ET, we generate 3 posts per active account</li>
-        <li>Owner gets one Slack message with a live preview link, reroll tools, and downloads</li>
-      </ol>
+    <div class="grid-3" style="width:100%">
+      <div class="feature-card">
+        <div class="feature-icon">1</div>
+        <h4>Onboard accounts</h4>
+        <p class="section-sub">Add @handles, goals and owner tags. Toggle Auto‑Gen per account.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">2</div>
+        <h4>Generate daily</h4>
+        <p class="section-sub">Three posts per account at 5 AM ET. Cost‑aware fallback keeps things running.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">3</div>
+        <h4>Preview & reroll</h4>
+        <p class="section-sub">Open a live preview, replace images, and download selected with one click.</p>
+      </div>
     </div>
   </div>
+
+  <div class="row section fade-up">
+    <div class="card white" style="flex:1 1 100%">
+      <div class="section-header"><h3>FAQ</h3></div>
+      <div class="faq">
+        <div class="faq-item"><div class="faq-q">How many posts are sent daily?<span>+</span></div><div class="faq-a">Three posts per active, auto‑gen account.</div></div>
+        <div class="faq-item"><div class="faq-q">Can I replace images?<span>+</span></div><div class="faq-a">Yes—use the preview page to reroll and download selected.</div></div>
+        <div class="faq-item"><div class="faq-q">What time are messages sent?<span>+</span></div><div class="faq-a">09:00 UTC daily (5 AM Eastern).</div></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.querySelectorAll('.faq-q').forEach(q=>{
+      q.onclick = ()=> q.parentElement.classList.toggle('open');
+    });
+  </script>
   </main>
 
   <footer class="center" style="gap:12px;margin:24px 0">
