@@ -121,7 +121,7 @@ function renderPage(batchId, username, posts) {
     document.getElementById('downloadSelected').onclick = ()=>{
       const ids = allCheckboxes().filter(cb=>cb.checked).map(cb=>parseInt(cb.value));
       if(ids.length===0){ setStatus('Select at least one image to download','err'); return; }
-      window.location.href = '/api/postpreview/download-selected/'+encodeURIComponent(batchId)+'?imageIds='+ids.join(',');
+      window.location.href = '/api/postpreview/download-selected/'+encodeURIComponent(batchId)+'?post='+(currentIndex+1)+'&imageIds='+ids.join(',');
     };
     document.getElementById('rerollSelected').onclick = async ()=>{
       const ids = allCheckboxes().filter(cb=>cb.checked).map(cb=>parseInt(cb.value));
