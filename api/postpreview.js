@@ -118,10 +118,27 @@ function renderPage(batchId, username, posts) {
     document.getElementById('selectAll').onclick = ()=>{ allCheckboxes().forEach(cb=>cb.checked=true); setStatus('Selected '+allCheckboxes().length+' images'); };
     document.getElementById('clearAll').onclick = ()=>{ allCheckboxes().forEach(cb=>cb.checked=false); setStatus('Cleared selection'); };
     document.getElementById('downloadAll').onclick = ()=>{ window.location.href = '/api/postpreview/download/'+encodeURIComponent(batchId)+'?post='+(currentIndex+1); };
-    document.getElementById('downloadSelected').onclick = ()=>{
+    document.getElementById('downloadSelected').onclick = async ()=>{
       const ids = allCheckboxes().filter(cb=>cb.checked).map(cb=>parseInt(cb.value));
       if(ids.length===0){ setStatus('Select at least one image to download','err'); return; }
-      window.location.href = '/api/postpreview/download-selected/'+encodeURIComponent(batchId)+'?post='+(currentIndex+1)+'&imageIds='+ids.join(',');
+      try {
+        const post = posts[currentIndex] || { images: [] };
+        const selectedImages = (post.images||[]).filter(img => ids.includes(parseInt(img.id)));
+        if(selectedImages.length===0){ setStatus('Could not find selected images','err'); return; }
+        setStatus('Preparing download of '+selectedImages.length+' images…');
+        const resp = await fetch('/api/download-images', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ images: selectedImages, accountUsername: username, type: 'selected' })
+        });
+        if(!resp.ok){ const j = await resp.json().catch(()=>({})); throw new Error(j.error||'Request failed'); }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${username}_selected_${Date.now()}.zip`; a.style.display='none';
+        document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
+        setStatus('✅ Download started');
+      } catch(e){ setStatus('Error: '+e.message, 'err'); }
     };
     document.getElementById('rerollSelected').onclick = async ()=>{
       const ids = allCheckboxes().filter(cb=>cb.checked).map(cb=>parseInt(cb.value));
