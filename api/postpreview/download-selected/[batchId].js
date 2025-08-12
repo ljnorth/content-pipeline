@@ -24,7 +24,8 @@ export default async function handler(req, res) {
     if (error || !batch) return res.status(404).json({ error: 'Batch not found' });
 
     const accountUsername = batch.account_username;
-    const images = (batch.posts?.[0]?.images) || [];
+    const postIndex = Math.max(1, Math.min(99, parseInt(req.query.post, 10) || 1)) - 1;
+    const images = (batch.posts?.[postIndex]?.images) || [];
     const selected = images.filter((img) => imageIds.includes(img.id));
     if (selected.length === 0) return res.status(400).json({ error: 'No matching images found' });
 
@@ -34,7 +35,10 @@ export default async function handler(req, res) {
     let index = 1;
     for (const image of selected) {
       try {
-        const url = image.imagePath || image.image_path;
+        let url = image.imagePath || image.image_path || '';
+        if (!url.startsWith('http')) {
+          url = `https://oxskatabfilwdufzqdzd.supabase.co/storage/v1/object/public/fashion-images/${url}`;
+        }
         const resp = await fetch(url);
         if (!resp.ok) continue;
         const buf = await resp.arrayBuffer();

@@ -24,7 +24,10 @@ export default async function handler(req, res) {
     let index = 1;
     for (const image of images) {
       try {
-        const url = image.imagePath || image.image_path;
+        let url = image.imagePath || image.image_path || '';
+        if (!url.startsWith('http')) {
+          url = `https://oxskatabfilwdufzqdzd.supabase.co/storage/v1/object/public/fashion-images/${url}`;
+        }
         const resp = await fetch(url);
         if (!resp.ok) continue;
         const buf = await resp.arrayBuffer();
