@@ -2,10 +2,12 @@
   "name": "minimal-api",
   "version": "1.0.0",
   "description": "Minimal API for content preview",
+  "type": "module",
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
     "jszip": "^3.10.1",
-    "node-fetch": "^3.3.0"
+    "node-fetch": "^3.3.0",
+    "openai": "^4.53.0"
   },
   "engines": {
     "node": "22.x"

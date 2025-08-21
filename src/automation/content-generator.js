@@ -67,25 +67,31 @@ export class ContentGenerator {
     // Generate 3 different posts
     for (let i = 1; i <= 3; i++) {
       this.logger.info(`📝 Generating post ${i}/3 for ${account.username}`);
-      
-      const post = await this.generateSinglePost(account, strategy, i);
-      // Track image usage per source
       try {
-        const { SupabaseClient } = await import('../database/supabase-client.js');
-        const db = new SupabaseClient();
-        const updates = post.images.map(img => ({
-          image_id: img.id,
-          source_username: img.username || img.account_username || account.username,
-          used_count: 1,
-          last_used: new Date().toISOString()
-        }));
-        for (const u of updates) {
-          await db.client.from('image_usage').upsert({ image_id: u.image_id, source_username: u.source_username, last_used: u.last_used, used_count: u.used_count }, { onConflict: 'image_id' });
-          await db.client.rpc('increment_image_usage', { img_id: u.image_id });
+        const post = await this.generateSinglePost(account, strategy, i);
+        // Track image usage per source (best-effort)
+        try {
+          const { SupabaseClient } = await import('../database/supabase-client.js');
+          const db = new SupabaseClient();
+          const updates = post.images.map(img => ({
+            image_id: img.id,
+            source_username: img.username || img.account_username || account.username,
+            used_count: 1,
+            last_used: new Date().toISOString()
+          }));
+          for (const u of updates) {
+            await db.client.from('image_usage').upsert({ image_id: u.image_id, source_username: u.source_username, last_used: u.last_used, used_count: u.used_count }, { onConflict: 'image_id' });
+            await db.client.rpc('increment_image_usage', { img_id: u.image_id });
+          }
+        } catch (trackErr) {
+          this.logger.warn(`⚠️ Image usage tracking best-effort failed: ${trackErr.message}`);
         }
-      } catch (_) { /* best effort */ }
-      posts.push(post);
-      
+        posts.push(post);
+      } catch (postErr) {
+        // Log and continue with next post instead of failing the entire account
+        this.logger.error(`❌ Post ${i} failed for ${account.username}: ${postErr.message}`);
+        continue;
+      }
       // Small delay between posts to vary content
       await new Promise(resolve => setTimeout(resolve, 2000));
     }

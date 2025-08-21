@@ -23,8 +23,18 @@ export const JobHandlers = {
       .eq('is_active', true);
     const enabled = (accounts||[]).filter(a => a?.content_strategy?.autogenEnabled === true);
     for (const acc of enabled){
-      const posts = await generator.generateContentForAccount({ username: acc.username });
-      await slack.sendAccountConsolidated({ account: acc.username, posts });
+      try {
+        const posts = await generator.generateContentForAccount({ username: acc.username });
+        try {
+          await slack.sendAccountConsolidated({ account: acc.username, posts });
+        } catch (slackErr) {
+          // Log Slack failure but continue with other accounts
+          console.warn(`[${new Date().toISOString()}] ⚠️ Slack send failed for ${acc.username}: ${slackErr.message}`);
+        }
+      } catch (genErr) {
+        // Log generation failure but continue with other accounts
+        console.error(`[${new Date().toISOString()}] ❌ Generation failed for ${acc.username}: ${genErr.message}`);
+      }
     }
     return { accounts: enabled.length };
   },
