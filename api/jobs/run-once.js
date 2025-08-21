@@ -11,7 +11,8 @@ export default async function handler(req, res){
   if (!auth(req)) return res.status(401).json({ error: 'unauthorized' });
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' });
   try{
-    const { job_type = JobTypes.RUN_ONCE, payload = {} } = req.body || {};
+    let { job_type = JobTypes.RUN_ONCE, payload = {}, force } = req.body || {};
+    if (force === true && typeof payload === 'object') payload.force = true;
     const q = new DbQueue();
     const row = await q.enqueue(job_type, payload, {});
     res.json({ run_id: row.run_id, idempotency_key: row.idempotency_key, status: row.status });
