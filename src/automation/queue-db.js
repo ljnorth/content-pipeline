@@ -9,6 +9,12 @@ export class DbQueue {
     const row = { job_type: jobType, idempotency_key, payload, status:'queued', max_attempts: opts.maxAttempts ?? 5 };
     const { data, error } = await this.db.client.from('job_runs').insert(row).select().single();
     if (error){
+        // If idempotency is disabled, on conflict we still want a new run
+      if (process.env.DISABLE_IDEMPOTENCY === 'true'){
+        const altKey = `${jobType}:${Date.now()}`;
+        const { data: fresh } = await this.db.client.from('job_runs').insert({ ...row, idempotency_key: altKey }).select().single();
+        return fresh;
+      }
       if ((error.code||'').toString() === '23505'){
         const { data: existing } = await this.db.client.from('job_runs').select('*').eq('idempotency_key', idempotency_key).single();
         return existing;
