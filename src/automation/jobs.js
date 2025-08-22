@@ -25,14 +25,16 @@ export const JobHandlers = {
     for (const acc of enabled){
       try {
         const posts = await generator.generateContentForAccount({ username: acc.username });
-        try {
-          await slack.sendAccountConsolidated({ account: acc.username, posts });
-        } catch (slackErr) {
-          // Log Slack failure but continue with other accounts
-          console.warn(`[${new Date().toISOString()}] ⚠️ Slack send failed for ${acc.username}: ${slackErr.message}`);
+        if (Array.isArray(posts) && posts.length > 0){
+          try {
+            await slack.sendAccountConsolidated({ account: acc.username, posts });
+          } catch (slackErr) {
+            console.warn(`[${new Date().toISOString()}] ⚠️ Slack send failed for ${acc.username}: ${slackErr.message}`);
+          }
+        } else {
+          console.warn(`[${new Date().toISOString()}] ⚠️ No posts generated for ${acc.username}; skipping Slack send.`);
         }
       } catch (genErr) {
-        // Log generation failure but continue with other accounts
         console.error(`[${new Date().toISOString()}] ❌ Generation failed for ${acc.username}: ${genErr.message}`);
       }
     }
