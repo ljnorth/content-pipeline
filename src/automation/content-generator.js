@@ -186,10 +186,16 @@ Please run the content pipeline to scrape more content or adjust the account's c
         .select('id, image_path, aesthetic, colors, season, occasion, username, post_id, additional')
         .not('image_path', 'is', null); // Ensure we have valid image paths
 
-      // Exclude recently used images
+      // Exclude recently used images (numeric IDs only) – build proper SQL list: (1,2,3)
       if (recentlyUsedImages.length > 0) {
-        query = query.not('id', 'in', recentlyUsedImages);
-        this.logger.info(`🚫 Excluding ${recentlyUsedImages.length} recently used images`);
+        const numericIds = recentlyUsedImages
+          .map(v => (typeof v === 'number' || /^\d+$/.test(String(v))) ? Number(v) : null)
+          .filter(v => Number.isFinite(v));
+        if (numericIds.length > 0) {
+          const idList = `(${numericIds.join(',')})`;
+          query = query.not('id', 'in', idList);
+          this.logger.info(`🚫 Excluding ${numericIds.length} recently used images`);
+        }
       }
 
       // Apply aesthetic filters if specified AND there are aesthetics available
@@ -321,7 +327,7 @@ Please run the content pipeline to scrape more content or adjust the account's c
 
     // Aesthetic matching (require aesthetic data for proper scoring)
     if (strategy.content_strategy?.aestheticFocus?.length > 0) {
-      const aesthetics = strategy.content_strategy.aestheticFocus.filter(a => a && a.trim() !== '');
+      const aesthetics = (strategy.content_strategy.aestheticFocus || []).filter(a => a && a.trim() !== '');
       if (aesthetics.length > 0) {
         if (!image.aesthetic) {
           // Fail fast - image missing required aesthetic data
@@ -335,7 +341,7 @@ Please run the content pipeline to scrape more content or adjust the account's c
 
     // Color matching (require color data for proper scoring)
     if (strategy.content_strategy?.colorPalette?.length > 0) {
-      const colors = strategy.content_strategy.colorPalette.filter(c => c && c.trim() !== '');
+      const colors = (strategy.content_strategy.colorPalette || []).filter(c => c && c.trim() !== '');
       if (colors.length > 0) {
         if (!image.colors || !Array.isArray(image.colors)) {
           // Fail fast - image missing required color data
