@@ -12,6 +12,8 @@ export default async function handler(req, res){
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' });
   try{
     let { job_type = JobTypes.RUN_ONCE, payload = {}, force } = req.body || {};
+    // Validate job type quickly to avoid typos
+    if (!Object.values(JobTypes).includes(job_type)) return res.status(400).json({ error: 'unknown job_type' });
     if (force === true && typeof payload === 'object') payload.force = true;
     const q = new DbQueue();
     const row = await q.enqueue(job_type, payload, {});

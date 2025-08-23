@@ -9,6 +9,8 @@ async function getContentGenerator(){
 export const JobTypes = {
   DAILY_GENERATE: 'daily_generate',
   DAILY_INGEST: 'daily_ingest',
+  WEEKLY_INGEST: 'weekly_ingest',
+  WASH_IMAGES: 'wash_images',
   RUN_ONCE: 'run_once'
 };
 
@@ -48,6 +50,31 @@ export const JobHandlers = {
     const r = await fetch(`${base}/api/ingest?mode=all&dryRun=false`);
     if (!r.ok) throw new Error(`ingest failed ${r.status}`);
     return { ok: true };
+  },
+
+  async [JobTypes.WEEKLY_INGEST](run){
+    const base = process.env.PUBLIC_BASE_URL || 'https://www.easypost.fun';
+    const r = await fetch(`${base}/api/ingest?mode=all&dryRun=false`);
+    if (!r.ok) throw new Error(`weekly ingest failed ${r.status}`);
+    return { ok: true };
+  },
+
+  async [JobTypes.WASH_IMAGES](run){
+    const { ImageSanitiser } = await import('../stages/image-sanitiser.js');
+    const { SupabaseClient } = await import('../database/supabase-client.js');
+    const db = new SupabaseClient();
+    const washer = new ImageSanitiser();
+    const batch = parseInt((run.payload && run.payload.batch) || '500', 10);
+    const { data: rows } = await db.client
+      .from('images')
+      .select('id, image_path, username, post_id')
+      .eq('washed', false)
+      .limit(batch);
+    let washed = 0;
+    for (const row of (rows||[])){
+      try { await washer.washImageRecord(row); washed++; } catch(e){ /* continue */ }
+    }
+    return { washed };
   },
 
   async [JobTypes.RUN_ONCE](run){ return { echo: run.payload || {} }; }
