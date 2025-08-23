@@ -17,6 +17,8 @@ export const JobHandlers = {
     const db = new SupabaseClient();
     const slack = new EnhancedSlackAPI();
     const generator = await getContentGenerator();
+    // New run context to reduce cross-account duplicates
+    generator.runContext = { usedImageIds: new Set() };
     const { data: accounts } = await db.client
       .from('account_profiles')
       .select('username, content_strategy')
@@ -24,7 +26,7 @@ export const JobHandlers = {
     const enabled = (accounts||[]).filter(a => a?.content_strategy?.autogenEnabled === true);
     for (const acc of enabled){
       try {
-        const posts = await generator.generateContentForAccount({ username: acc.username });
+        const posts = await generator.generateContentForAccount({ username: acc.username }, { selectionMode: (acc?.content_strategy?.selectionMode)||'rerollish' });
         if (Array.isArray(posts) && posts.length > 0){
           try {
             await slack.sendAccountConsolidated({ account: acc.username, posts });

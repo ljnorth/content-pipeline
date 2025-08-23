@@ -7,6 +7,8 @@ export class ContentGenerator {
     this.logger = new Logger();
     this.db = new SupabaseClient();
     this.openai = new OpenAI();
+    // Optional run context shared across accounts to enforce cross-account variety
+    this.runContext = { usedImageIds: new Set() };
   }
 
   /**
@@ -58,11 +60,12 @@ export class ContentGenerator {
   /**
    * Generate 3 posts for a specific account
    */
-  async generateContentForAccount(account) {
+  async generateContentForAccount(account, options = {}) {
     const posts = [];
     
     // Get account's content strategy and preferences
     const strategy = await this.getAccountStrategy(account.username);
+    const selectionMode = strategy?.content_strategy?.selectionMode || options.selectionMode || 'rerollish';
     
     // Generate 3 different posts
     for (let i = 1; i <= 3; i++) {
@@ -87,6 +90,10 @@ export class ContentGenerator {
           this.logger.warn(`⚠️ Image usage tracking best-effort failed: ${trackErr.message}`);
         }
         posts.push(post);
+        // Track for cross-account variety within a run
+        try {
+          for (const img of post.images){ this.runContext.usedImageIds.add(img.id); }
+        } catch(_){}
       } catch (postErr) {
         // Log and continue with next post instead of failing the entire account
         this.logger.error(`❌ Post ${i} failed for ${account.username}: ${postErr.message}`);
@@ -108,7 +115,7 @@ export class ContentGenerator {
     try {
       // Get curated images based on account strategy
       this.logger.info(`🔍 Getting curated images for ${account.username}...`);
-      const images = await this.getCuratedImages(account.username, strategy, 5);
+      const images = await this.getCuratedImages(account.username, strategy, 5, { selectionMode: 'rerollish' });
       
       this.logger.info(`📊 Retrieved ${images.length} curated images`);
       
@@ -170,10 +177,11 @@ Please run the content pipeline to scrape more content or adjust the account's c
   /**
    * Get curated images based on account strategy with deduplication rules
    */
-  async getCuratedImages(username, strategy, count = 5) {
+  async getCuratedImages(username, strategy, count = 5, opts = {}) {
     this.logger.info(`🔍 Curating ${count} images for ${username} with deduplication rules...`);
     
     try {
+      const selectionMode = opts?.selectionMode || 'rerollish';
       // Get recently used images for this account (within last 6 posts)
       this.logger.info(`📋 Checking for recently used images...`);
       const recentlyUsedImages = await this.getRecentlyUsedImages(username);
@@ -221,8 +229,7 @@ Please run the content pipeline to scrape more content or adjust the account's c
       }
 
       // Get recent, high-quality images
-      query = query
-        .order('created_at', { ascending: false });
+      query = query.order('created_at', { ascending: false });
 
       this.logger.info(`🔍 Executing database query...`);
       const { data: images, error } = await query;
@@ -246,21 +253,18 @@ Please run the content pipeline to scrape more content or adjust the account's c
         throw new Error(errorMsg);
       }
 
-      // Process and score images normally
-      this.logger.info(`🎯 Scoring filtered images...`);
-      const scoredImages = images.map(img => {
-        return {
-          ...img,
-          score: this.scoreImageForAccount(img, strategy)
-        };
-      }).sort((a, b) => b.score - a.score);
+      // Selection strategy
+      const selectedImages = selectionMode === 'rerollish'
+        ? this.selectAlternates(images, strategy, count)
+        : this.selectVariedImages(images.map(img => ({ ...img, score: this.scoreImageForAccount(img, strategy) })).sort((a,b)=>b.score-a.score), count);
 
-      this.logger.info(`🎯 Scored ${scoredImages.length} images, top score: ${scoredImages[0]?.score || 0}`);
+      // Cross-account de-duplication within the same run
+      const runUsed = this.runContext?.usedImageIds || new Set();
+      const filtered = selectedImages.filter(img => !runUsed.has(img.id));
+      const finalImages = filtered.length >= count ? filtered.slice(0, count) : selectedImages.slice(0, count);
 
-      // Return top images, ensuring variety and no duplicates within the post
-      const selectedImages = this.selectVariedImages(scoredImages, count);
-      this.logger.info(`✅ Selected ${selectedImages.length} varied images`);
-      return selectedImages;
+      this.logger.info(`✅ Selected ${finalImages.length} images (mode=${selectionMode})`);
+      return finalImages;
       
     } catch (error) {
       this.logger.error(`❌ Error in getCuratedImages: ${error.message}`);
@@ -433,6 +437,22 @@ Please run the content pipeline to scrape more content or adjust the account's c
     }
 
     return selected;
+  }
+
+  /**
+   * Reroll-like selector: lightly shuffle, then bias by score and enforce variety/uniqueness
+   */
+  selectAlternates(baseImages, strategy, count){
+    const scored = baseImages.map(img => ({ ...img, score: this.safeScore(img, strategy) }));
+    // Light shuffle to avoid deterministic top-N sameness
+    const shuffled = scored.sort(()=> Math.random() - 0.35);
+    // Sort with bias but retain some shuffle ordering
+    const ranked = shuffled.sort((a,b)=> (b.score + Math.random()*5) - (a.score + Math.random()*5));
+    return this.selectVariedImages(ranked, count);
+  }
+
+  safeScore(image, strategy){
+    try { return this.scoreImageForAccount(image, strategy); } catch { return 0; }
   }
 
   /**
