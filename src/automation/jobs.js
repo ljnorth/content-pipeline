@@ -62,19 +62,39 @@ export const JobHandlers = {
   async [JobTypes.WASH_IMAGES](run){
     const { ImageSanitiser } = await import('../stages/image-sanitiser.js');
     const { SupabaseClient } = await import('../database/supabase-client.js');
+    const { DbQueue } = await import('./queue-db.js');
     const db = new SupabaseClient();
     const washer = new ImageSanitiser();
     const batch = parseInt((run.payload && run.payload.batch) || '500', 10);
-    const { data: rows } = await db.client
-      .from('images')
-      .select('id, image_path, username, post_id')
-      .eq('washed', false)
-      .limit(batch);
+    const maxMs = parseInt(process.env.WASH_MAX_MS || '60000', 10);
+    const start = Date.now();
     let washed = 0;
-    for (const row of (rows||[])){
-      try { await washer.washImageRecord(row); washed++; } catch(e){ /* continue */ }
+
+    while (Date.now() - start < maxMs){
+      const { data: rows } = await db.client
+        .from('images')
+        .select('id, image_path, username, post_id')
+        .eq('washed', false)
+        .limit(batch);
+      if (!rows || rows.length === 0) break;
+      for (const row of rows){
+        try { await washer.washImageRecord(row); washed++; } catch(e){ /* continue */ }
+      }
+      if (rows.length < batch) break; // likely finished
     }
-    return { washed };
+
+    // Check remaining and auto-enqueue another batch if needed
+    const { count } = await db.client
+      .from('images')
+      .select('*', { count: 'exact', head: true })
+      .eq('washed', false);
+
+    if ((count || 0) > 0){
+      const q = new DbQueue();
+      await q.enqueue(JobTypes.WASH_IMAGES, { batch, idempotency_key: `wash_images:${Date.now()}`, force: true }, {});
+    }
+
+    return { washed, remaining: count || 0 };
   },
 
   async [JobTypes.RUN_ONCE](run){ return { echo: run.payload || {} }; }
