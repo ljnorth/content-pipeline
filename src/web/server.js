@@ -798,10 +798,15 @@ app.get('/api/accounts', async (req, res) => {
 });
 
 app.post('/api/accounts', async (req, res) => {
-  const { username, url } = req.body;
+  const { username, url, gender } = req.body;
   if (!username) return res.status(400).json({ error: 'username is required' });
   try {
-    await db.upsertAccount({ username: username.toLowerCase(), url: url || `https://www.tiktok.com/@${username}` });
+    const base = { username: username.toLowerCase(), url: url || `https://www.tiktok.com/@${username}` };
+    // Merge gender into tags array if provided
+    if (gender === 'men' || gender === 'women') {
+      base.tags = [gender];
+    }
+    await db.upsertAccount(base);
     res.json({ message: 'Account added' });
   } catch (err) {
     res.status(500).json({ error: err.message });

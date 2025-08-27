@@ -1387,7 +1387,8 @@ async function createAccountProfile() {
             colorPalette: document.getElementById('colorPalette').value.split(',').map(c => c.trim()),
             contentTypes: ['fashion', 'outfit'], // Default content types
             postingStyle: 'casual', // Default posting style
-            brandVoice: 'authentic' // Default brand voice
+            brandVoice: 'authentic', // Default brand voice
+            preferredGender: (document.getElementById('preferredGender')?.value || 'any')
         },
         performanceGoals: {
             primaryMetric: document.getElementById('primaryMetric').value,
@@ -1637,6 +1638,7 @@ function setSelectedValues(selectId, values) {
 async function addScrapedAccount() {
     const username = document.getElementById('newScrapedUsername').value.trim();
     const url = document.getElementById('newScrapedAccountUrl').value.trim();
+    const gender = (document.getElementById('newScrapedGender')?.value || '').trim();
     
     if (!username) {
         showError('Username is required');
@@ -1649,7 +1651,7 @@ async function addScrapedAccount() {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ username, url })
+            body: JSON.stringify({ username, url, gender })
         });
         
         const result = await response.json();
@@ -1658,6 +1660,7 @@ async function addScrapedAccount() {
             showSuccess('Scraped account added successfully');
             document.getElementById('newScrapedUsername').value = '';
             document.getElementById('newScrapedAccountUrl').value = '';
+            const g = document.getElementById('newScrapedGender'); if (g) g.value = '';
             loadScrapedAccountsList();
         } else {
             showError(result.error || 'Failed to add scraped account');
@@ -1751,6 +1754,7 @@ async function refreshScrapedAccounts() {
 async function addBulkScrapedAccounts() {
     const textarea = document.getElementById('bulkScrapedUsernames');
     const rawText = textarea.value.trim();
+    const bulkGender = (document.getElementById('bulkScrapedGender')?.value || '').trim();
     
     if (!rawText) {
         showError('Please enter usernames or URLs');
@@ -1800,7 +1804,7 @@ async function addBulkScrapedAccounts() {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ username, url: '' })
+                body: JSON.stringify({ username, url: '', gender: bulkGender })
             });
             
             if (response.ok) {
