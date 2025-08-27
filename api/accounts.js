@@ -31,7 +31,7 @@ export default async function handler(req, res) {
         }
       };
 
-      const { error } = await db.client.from('account_profiles').upsert(profile);
+      const { error } = await db.client.from('account_profiles').upsert(profile, { onConflict: 'username' });
       if (error) throw error;
       return res.json({ success: true });
     }

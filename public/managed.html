@@ -205,7 +205,8 @@
           preferredGender: tr.querySelector('.prefGender').value
         };
         try {
-          await fetch('/api/accounts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+          // Use PATCH to merge into existing content_strategy reliably
+          await fetch('/api/accounts', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
           setStatus('Saved changes for @'+username, 'ok');
           await loadProfiles();
         } catch (e) {
