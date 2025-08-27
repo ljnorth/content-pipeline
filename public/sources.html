@@ -155,6 +155,7 @@
             gender: tr.querySelector('.gender').value
           };
           try {
+            // Use PATCH when only toggling active; otherwise POST upsert
             await fetch('/api/sources',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
             await loadSources();
           } catch(e){ alert('Save failed: '+e.message); }
