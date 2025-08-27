@@ -46,17 +46,63 @@ export const JobHandlers = {
   },
 
   async [JobTypes.DAILY_INGEST](run){
-    const base = process.env.PUBLIC_BASE_URL || 'https://www.easypost.fun';
-    const r = await fetch(`${base}/api/ingest?mode=all&dryRun=false`);
-    if (!r.ok) throw new Error(`ingest failed ${r.status}`);
-    return { ok: true };
+    // Run incremental ingest directly inside the worker
+    const { ContentAcquirer } = await import('../stages/content-acquirer.js');
+    const { DatabaseStorage } = await import('../stages/database-storage.js');
+    const db = new SupabaseClient();
+
+    // Fetch active source accounts
+    const { data: sources } = await db.client.from('accounts').select('username, last_scraped, active').eq('active', true);
+    if (!sources || sources.length === 0) return { accounts: 0, newPosts: 0 };
+
+    // Build account descriptors with simple metadata
+    const accounts = [];
+    for (const s of sources){
+      // Count existing posts for this source (best-effort)
+      let count = 0; let latest = null;
+      try{
+        const { count: c } = await db.client.from('posts').select('*', { count:'exact', head:true }).eq('username', s.username);
+        count = c || 0;
+        const { data: recent } = await db.client.from('posts').select('created_at').eq('username', s.username).order('created_at', { ascending:false }).limit(1);
+        latest = recent && recent[0] ? recent[0].created_at : null;
+      }catch(_){ /* ignore */ }
+      accounts.push({ username: s.username, isNew: false, existingPostCount: count, latestPostTimestamp: latest });
+    }
+
+    const acquirer = new ContentAcquirer();
+    const storage = new DatabaseStorage();
+    const posts = await acquirer.process(accounts);
+    const storeRes = await storage.process(posts);
+    return { accounts: accounts.length, scrapedPosts: posts.length, stored: storeRes.successCount, errors: storeRes.errorCount };
   },
 
   async [JobTypes.WEEKLY_INGEST](run){
-    const base = process.env.PUBLIC_BASE_URL || 'https://www.easypost.fun';
-    const r = await fetch(`${base}/api/ingest?mode=all&dryRun=false`);
-    if (!r.ok) throw new Error(`weekly ingest failed ${r.status}`);
-    return { ok: true };
+    // Same as daily_ingest but can be scheduled weekly
+    const { ContentAcquirer } = await import('../stages/content-acquirer.js');
+    const { DatabaseStorage } = await import('../stages/database-storage.js');
+    const db = new SupabaseClient();
+
+    const { data: sources } = await db.client.from('accounts').select('username, last_scraped, active').eq('active', true);
+    if (!sources || sources.length === 0) return { accounts: 0, newPosts: 0 };
+
+    // Treat sources with zero posts as new (full scrape), others delta
+    const accounts = [];
+    for (const s of sources){
+      let count = 0; let latest = null;
+      try{
+        const { count: c } = await db.client.from('posts').select('*', { count:'exact', head:true }).eq('username', s.username);
+        count = c || 0;
+        const { data: recent } = await db.client.from('posts').select('created_at').eq('username', s.username).order('created_at', { ascending:false }).limit(1);
+        latest = recent && recent[0] ? recent[0].created_at : null;
+      }catch(_){ /* ignore */ }
+      accounts.push({ username: s.username, isNew: count === 0, existingPostCount: count, latestPostTimestamp: latest });
+    }
+
+    const acquirer = new ContentAcquirer();
+    const storage = new DatabaseStorage();
+    const posts = await acquirer.process(accounts);
+    const storeRes = await storage.process(posts);
+    return { accounts: accounts.length, scrapedPosts: posts.length, stored: storeRes.successCount, errors: storeRes.errorCount };
   },
 
   async [JobTypes.WASH_IMAGES](run){
@@ -90,8 +136,16 @@ export const JobHandlers = {
       .eq('washed', false);
 
     if ((count || 0) > 0){
-      const q = new DbQueue();
-      await q.enqueue(JobTypes.WASH_IMAGES, { batch, idempotency_key: `wash_images:${Date.now()}`, force: true }, {});
+      // enqueue follow-up only if there isn't already a queued wash_images job
+      const { count: queuedCount } = await db.client
+        .from('job_runs')
+        .select('*', { count: 'exact', head: true })
+        .eq('job_type', JobTypes.WASH_IMAGES)
+        .eq('status', 'queued');
+      if ((queuedCount || 0) === 0){
+        const q = new DbQueue();
+        await q.enqueue(JobTypes.WASH_IMAGES, { batch, idempotency_key: `wash_images:${Date.now()}`, force: true }, {});
+      }
     }
 
     return { washed, remaining: count || 0 };
