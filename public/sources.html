@@ -73,11 +73,12 @@
           const tr = document.createElement('tr');
           const tags = Array.isArray(a.tags) ? a.tags.join(', ') : '';
           tr.innerHTML = `<td><input type="checkbox" class="sel" data-u="${a.username}"></td>`+
-            `<td>@${a.username}</td><td>${a.url||''}</td><td>${tags}</td><td>${a.active?'Yes':'No'}</td>
+            `<td class="col-user">@${a.username}</td><td class="col-url">${a.url||''}</td><td class="col-tags">${tags}</td><td class="col-active">${a.active?'Yes':'No'}</td>
             <td>
               <button class="btn btn-outline ingest" data-u="${a.username}">Ingest Delta</button>
               <button class="btn btn-outline ingest-new" data-u="${a.username}">Ingest New</button>
               <button class="btn btn-outline toggle" data-u="${a.username}" data-active="${a.active}">${a.active?'Pause':'Resume'}</button>
+              <button class="btn btn-outline edit" data-u="${a.username}">Edit</button>
               <button class="btn btn-outline del" data-u="${a.username}">Remove</button>
             </td>`;
           tbody.appendChild(tr);
@@ -90,6 +91,11 @@
             loadSources();
         }; });
         document.querySelectorAll('button.del').forEach(btn=>{ btn.onclick=async()=>{ await fetch('/api/sources?username='+encodeURIComponent(btn.dataset.u),{method:'DELETE'}); loadSources(); }; });
+
+        // Inline edit for sources
+        document.querySelectorAll('button.edit').forEach(btn=>{
+          btn.onclick = () => startEditSource(btn.closest('tr'));
+        });
       }
 
       document.getElementById('addSource').onclick = async ()=>{
@@ -117,6 +123,37 @@
         }
         loadSources();
       };
+
+      function startEditSource(tr){
+        const username = tr.querySelector('.col-user').textContent.replace('@','').trim();
+        const url = tr.querySelector('.col-url').textContent.trim();
+        const tags = tr.querySelector('.col-tags').textContent.trim();
+        const active = /Yes/i.test(tr.querySelector('.col-active').textContent);
+        const actions = tr.querySelector('td:last-child');
+
+        tr.querySelector('.col-url').innerHTML = `<input class="inline url" value="${escapeHtml(url)}" style="width:95%"/>`;
+        tr.querySelector('.col-tags').innerHTML = `<input class="inline tags" value="${escapeHtml(tags)}" style="width:95%"/>`;
+        tr.querySelector('.col-active').innerHTML = `<label><input type="checkbox" class="inline active" ${active?'checked':''}/> Active</label>`;
+        actions.innerHTML = `<button class="btn btn-primary save">Save</button> <button class="btn btn-outline cancel">Cancel</button>`;
+
+        actions.querySelector('.save').onclick = async () => {
+          const body = {
+            username,
+            url: tr.querySelector('.url').value,
+            tags: tr.querySelector('.tags').value.split(',').map(s=>s.trim()).filter(Boolean),
+            active: tr.querySelector('.active').checked
+          };
+          try {
+            await fetch('/api/sources',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+            await loadSources();
+          } catch(e){ alert('Save failed: '+e.message); }
+        };
+        actions.querySelector('.cancel').onclick = () => loadSources();
+      }
+
+      function escapeHtml(s){
+        return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      }
 
       // Auth guard
       const cfg = await loadConfig();
