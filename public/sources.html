@@ -43,7 +43,7 @@
     <table>
       <thead><tr>
         <th><input type="checkbox" id="selectAll"/></th>
-        <th>Username</th><th>URL</th><th>Tags</th><th>Active</th><th>Actions</th>
+        <th>Username</th><th>URL</th><th>Tags</th><th>Gender</th><th>Active</th><th>Actions</th>
       </tr></thead>
       <tbody id="rows"></tbody>
     </table>
@@ -72,8 +72,9 @@
         (data||[]).forEach(a=>{
           const tr = document.createElement('tr');
           const tags = Array.isArray(a.tags) ? a.tags.join(', ') : '';
-          tr.innerHTML = `<td><input type="checkbox" class="sel" data-u="${a.username}"></td>`+
-            `<td class="col-user">@${a.username}</td><td class="col-url">${a.url||''}</td><td class="col-tags">${tags}</td><td class="col-active">${a.active?'Yes':'No'}</td>
+          const gender = Array.isArray(a.tags) ? (a.tags.includes('men') ? 'men' : (a.tags.includes('women') ? 'women' : '')) : '';
+          tr.innerHTML = `<td><input type=\"checkbox\" class=\"sel\" data-u=\"${a.username}\"></td>`+
+            `<td class=\"col-user\">@${a.username}</td><td class=\"col-url\">${a.url||''}</td><td class=\"col-tags\">${tags}</td><td class=\"col-gender\">${gender}</td><td class=\"col-active\">${a.active?'Yes':'No'}</td>
             <td>
               <button class="btn btn-outline ingest" data-u="${a.username}">Ingest Delta</button>
               <button class="btn btn-outline ingest-new" data-u="${a.username}">Ingest New</button>
@@ -128,20 +129,30 @@
         const username = tr.querySelector('.col-user').textContent.replace('@','').trim();
         const url = tr.querySelector('.col-url').textContent.trim();
         const tags = tr.querySelector('.col-tags').textContent.trim();
+        const genderText = tr.querySelector('.col-gender').textContent.trim() || '';
         const active = /Yes/i.test(tr.querySelector('.col-active').textContent);
         const actions = tr.querySelector('td:last-child');
 
         tr.querySelector('.col-url').innerHTML = `<input class="inline url" value="${escapeHtml(url)}" style="width:95%"/>`;
         tr.querySelector('.col-tags').innerHTML = `<input class="inline tags" value="${escapeHtml(tags)}" style="width:95%"/>`;
+        tr.querySelector('.col-gender').innerHTML = `<select class="inline gender" style="width:95%">
+          <option value="" ${genderText===''?'selected':''}></option>
+          <option value="men" ${genderText==='men'?'selected':''}>men</option>
+          <option value="women" ${genderText==='women'?'selected':''}>women</option>
+        </select>`;
         tr.querySelector('.col-active').innerHTML = `<label><input type="checkbox" class="inline active" ${active?'checked':''}/> Active</label>`;
         actions.innerHTML = `<button class="btn btn-primary save">Save</button> <button class="btn btn-outline cancel">Cancel</button>`;
 
         actions.querySelector('.save').onclick = async () => {
+          // Remove any gender tokens from tags; send chosen gender separately
+          const rawTags = tr.querySelector('.tags').value.split(',').map(s=>s.trim()).filter(Boolean);
+          const nonGenderTags = rawTags.filter(t => t.toLowerCase() !== 'men' && t.toLowerCase() !== 'women');
           const body = {
             username,
             url: tr.querySelector('.url').value,
-            tags: tr.querySelector('.tags').value.split(',').map(s=>s.trim()).filter(Boolean),
-            active: tr.querySelector('.active').checked
+            tags: nonGenderTags,
+            active: tr.querySelector('.active').checked,
+            gender: tr.querySelector('.gender').value
           };
           try {
             await fetch('/api/sources',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
