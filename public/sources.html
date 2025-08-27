@@ -29,6 +29,11 @@
       <input id="susername" placeholder="@username"/>
       <input id="surl" placeholder="Profile URL (optional)"/>
       <input id="stags" placeholder="Tags (comma separated)"/>
+      <select id="sgender">
+        <option value="">Gender (optional)</option>
+        <option value="men">Men</option>
+        <option value="women">Women</option>
+      </select>
       <label class="muted"><input type="checkbox" id="sactive" checked/> Active</label>
       <button id="addSource" class="btn btn-primary">Add / Update Source</button>
       <button id="bulk" class="btn btn-outline">Bulk Add</button>
@@ -90,8 +95,9 @@
       document.getElementById('addSource').onclick = async ()=>{
         const username = document.getElementById('susername').value.replace('@','');
         const url = document.getElementById('surl').value; const tags = document.getElementById('stags').value.split(',').map(s=>s.trim()).filter(Boolean);
+        const gender = document.getElementById('sgender').value;
         const active = document.getElementById('sactive').checked;
-        await fetch('/api/sources',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,url,tags,active})});
+        await fetch('/api/sources',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,url,tags,active,gender})});
         loadSources();
       };
 
@@ -107,7 +113,7 @@
           const username = parts[0].replace('@','');
           const url = parts[1] || '';
           const tags = parts.slice(2).filter(Boolean);
-          await fetch('/api/sources',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,url,tags,active:true})});
+          await fetch('/api/sources',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,url,tags,active:true,gender:document.getElementById('sgender').value})});
         }
         loadSources();
       };

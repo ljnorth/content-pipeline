@@ -32,6 +32,11 @@
     <input id="audience" placeholder="Audience (plain text)"/>
     <input id="ownerSlackId" placeholder="Owner Slack ID (U...)"/>
     <input id="ownerDisplayName" placeholder="Owner display name"/>
+    <select id="preferredGender">
+      <option value="any" selected>Preferred: Any</option>
+      <option value="men">Preferred: Men</option>
+      <option value="women">Preferred: Women</option>
+    </select>
     <label class="muted"><input type="checkbox" id="autogenEnabled"/> Auto-Gen</label>
     <button id="add" class="btn btn-primary">Add / Update</button>
     <button id="genAll" class="btn btn-outline">Generate Daily Now (All enabled)</button>
@@ -40,7 +45,7 @@
   <table>
     <thead>
       <tr>
-        <th>Username</th><th>Owner</th><th>Goal</th><th>Audience</th><th>Auto-Gen</th><th>Actions</th>
+        <th>Username</th><th>Owner</th><th>Goal</th><th>Audience</th><th>Pref. Gender</th><th>Auto-Gen</th><th>Actions</th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
@@ -62,6 +67,7 @@
           '<td>'+(a.owner_display_name||'')+(a.owner_slack_id? ' ('+a.owner_slack_id+')':'' )+'</td>'+
           '<td>'+(cs.goal||'')+'</td>'+
           '<td>'+(cs.audience||'')+'</td>'+
+          '<td>'+(cs.preferredGender||'any')+'</td>'+
           '<td><input type="checkbox" '+(cs.autogenEnabled?'checked':'')+' data-u="'+a.username+'" class="toggle"/></td>'+
           '<td>'+
             '<button class="btn btn-outline" data-prev="'+a.username+'">Preview</button> '+
@@ -112,7 +118,8 @@
         audience: document.getElementById('audience').value,
         ownerSlackId: document.getElementById('ownerSlackId').value,
         ownerDisplayName: document.getElementById('ownerDisplayName').value,
-        autogenEnabled: document.getElementById('autogenEnabled').checked
+        autogenEnabled: document.getElementById('autogenEnabled').checked,
+        preferredGender: document.getElementById('preferredGender').value
       };
       await fetch('/api/accounts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
       await loadProfiles();
