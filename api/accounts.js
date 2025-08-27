@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      const { username, goal, audience, ownerSlackId, ownerDisplayName, autogenEnabled } = req.body || {};
+      const { username, goal, audience, ownerSlackId, ownerDisplayName, autogenEnabled, preferredGender } = req.body || {};
       if (!username) return res.status(400).json({ error: 'username is required' });
 
       const profile = {
@@ -26,7 +26,8 @@ export default async function handler(req, res) {
           goal: goal || null,
           audience: audience || null,
           aestheticFocus: [],
-          autogenEnabled: !!autogenEnabled
+          autogenEnabled: !!autogenEnabled,
+          preferredGender: ['men','women','any'].includes(preferredGender) ? preferredGender : 'any'
         }
       };
 
@@ -36,7 +37,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'PATCH') {
-      const { username, autogenEnabled } = req.body || {};
+      const { username, autogenEnabled, preferredGender } = req.body || {};
       if (!username) return res.status(400).json({ error: 'username is required' });
 
       // merge flag into content_strategy JSON
@@ -47,7 +48,14 @@ export default async function handler(req, res) {
         .single();
       if (fetchErr) throw fetchErr;
 
-      const content_strategy = Object.assign({}, existing?.content_strategy || {}, { autogenEnabled: !!autogenEnabled });
+      const content_strategy = Object.assign(
+        {},
+        existing?.content_strategy || {},
+        {
+          autogenEnabled: typeof autogenEnabled === 'boolean' ? autogenEnabled : (existing?.content_strategy?.autogenEnabled ?? false),
+          preferredGender: ['men','women','any'].includes(preferredGender) ? preferredGender : (existing?.content_strategy?.preferredGender || 'any')
+        }
+      );
 
       const { error } = await db.client
         .from('account_profiles')

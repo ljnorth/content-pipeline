@@ -12,9 +12,14 @@ export default async function handler(req, res) {
       return res.json(data || []);
     }
     if (req.method === 'POST') {
-      const { username, url, tags = [], active = true } = req.body || {};
+      const { username, url, tags = [], active = true, gender } = req.body || {};
       if (!username) return res.status(400).json({ error: 'username required' });
-      const { error } = await supabase.from('accounts').upsert({ username, url, tags, active });
+      // Map gender to tags (ensure dedupe)
+      let nextTags = Array.isArray(tags) ? [...tags] : [];
+      if (gender && (gender === 'men' || gender === 'women')) {
+        if (!nextTags.includes(gender)) nextTags.push(gender);
+      }
+      const { error } = await supabase.from('accounts').upsert({ username, url, tags: nextTags, active });
       if (error) throw error;
       return res.json({ success: true });
     }

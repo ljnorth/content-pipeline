@@ -217,6 +217,31 @@ Please run the content pipeline to scrape more content or adjust the account's c
         }
       }
 
+      // Apply gender preference via source account tags
+      const preferredGender = (strategy?.content_strategy?.preferredGender || 'any').toLowerCase();
+      if (preferredGender === 'men' || preferredGender === 'women') {
+        // Join images to accounts by username and require accounts.tags @> '{preferredGender}'
+        // Supabase JS can't do join directly here, so we filter by username list from accounts
+        try {
+          const { data: genderAccounts, error: gaErr } = await this.db.client
+            .from('accounts')
+            .select('username')
+            .contains('tags', [preferredGender]);
+          if (gaErr) throw gaErr;
+          const allowedUsernames = (genderAccounts || []).map(a => a.username);
+          if (allowedUsernames.length > 0) {
+            query = query.in('username', allowedUsernames);
+            this.logger.info(`🚻 Applied gender filter: ${preferredGender} (${allowedUsernames.length} source accounts)`);
+          } else {
+            this.logger.warn(`🚻 No source accounts tagged with ${preferredGender}; results may be empty`);
+            // Force empty result fast to avoid misleading picks
+            query = query.eq('username', '__none__');
+          }
+        } catch (gErr) {
+          this.logger.warn(`⚠️ Gender filter lookup failed: ${gErr.message}`);
+        }
+      }
+
       // Apply color preferences if specified AND there are colors available
       if (strategy.content_strategy?.colorPalette?.length > 0) {
         const colors = strategy.content_strategy.colorPalette.filter(c => c && c.trim() !== '');
