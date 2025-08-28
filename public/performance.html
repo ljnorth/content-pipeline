@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Performance</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/assets/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header class="nav"><div class="nav-inner">
+    <div class="brand"><span class="dot"></span> EasyPost</div>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/managed.html">Managed</a>
+      <a href="/sources.html">Sources</a>
+      <a href="/performance.html" class="active">Performance</a>
+      <a href="/logout.html">Logout</a>
+    </div>
+  </div></header>
+  <main>
+    <h2>Performance</h2>
+    <div class="row section">
+      <select id="acct">
+        <option value="">All Accounts</option>
+      </select>
+      <select id="range">
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+      </select>
+      <select id="group">
+        <option value="day" selected>Group: Day</option>
+        <option value="week">Group: Week</option>
+      </select>
+      <button id="refresh" class="btn btn-primary">Refresh</button>
+    </div>
+
+    <div class="card white">
+      <h3>Views Over Time</h3>
+      <canvas id="chart" height="140"></canvas>
+    </div>
+  </main>
+
+  <script type="module">
+    async function loadAccounts(){
+      const r = await fetch('/api/account-profiles');
+      const a = await r.json();
+      const sel = document.getElementById('acct');
+      (a||[]).forEach(p=>{
+        const o = document.createElement('option');
+        o.value = p.username; o.textContent = '@'+p.username; sel.appendChild(o);
+      });
+    }
+
+    function isoDaysAgo(n){
+      const d = new Date(); d.setUTCDate(d.getUTCDate()-n); return d.toISOString().slice(0,10);
+    }
+
+    async function refresh(){
+      const acct = document.getElementById('acct').value;
+      const days = parseInt(document.getElementById('range').value, 10);
+      const group = document.getElementById('group').value;
+      const from = isoDaysAgo(days);
+      const url = `/api/performance-series?${acct?`username=${encodeURIComponent(acct)}&`:''}from=${from}&group=${group}`;
+      const r = await fetch(url);
+      const j = await r.json();
+      draw(j.series||[]);
+    }
+
+    let chart;
+    function draw(series){
+      const labels = series.map(p=>p.date);
+      const data = series.map(p=>p.views);
+      const ctx = document.getElementById('chart').getContext('2d');
+      if (chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets: [{ label: 'Views', data, borderColor: '#667eea', backgroundColor: 'rgba(102,126,234,0.2)', fill: true }] },
+        options: { scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }
+      });
+    }
+
+    document.getElementById('refresh').onclick = refresh;
+    await loadAccounts();
+    await refresh();
+  </script>
+</body>
+</html>
+
+
