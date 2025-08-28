@@ -180,8 +180,8 @@ export class ContentAcquirer {
     // Prepare input for this batch
     const input = {
       excludePinnedPosts: false,
-      profileSorting: "popular",
-      profiles: [username],
+      profileSorting: "byDate",
+      profiles: [username.startsWith('@')? username : `@${username}`],
       proxyCountryCode: "None",
       resultsPerPage: batchSize, // Use batch size (25 posts)
       scrapeRelatedVideos: false,

@@ -118,18 +118,24 @@ export const JobHandlers = {
       .eq('is_active', true);
     let discovered = 0;
     for (const acc of (accounts||[])){
-      const input = {
+      // First try without '@', then fallback with '@' if empty
+      const baseInput = {
         excludePinnedPosts: false,
-        profileSorting: 'popular',
-        profiles: [acc.username],
+        profileSorting: 'byDate',
         resultsPerPage: 50,
         profileScrapeSections: ['videos'],
         shouldDownloadVideos: false,
         shouldDownloadSlideshowImages: false
       };
-      const runRes = await apify.actor('clockworks~tiktok-scraper').call(input);
-      if (runRes.status !== 'SUCCEEDED') continue;
-      const { items } = await apify.dataset(runRes.defaultDatasetId).listItems();
+      let items = [];
+      for (const handle of [acc.username, `@${acc.username}`]){
+        const input = { ...baseInput, profiles: [handle] };
+        const runRes = await apify.actor('clockworks~tiktok-scraper').call(input);
+        if (runRes.status !== 'SUCCEEDED') continue;
+        const res = await apify.dataset(runRes.defaultDatasetId).listItems();
+        items = res.items || [];
+        if (items.length > 0) break;
+      }
       for (const item of (items||[])){
         const postId = item.id;
         const url = item.shareUrl || item.webVideoUrl || '';
