@@ -36,6 +36,29 @@
       <button id="refresh" class="btn btn-primary">Refresh</button>
     </div>
 
+    <div class="row">
+      <div class="card white" style="flex:1; margin-right:8px">
+        <div class="muted">Views</div>
+        <div id="kpiViews" class="big">0</div>
+        <div id="kpiViewsDelta" class="muted">–</div>
+      </div>
+      <div class="card white" style="flex:1; margin-right:8px">
+        <div class="muted">Engagement</div>
+        <div id="kpiEng" class="big">0</div>
+        <div id="kpiEngDelta" class="muted">–</div>
+      </div>
+      <div class="card white" style="flex:1; margin-right:8px">
+        <div class="muted">Likes</div>
+        <div id="kpiLikes" class="big">0</div>
+        <div id="kpiLikesDelta" class="muted">–</div>
+      </div>
+      <div class="card white" style="flex:1">
+        <div class="muted">Comments</div>
+        <div id="kpiComments" class="big">0</div>
+        <div id="kpiCommentsDelta" class="muted">–</div>
+      </div>
+    </div>
+
     <div class="card white">
       <h3>Views Over Time</h3>
       <canvas id="chart" height="140"></canvas>
@@ -66,6 +89,9 @@
       const r = await fetch(url);
       const j = await r.json();
       draw(j.series||[]);
+
+      const s = await (await fetch(`/api/performance-summary?${acct?`username=${encodeURIComponent(acct)}&`:''}days=${days}`)).json();
+      setKpis(s);
     }
 
     let chart;
@@ -84,6 +110,25 @@
     document.getElementById('refresh').onclick = refresh;
     await loadAccounts();
     await refresh();
+
+    function fmt(n){
+      if (n>=1e9) return (n/1e9).toFixed(1)+'B';
+      if (n>=1e6) return (n/1e6).toFixed(1)+'M';
+      if (n>=1e3) return (n/1e3).toFixed(1)+'K';
+      return String(n);
+    }
+    function delta(n){ const d = (n||0); const sign = d>0?'+':''; return `${sign}${d.toFixed(1)}%`; }
+    function setKpis(s){
+      if (!s || !s.totals) return;
+      document.getElementById('kpiViews').textContent = fmt(s.totals.views||0);
+      document.getElementById('kpiEng').textContent = fmt(s.totals.engagement||0);
+      document.getElementById('kpiLikes').textContent = fmt(s.totals.likes||0);
+      document.getElementById('kpiComments').textContent = fmt(s.totals.comments||0);
+      document.getElementById('kpiViewsDelta').textContent = delta(s.deltas?.views);
+      document.getElementById('kpiEngDelta').textContent = delta(s.deltas?.engagement);
+      document.getElementById('kpiLikesDelta').textContent = delta(s.deltas?.likes);
+      document.getElementById('kpiCommentsDelta').textContent = delta(s.deltas?.comments);
+    }
   </script>
 </body>
 </html>
