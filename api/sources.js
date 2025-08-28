@@ -4,9 +4,10 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
-      const { active } = req.query;
+      const { active, username } = req.query;
       let q = supabase.from('accounts').select('*').order('username');
       if (active === 'true') q = q.eq('active', true);
+      if (username) q = q.eq('username', username);
       const { data, error } = await q;
       if (error) throw error;
       return res.json(data || []);

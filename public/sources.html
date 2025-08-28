@@ -25,6 +25,16 @@
   <main>
     <h2>Source Accounts</h2>
     <div id="authStatus" class="muted" style="margin-bottom:8px">Checking session…</div>
+    <div class="row" style="margin-bottom:12px">
+      <div class="card white" style="flex:1; margin-right:8px">
+        <div class="muted">Total Sources</div>
+        <div id="kpiSources" class="big">0</div>
+      </div>
+      <div class="card white" style="flex:1">
+        <div class="muted">Last Pipeline Activity</div>
+        <div id="kpiLastRun" class="big">—</div>
+      </div>
+    </div>
 
     <div class="row section">
       <input id="susername" placeholder="@username"/>
@@ -40,6 +50,7 @@
       <button id="bulk" class="btn btn-outline">Bulk Add</button>
       <button id="ingestAll" class="btn btn-outline">Ingest All (Delta)</button>
     </div>
+    <div id="statusBar" class="muted" style="margin:-4px 0 12px 0"></div>
 
     <table>
       <thead><tr>
@@ -98,6 +109,10 @@
         document.querySelectorAll('button.edit').forEach(btn=>{
           btn.onclick = () => startEditSource(btn.closest('tr'));
         });
+
+        // KPIs
+        setKpiSources((data||[]).length);
+        loadLastRunKpi();
       }
 
       document.getElementById('addSource').onclick = async ()=>{
@@ -105,8 +120,12 @@
         const url = document.getElementById('surl').value; const tags = document.getElementById('stags').value.split(',').map(s=>s.trim()).filter(Boolean);
         const gender = document.getElementById('sgender').value;
         const active = document.getElementById('sactive').checked;
-        await fetch('/api/sources',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,url,tags,active,gender})});
-        loadSources();
+        if (!username){ return setStatus('Please enter a username','err'); }
+        const exists = await (await fetch('/api/sources?username='+encodeURIComponent(username))).json();
+        if (Array.isArray(exists) && exists.length>0){ return setStatus(`@${username} already exists. Use Edit to update.`, 'warn'); }
+        const r = await fetch('/api/sources',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,url,tags,active,gender})});
+        if (r.ok){ setStatus(`Added @${username} successfully`, 'ok'); document.getElementById('susername').value=''; document.getElementById('surl').value=''; document.getElementById('stags').value=''; document.getElementById('sgender').value=''; document.getElementById('sactive').checked=true; loadSources(); }
+        else { const j = await r.json().catch(()=>({})); setStatus(j.error||'Failed to add source','err'); }
       };
 
       document.getElementById('ingestAll').onclick = async ()=>{ await fetch('/api/ingest?mode=all'); };
@@ -200,6 +219,19 @@
         const users = selected(); if (users.length===0) return;
         for (const u of users) await fetch('/api/ingest?mode=delta&username='+encodeURIComponent(u));
       };
+
+      function setStatus(text, kind){
+        const el = document.getElementById('statusBar'); el.textContent=text; el.style.color = kind==='err'? '#b00020' : (kind==='ok'? '#2e7d32' : (kind==='warn'? '#d99100' : '#666'));
+      }
+      function setKpiSources(n){ document.getElementById('kpiSources').textContent = String(n); }
+      async function loadLastRunKpi(){
+        try{
+          const types=['weekly_ingest','discover_owned_posts','fetch_post_metrics'];
+          const arr = await Promise.all(types.map(t=> fetch('/api/runs?job_type='+t+'&limit=1').then(r=>r.json()).catch(()=>({runs:[]}))));
+          const dates = arr.flatMap(r=> (r.runs||[]).map(x=> x.created_at)).filter(Boolean);
+          document.getElementById('kpiLastRun').textContent = dates.length? new Date(dates.sort().pop()).toLocaleString() : '—';
+        }catch{ document.getElementById('kpiLastRun').textContent='—'; }
+      }
   </script>
   <footer class="center" style="gap:12px;margin:24px 0">
     <a href="/privacy.html">Privacy</a>
