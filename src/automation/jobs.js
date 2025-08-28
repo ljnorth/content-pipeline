@@ -117,11 +117,32 @@ export const JobHandlers = {
       .select('username')
       .eq('is_active', true);
     let discovered = 0;
+
+    function parseIdFromUrl(u){
+      try{
+        if (!u) return null;
+        const m = String(u).match(/\/video\/(\d+)/);
+        return m ? m[1] : null;
+      }catch{ return null; }
+    }
+
+    function getPostId(item){
+      return item?.id || item?.videoId || item?.awemeId || parseIdFromUrl(item?.webVideoUrl) || parseIdFromUrl(item?.shareUrl) || null;
+    }
+
+    function getPostedAt(item){
+      if (item?.createTimeISO) return new Date(item.createTimeISO).toISOString();
+      if (item?.createTime) return new Date(Number(item.createTime) * 1000).toISOString();
+      return null;
+    }
     for (const acc of (accounts||[])){
       // First try without '@', then fallback with '@' if empty
       const baseInput = {
         profileSorting: 'latest',
-        resultsPerPage: 50
+        resultsPerPage: 50,
+        profileScrapeSections: ['videos'],
+        shouldDownloadVideos: false,
+        shouldDownloadSlideshowImages: false
       };
       let items = [];
       for (const handle of [acc.username, `@${acc.username}`]){
@@ -133,9 +154,10 @@ export const JobHandlers = {
         if (items.length > 0) break;
       }
       for (const item of (items||[])){
-        const postId = item.id;
+        const postId = getPostId(item);
+        if (!postId) { continue; }
         const url = item.shareUrl || item.webVideoUrl || '';
-        const postedAt = item.createTimeISO ? new Date(item.createTimeISO).toISOString() : null;
+        const postedAt = getPostedAt(item);
         const { error } = await db.client
           .from('owned_posts')
           .upsert({ account_username: acc.username, platform: 'tiktok', platform_post_id: postId, url, caption: item.text || '', posted_at: postedAt }, { onConflict: 'platform,platform_post_id' });
