@@ -88,18 +88,18 @@
           tr.innerHTML = `<td><input type=\"checkbox\" class=\"sel\" data-u=\"${a.username}\"></td>`+
             `<td class=\"col-user\">@${a.username}</td><td class=\"col-url\">${a.url||''}</td><td class=\"col-tags\">${tags}</td><td class=\"col-gender\">${gender}</td><td class=\"col-active\">${a.active?'Yes':'No'}</td>
             <td>
-              <button class="btn btn-outline ingest" data-u="${a.username}">Ingest Delta</button>
-              <button class="btn btn-outline ingest-new" data-u="${a.username}">Ingest New</button>
-              <button class="btn btn-outline toggle" data-u="${a.username}" data-active="${a.active}">${a.active?'Pause':'Resume'}</button>
-              <button class="btn btn-outline edit" data-u="${a.username}">Edit</button>
-              <button class="btn btn-outline del" data-u="${a.username}">Remove</button>
+              <button class="icon-btn ingest" data-u="${a.username}" title="Ingest Delta" aria-label="Ingest Delta">↻</button>
+              <button class="icon-btn ingest-new" data-u="${a.username}" title="Ingest New" aria-label="Ingest New">➕</button>
+              <button class="icon-btn toggle" data-u="${a.username}" data-active="${a.active}" data-next="${a.active?'pause':'resume'}" title="${a.active?'Pause':'Resume'}" aria-label="${a.active?'Pause':'Resume'}">${a.active?'⏸':'▶'}</button>
+              <button class="icon-btn edit" data-u="${a.username}" title="Edit" aria-label="Edit">✎</button>
+              <button class="icon-btn del" data-u="${a.username}" title="Remove" aria-label="Remove">🗑</button>
             </td>`;
           tbody.appendChild(tr);
         });
         document.querySelectorAll('button.ingest').forEach(btn=>{ btn.onclick=async()=>{ await fetch('/api/ingest?mode=delta&username='+encodeURIComponent(btn.dataset.u)); }; });
         document.querySelectorAll('button.ingest-new').forEach(btn=>{ btn.onclick=async()=>{ await fetch('/api/ingest?mode=new&username='+encodeURIComponent(btn.dataset.u)); }; });
         document.querySelectorAll('button.toggle').forEach(btn=>{ btn.onclick=async()=>{
-            const makeActive = /resume/i.test(btn.textContent);
+            const makeActive = btn.dataset.next === 'resume';
             await fetch('/api/sources',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:btn.dataset.u,active:makeActive})});
             loadSources();
         }; });

@@ -71,6 +71,11 @@ footer a:hover{text-decoration:underline}
 .btn-outline{background:#fff;color:var(--brand-600);border:2px solid var(--brand-600)}
 .btn-outline:hover{background:var(--brand-600);color:#fff}
 
+/* Compact icon buttons */
+.icon-btn{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border:2px solid var(--brand-600);background:#fff;color:var(--brand-600);border-radius:9999px;font-weight:700;font-size:16px;cursor:pointer;line-height:1;padding:0}
+.icon-btn:hover{background:var(--brand-600);color:#fff}
+.icon-btn[title]{position:relative}
+
 /* Forms */
 input,select{padding:10px;border:1px solid #D1D5DB;border-radius:var(--radius);outline:none}
 input:focus,select:focus{border-color:var(--brand-500);box-shadow:0 0 0 3px rgba(99,102,241,.15)}
