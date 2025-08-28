@@ -179,23 +179,9 @@ export class ContentAcquirer {
     
     // Prepare input for this batch
     const input = {
-      excludePinnedPosts: false,
-      profileSorting: "byDate",
+      profileSorting: "latest",
       profiles: [username.startsWith('@')? username : `@${username}`],
-      proxyCountryCode: "None",
-      resultsPerPage: batchSize, // Use batch size (25 posts)
-      scrapeRelatedVideos: false,
-      shouldDownloadAvatars: false,
-      shouldDownloadCovers: false,
-      shouldDownloadMusicCovers: false,
-      shouldDownloadSlideshowImages: true,
-      shouldDownloadSubtitles: false,
-      shouldDownloadVideos: true,
-      profileScrapeSections: ["videos"],
-      searchSection: "",
-      maxProfilesPerQuery: 1,
-      maxRequestRetries: 2,
-      maxConcurrency: 1,
+      resultsPerPage: batchSize,
       // Add offset to get different posts in each batch
       offset: calculatedOffset
     };

@@ -120,12 +120,8 @@ export const JobHandlers = {
     for (const acc of (accounts||[])){
       // First try without '@', then fallback with '@' if empty
       const baseInput = {
-        excludePinnedPosts: false,
-        profileSorting: 'byDate',
-        resultsPerPage: 50,
-        profileScrapeSections: ['videos'],
-        shouldDownloadVideos: false,
-        shouldDownloadSlideshowImages: false
+        profileSorting: 'latest',
+        resultsPerPage: 50
       };
       let items = [];
       for (const handle of [acc.username, `@${acc.username}`]){
