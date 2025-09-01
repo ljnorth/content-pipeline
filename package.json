@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
+    "@aws-sdk/client-sagemaker-runtime": "^3.640.0",
     "dotenv": "^16.4.5",
     "jszip": "^3.10.1",
     "node-fetch": "^3.3.0",
@@ -12,6 +13,7 @@
     "openai": "^4.53.0",
     "fs-extra": "^11.2.0",
     "axios": "^1.7.2",
+    "p-limit": "^5.0.0",
     "apify-client": "^2.7.1"
   },
   "engines": {

@@ -11,6 +11,7 @@ export const JobTypes = {
   DAILY_INGEST: 'daily_ingest',
   WEEKLY_INGEST: 'weekly_ingest',
   WASH_IMAGES: 'wash_images',
+  EMBED_IMAGES: 'embed_images',
   DISCOVER_OWNED_POSTS: 'discover_owned_posts',
   FETCH_POST_METRICS: 'fetch_post_metrics',
   RUN_ONCE: 'run_once'
@@ -250,6 +251,14 @@ export const JobHandlers = {
     }
 
     return { washed, remaining: count || 0 };
+  },
+
+  async [JobTypes.EMBED_IMAGES](run){
+    const { ImageEmbeddings } = await import('../stages/image-embeddings.js');
+    const batch = parseInt((run.payload && run.payload.batch) || '200', 10);
+    const emb = new ImageEmbeddings();
+    const res = await emb.embedMissing(batch);
+    return res;
   },
 
   async [JobTypes.RUN_ONCE](run){ return { echo: run.payload || {} }; }
