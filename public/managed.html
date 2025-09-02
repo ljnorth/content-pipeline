@@ -54,6 +54,16 @@
     <tbody id="rows"></tbody>
   </table>
 
+  <section class="section" style="margin-top:12px">
+    <h3>Anchor Preview</h3>
+    <div class="muted" style="margin-bottom:8px">Preview nearest images around the current anchor.</div>
+    <div class="row">
+      <input id="previewUser" placeholder="@managed_username"/>
+      <button id="previewAnchorBtn" class="btn btn-outline">Preview</button>
+    </div>
+    <div id="previewGrid" class="grid" style="margin-top:12px; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap:8px"></div>
+  </section>
+
   <script type="module">
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     async function loadConfig(){ const r = await fetch('/api/public-config'); return await r.json(); }
@@ -144,6 +154,25 @@
         const top = (rows||[]).slice(0,3).map(r => r.source_username || r.username).filter(Boolean);
         if (top.length > 0) document.getElementById('inspoAccounts').value = top.join(',');
       }catch(_){ /* ignore */ }
+    };
+
+    // Preview anchor neighbors
+    document.getElementById('previewAnchorBtn').onclick = async () => {
+      const u = document.getElementById('previewUser').value.replace('@','').trim();
+      if (!u) return setStatus('Enter a managed username to preview.', 'err');
+      setStatus('Loading anchor preview…');
+      try{
+        const res = await fetch('/api/preview-anchors?username=' + encodeURIComponent(u) + '&k=24');
+        const json = await res.json();
+        const grid = document.getElementById('previewGrid');
+        grid.innerHTML = '';
+        (json.images||[]).forEach(img => {
+          const a = document.createElement('a'); a.href = img.image_path; a.target = '_blank';
+          a.innerHTML = '<img src="'+img.image_path+'" style="width:100%;height:100%;object-fit:cover;border-radius:6px"/>';
+          grid.appendChild(a);
+        });
+        setStatus(`Loaded ${json.images?.length||0} images for preview.`, 'ok');
+      }catch(e){ setStatus('Preview failed: '+e.message, 'err'); }
     };
       const btn = document.getElementById('genAll');
       setStatus('Triggering daily generation for all enabled accounts…');

@@ -11,6 +11,7 @@
     }
   ],
   "crons": [
-    
+    { "path": "/api/cron/anchors-refresh", "schedule": "0 9 * * *" },
+    { "path": "/api/cron/anchors-weekly", "schedule": "0 9 * * 0" }
   ]
 }
