@@ -71,6 +71,18 @@
     </div>
     <div id="previewGrid" class="grid" style="margin-top:12px; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap:8px"></div>
   </section>
+  <div id="inspoModal" class="modal-overlay">
+    <div class="modal">
+      <header><h3>Select Inspo Accounts</h3><button id="inspoClose" class="btn btn-outline">Close</button></header>
+      <div class="body">
+        <input id="modalSearch" type="text" placeholder="Search sources…" style="width:100%;margin-bottom:8px"/>
+        <div id="modalOptions" class="options"></div>
+      </div>
+      <div class="footer">
+        <button id="inspoSave" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
 
   <script type="module">
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -95,7 +107,8 @@
           '<td>'+
             '<button class="btn btn-outline" data-prev="'+a.username+'">Preview</button> '+
             '<button class="btn btn-outline gen" data-u="'+a.username+'">Generate</button> '+
-            '<button class="btn btn-outline edit" data-u="'+a.username+'">Edit</button>'+
+            '<button class="btn btn-outline edit" data-u="'+a.username+'">Edit</button> '+
+            '<button class="btn btn-outline inspo-edit" data-u="'+a.username+'">Inspo</button>'+
           '</td>';
         tbody.appendChild(tr);
       });
@@ -137,6 +150,11 @@
       // Inline edit handlers
       document.querySelectorAll('button.edit').forEach(btn => {
         btn.onclick = () => startEditRow(btn.closest('tr'));
+      });
+
+      // Open inspo modal for a specific account
+      document.querySelectorAll('button.inspo-edit').forEach(btn => {
+        btn.onclick = () => openInspoModal(btn.dataset.u);
       });
     }
 
@@ -308,6 +326,49 @@
     function addInspoChip(u){ if (!u) return; const clean=u.replace('@',''); if (selected.has(clean)) return; selected.add(clean); const chip = document.createElement('span'); chip.className='chip'; chip.dataset.u = clean; chip.innerHTML = '@'+clean+' <span class="x">×</span>'; chip.querySelector('.x').onclick = ()=> removeInspoChip(clean); chips.appendChild(chip); }
     function removeInspoChip(u){ const clean=u.replace('@',''); selected.delete(clean); chips.querySelectorAll('.chip').forEach(c => { if (c.dataset.u===clean) c.remove(); }); renderOptions(search.value||''); }
     function getSelectedInspo(){ return Array.from(selected); }
+
+    // Modal logic for per-account inspo editing
+    const inspoModal = document.getElementById('inspoModal');
+    const modalSearch = document.getElementById('modalSearch');
+    const modalOptions = document.getElementById('modalOptions');
+    document.getElementById('inspoClose').onclick = ()=> inspoModal.classList.remove('open');
+    let modalSelected = new Set();
+    let modalAccount = null;
+    async function openInspoModal(username){
+      modalAccount = username;
+      modalSelected = new Set();
+      // Load current profile to seed selection
+      try{
+        const res = await fetch('/api/accounts');
+        const arr = await res.json();
+        const p = (arr||[]).find(x=>x.username===username);
+        if (p && Array.isArray(p.content_strategy?.inspoAccounts)) p.content_strategy.inspoAccounts.forEach(u=> modalSelected.add(u));
+      }catch(_){ }
+      if (allSources.length === 0){ try{ const r = await fetch('/api/sources?active=true'); allSources = await r.json(); }catch(_){ allSources=[]; } }
+      renderModalOptions('');
+      modalSearch.value = '';
+      modalSearch.oninput = ()=> renderModalOptions(modalSearch.value||'');
+      inspoModal.classList.add('open');
+    }
+    function renderModalOptions(q){
+      const ql = (q||'').toLowerCase();
+      modalOptions.innerHTML = '';
+      allSources
+        .filter(s => !ql || s.username.toLowerCase().includes(ql))
+        .slice(0,500)
+        .forEach(s => {
+          const lbl = document.createElement('label');
+          lbl.innerHTML = '<input type="checkbox" '+(modalSelected.has(s.username)?'checked':'')+' data-u="'+s.username+'"/> @'+s.username;
+          lbl.querySelector('input').onchange = (ev)=>{ if (ev.target.checked){ modalSelected.add(s.username); } else { modalSelected.delete(s.username);} };
+          modalOptions.appendChild(lbl);
+        });
+    }
+    document.getElementById('inspoSave').onclick = async () => {
+      if (!modalAccount) return inspoModal.classList.remove('open');
+      const payload = { username: modalAccount, inspoAccounts: Array.from(modalSelected) };
+      try{ await fetch('/api/accounts', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) }); await loadProfiles(); }catch(_){ }
+      inspoModal.classList.remove('open');
+    };
   </script>
   <footer class="center" style="gap:12px;margin:24px 0">
     <a href="/privacy.html">Privacy</a>
