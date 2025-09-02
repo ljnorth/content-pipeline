@@ -33,8 +33,16 @@
     <input id="audience" placeholder="Audience (plain text)"/>
     <input id="ownerSlackId" placeholder="Owner Slack ID (U...)"/>
     <input id="ownerDisplayName" placeholder="Owner display name"/>
-    <input id="inspoAccounts" placeholder="Inspo accounts (comma-separated)"/>
+    <div class="dropdown">
+      <input id="inspoInput" placeholder="Add inspo account… (type to search)"/>
+      <div id="inspoPanel" class="dropdown-panel hidden">
+        <input id="inspoSearch" type="text" placeholder="Search sources…"/>
+        <div id="inspoOptions" class="options"></div>
+        <div class="muted" style="margin-top:6px">Tip: check to select, click outside to close</div>
+      </div>
+    </div>
     <button id="suggestInspo" class="btn btn-outline">Suggest</button>
+    <div id="inspoChips" class="chips"></div>
     <select id="preferredGender">
       <option value="any" selected>Preferred: Any</option>
       <option value="men">Preferred: Men</option>
@@ -76,11 +84,13 @@
       data.forEach(a => {
         const tr = document.createElement('tr');
         const cs = a.content_strategy || {};
+        const inspoList = (cs.inspoAccounts||[]).join(', ');
         tr.innerHTML = '<td class="col-username">@'+a.username+'</td>'+
           '<td>'+(a.owner_display_name||'')+(a.owner_slack_id? ' ('+a.owner_slack_id+')':'' )+'</td>'+
           '<td>'+(cs.goal||'')+'</td>'+
           '<td>'+(cs.audience||'')+'</td>'+
           '<td>'+(cs.preferredGender||'any')+'</td>'+
+          '<td class="muted">'+(inspoList||'-')+'</td>'+
           '<td><input type="checkbox" '+(cs.autogenEnabled?'checked':'')+' data-u="'+a.username+'" class="toggle"/></td>'+
           '<td>'+
             '<button class="btn btn-outline" data-prev="'+a.username+'">Preview</button> '+
@@ -137,7 +147,7 @@
         audience: document.getElementById('audience').value,
         ownerSlackId: document.getElementById('ownerSlackId').value,
         ownerDisplayName: document.getElementById('ownerDisplayName').value,
-        inspoAccounts: document.getElementById('inspoAccounts').value,
+        inspoAccounts: getSelectedInspo(),
         autogenEnabled: document.getElementById('autogenEnabled').checked,
         preferredGender: document.getElementById('preferredGender').value
       };
@@ -152,7 +162,7 @@
         const res = await fetch('/api/analytics/source-usage');
         const rows = await res.json();
         const top = (rows||[]).slice(0,3).map(r => r.source_username || r.username).filter(Boolean);
-        if (top.length > 0) document.getElementById('inspoAccounts').value = top.join(',');
+        top.forEach(addInspoChip);
       }catch(_){ /* ignore */ }
     };
 
@@ -263,6 +273,41 @@
     function escapeHtml(s){
       return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
+
+    // Multiselect logic for inspo accounts
+    const panel = document.getElementById('inspoPanel');
+    const input = document.getElementById('inspoInput');
+    const search = document.getElementById('inspoSearch');
+    const options = document.getElementById('inspoOptions');
+    const chips = document.getElementById('inspoChips');
+    let allSources = [];
+    let selected = new Set();
+
+    input.addEventListener('focus', async () => {
+      panel.classList.remove('hidden');
+      if (allSources.length === 0){
+        try{ const r = await fetch('/api/sources?active=true'); allSources = await r.json(); renderOptions(''); }catch(_){ allSources=[]; }
+      } else { renderOptions(search.value||''); }
+    });
+    document.addEventListener('click', (e)=>{ if (!panel.contains(e.target) && e.target!==input){ panel.classList.add('hidden'); }});
+    search.addEventListener('input', ()=> renderOptions(search.value||''));
+
+    function renderOptions(q){
+      const ql = (q||'').toLowerCase();
+      options.innerHTML = '';
+      allSources
+        .filter(s => !ql || s.username.toLowerCase().includes(ql))
+        .slice(0,200)
+        .forEach(s => {
+          const lbl = document.createElement('label');
+          lbl.innerHTML = '<input type="checkbox" '+(selected.has(s.username)?'checked':'')+' data-u="'+s.username+'"/> @'+s.username;
+          lbl.querySelector('input').onchange = (ev)=>{ if (ev.target.checked){ selected.add(s.username); addInspoChip(s.username); } else { selected.delete(s.username); removeInspoChip(s.username);} };
+          options.appendChild(lbl);
+        });
+    }
+    function addInspoChip(u){ if (!u) return; const clean=u.replace('@',''); if (selected.has(clean)) return; selected.add(clean); const chip = document.createElement('span'); chip.className='chip'; chip.dataset.u = clean; chip.innerHTML = '@'+clean+' <span class="x">×</span>'; chip.querySelector('.x').onclick = ()=> removeInspoChip(clean); chips.appendChild(chip); }
+    function removeInspoChip(u){ const clean=u.replace('@',''); selected.delete(clean); chips.querySelectorAll('.chip').forEach(c => { if (c.dataset.u===clean) c.remove(); }); renderOptions(search.value||''); }
+    function getSelectedInspo(){ return Array.from(selected); }
   </script>
   <footer class="center" style="gap:12px;margin:24px 0">
     <a href="/privacy.html">Privacy</a>

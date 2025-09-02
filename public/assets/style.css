@@ -101,4 +101,14 @@ tbody tr:hover{background:#FAFAFA}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .fade-up{animation:fadeUp .25s ease}
 
+/* Multiselect (inspo) */
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;background:#EEF2FF;color:#4338CA;border:1px solid #E5E7EB;border-radius:9999px;padding:6px 10px;font-weight:600}
+.chip .x{cursor:pointer;font-weight:800}
+.dropdown{position:relative}
+.dropdown-panel{position:absolute;z-index:30;top:42px;left:0;min-width:340px;background:#fff;border:1px solid #E5E7EB;border-radius:10px;box-shadow:var(--shadow);padding:10px;max-height:320px;overflow:auto}
+.dropdown-panel input[type="text"]{width:100%;margin-bottom:8px}
+.options{display:flex;flex-direction:column;gap:6px}
+.options label{display:flex;align-items:center;gap:8px}
+
 
