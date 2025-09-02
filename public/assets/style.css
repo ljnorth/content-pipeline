@@ -85,6 +85,8 @@ table{border-collapse:collapse;width:100%}
 th,td{border-bottom:1px solid #eee;padding:10px;text-align:left}
 thead th{background:#FAFAFA;position:sticky;top:0}
 tbody tr:hover{background:#FAFAFA}
+.table-center td:nth-last-child(2), .table-center th:nth-last-child(2),
+.table-center td:last-child, .table-center th:last-child { text-align:center }
 
 /* Hero */
 .hero{display:flex;justify-content:space-between;gap:24px;align-items:center;margin:12px 0 16px}
