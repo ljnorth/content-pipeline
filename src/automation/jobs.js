@@ -77,12 +77,11 @@ export const JobHandlers = {
     const posts = await acquirer.process(accounts);
     const storeRes = await storage.process(posts);
 
-    // Light-touch embeddings for newly added images
+    // Enqueue embeddings job to process remaining/missing vectors asynchronously
     try {
-      const { ImageEmbeddings } = await import('../stages/image-embeddings.js');
-      const emb = new ImageEmbeddings();
-      // Small batch to avoid long-running job here
-      await emb.embedMissing(200);
+      const { DbQueue } = await import('./queue-db.js');
+      const q = new DbQueue();
+      await q.enqueue(JobTypes.EMBED_IMAGES, { batch: 200 });
     } catch(_){ /* best-effort, continue */ }
 
     return { accounts: accounts.length, scrapedPosts: posts.length, stored: storeRes.successCount, errors: storeRes.errorCount };
@@ -115,11 +114,11 @@ export const JobHandlers = {
     const posts = await acquirer.process(accounts);
     const storeRes = await storage.process(posts);
 
-    // Light-touch embeddings after weekly ingest
+    // Enqueue embeddings job after weekly ingest
     try {
-      const { ImageEmbeddings } = await import('../stages/image-embeddings.js');
-      const emb = new ImageEmbeddings();
-      await emb.embedMissing(200);
+      const { DbQueue } = await import('./queue-db.js');
+      const q = new DbQueue();
+      await q.enqueue(JobTypes.EMBED_IMAGES, { batch: 200 });
     } catch(_){ /* best-effort */ }
 
     return { accounts: accounts.length, scrapedPosts: posts.length, stored: storeRes.successCount, errors: storeRes.errorCount };
