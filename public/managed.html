@@ -64,7 +64,7 @@
 
   <section class="section" style="margin-top:12px">
     <h3>Anchor Preview</h3>
-    <div class="muted" style="margin-bottom:8px">Preview nearest images around the current anchor.</div>
+    <div class="muted" style="margin-bottom:8px">Preview nearest images around the current anchor. Distances shown are cosine distance to the anchor (smaller is closer).</div>
     <div class="row">
       <select id="previewUserSelect" style="min-width:240px"></select>
       <button id="previewAnchorBtn" class="btn btn-outline">Preview</button>
@@ -197,16 +197,18 @@
       if (!u) return setStatus('Enter a managed username to preview.', 'err');
       setStatus('Generating preview…');
       try{
-        const res = await fetch('/api/generate-daily?username=' + encodeURIComponent(u) + '&preview=1');
+        // Pull anchor neighbors directly to show distances
+        const res = await fetch('/api/preview-anchors?username=' + encodeURIComponent(u) + '&k=10');
         const json = await res.json();
         const grid = document.getElementById('previewGrid');
         grid.innerHTML = '';
-        const posts = (json.results?.[0]?.postsData) || [];
-        const imgs = posts.flatMap(p => p.images || []).slice(0, 10);
+        const imgs = (json.images||[]);
         imgs.forEach(img => {
-          const a = document.createElement('a'); const src = img.imagePath || img.image_path; a.href = src; a.target = '_blank';
+          const wrap = document.createElement('div'); wrap.className = 'thumb-wrap';
+          const a = document.createElement('a'); const src = img.image_path; a.href = src; a.target = '_blank';
           a.innerHTML = '<img class="thumb" src="'+src+'"/>';
-          grid.appendChild(a);
+          const badge = document.createElement('div'); badge.className = 'dist-badge'; badge.textContent = (typeof img.dist === 'number' ? img.dist.toFixed(3) : '-');
+          wrap.appendChild(a); wrap.appendChild(badge); grid.appendChild(wrap);
         });
         setStatus(`Loaded ${imgs.length} images for preview.`, 'ok');
       }catch(e){ setStatus('Preview failed: '+e.message, 'err'); }
