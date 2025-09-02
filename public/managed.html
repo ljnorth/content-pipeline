@@ -66,7 +66,7 @@
     <h3>Anchor Preview</h3>
     <div class="muted" style="margin-bottom:8px">Preview nearest images around the current anchor.</div>
     <div class="row">
-      <input id="previewUser" placeholder="@managed_username"/>
+      <select id="previewUserSelect" style="min-width:240px"></select>
       <button id="previewAnchorBtn" class="btn btn-outline">Preview</button>
     </div>
     <div id="previewGrid" class="grid" style="margin-top:12px; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap:8px"></div>
@@ -93,6 +93,8 @@
       const data = await res.json();
       const tbody = document.getElementById('rows');
       tbody.innerHTML = '';
+      const previewSel = document.getElementById('previewUserSelect');
+      previewSel.innerHTML = '';
       data.forEach(a => {
         const tr = document.createElement('tr');
         const cs = a.content_strategy || {};
@@ -111,6 +113,10 @@
             '<button class="icon-btn inspo-edit" title="Inspo" data-u="'+a.username+'">✨</button>'+
           '</td>';
         tbody.appendChild(tr);
+        // Add to preview dropdown
+        const opt = document.createElement('option');
+        opt.value = a.username; opt.textContent = '@'+a.username;
+        previewSel.appendChild(opt);
       });
 
       document.querySelectorAll('.toggle').forEach(el => {
@@ -186,7 +192,8 @@
 
     // Preview anchor/generation images for a managed account
     document.getElementById('previewAnchorBtn').onclick = async () => {
-      const u = document.getElementById('previewUser').value.replace('@','').trim();
+      const sel = document.getElementById('previewUserSelect');
+      const u = (sel.value||'').replace('@','').trim();
       if (!u) return setStatus('Enter a managed username to preview.', 'err');
       setStatus('Generating preview…');
       try{
