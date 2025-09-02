@@ -33,6 +33,7 @@
     <input id="audience" placeholder="Audience (plain text)"/>
     <input id="ownerSlackId" placeholder="Owner Slack ID (U...)"/>
     <input id="ownerDisplayName" placeholder="Owner display name"/>
+    <input id="inspoAccounts" placeholder="Inspo accounts (comma-separated)"/>
     <select id="preferredGender">
       <option value="any" selected>Preferred: Any</option>
       <option value="men">Preferred: Men</option>
@@ -125,6 +126,7 @@
         audience: document.getElementById('audience').value,
         ownerSlackId: document.getElementById('ownerSlackId').value,
         ownerDisplayName: document.getElementById('ownerDisplayName').value,
+        inspoAccounts: document.getElementById('inspoAccounts').value,
         autogenEnabled: document.getElementById('autogenEnabled').checked,
         preferredGender: document.getElementById('preferredGender').value
       };
@@ -192,7 +194,8 @@
         + '<option value="women"'+(preferredGender==='women'?' selected':'')+'>women</option>'
         + '</select>';
       autoCell.innerHTML = '<label><input type="checkbox" class="inline autogen" '+(autogenEnabled?'checked':'')+'/> Auto</label>';
-      actionsCell.innerHTML = '<button class="btn btn-primary save">Save</button> '
+      actionsCell.innerHTML = '<input class="inline inspo" placeholder="Inspo accounts (comma-separated)" style="width: 95%; margin-bottom:6px" /> '
+        + '<button class="btn btn-primary save">Save</button> '
         + '<button class="btn btn-outline cancel">Cancel</button>';
 
       actionsCell.querySelector('.save').onclick = async () => {
@@ -202,6 +205,7 @@
           audience: tr.querySelector('.audience').value,
           ownerSlackId: tr.querySelector('.ownerSlack').value,
           ownerDisplayName: tr.querySelector('.ownerName').value,
+          inspoAccounts: tr.querySelector('.inspo').value,
           autogenEnabled: tr.querySelector('.autogen').checked,
           preferredGender: tr.querySelector('.prefGender').value
         };

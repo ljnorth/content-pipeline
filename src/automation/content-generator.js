@@ -113,13 +113,22 @@ export class ContentGenerator {
     this.logger.info(`🎯 Starting single post generation for ${account.username}, post ${postNumber}`);
     
     try {
-      // Get curated images based on account strategy
-      this.logger.info(`🔍 Getting curated images for ${account.username}...`);
-      const images = await this.getCuratedImages(account.username, strategy, 5, { selectionMode: 'rerollish' });
+      // Prefer anchor-driven selection if inspo accounts configured
+      const inspo = Array.isArray(strategy?.content_strategy?.inspoAccounts) ? strategy.content_strategy.inspoAccounts : [];
+      const imagesPerPost = Number(strategy?.content_strategy?.selection?.imagesPerPost || 6);
+      let images = [];
+      if (inspo.length > 0) {
+        this.logger.info(`🎯 Using inspo anchors for ${account.username} (post ${postNumber})`);
+        const picks = await this.selectWithAnchors(account.username, strategy, imagesPerPost, postNumber);
+        images = picks;
+      } else {
+        this.logger.info(`🔍 Getting curated images for ${account.username} (fallback)...`);
+        images = await this.getCuratedImages(account.username, strategy, imagesPerPost, { selectionMode: 'rerollish' });
+      }
       
       this.logger.info(`📊 Retrieved ${images.length} curated images`);
       
-      if (images.length < 5) {
+      if (images.length < imagesPerPost) {
         const errorMsg = `Not enough suitable images found for ${account.username}. Found ${images.length}, need 5. This indicates either:
 1. Not enough content has been scraped and analyzed for this account's strategy
 2. The content strategy filters (aesthetic: ${strategy.content_strategy?.aestheticFocus?.join(', ') || 'none'}, colors: ${strategy.content_strategy?.colorPalette?.join(', ') || 'none'}) are too restrictive
@@ -296,6 +305,85 @@ Please run the content pipeline to scrape more content or adjust the account's c
       this.logger.error(`❌ Stack trace: ${error.stack}`);
       throw error;
     }
+  }
+
+  /**
+   * Anchor-driven selection using inspo accounts' recent winners
+   */
+  async selectWithAnchors(username, strategy, count = 6, postNumber = 1){
+    const db = this.db.client;
+    const inspo = (strategy?.content_strategy?.inspoAccounts||[]).map(s=>String(s).replace('@',''));
+    const windowDays = Number(strategy?.content_strategy?.anchorSettings?.windowDays || 90);
+    const upDays = Number(strategy?.content_strategy?.anchorSettings?.upweightRecentDays || 14);
+    const minDist = Number(strategy?.content_strategy?.selection?.minIntraPostDistance || 0.18);
+
+    const since = new Date(Date.now() - windowDays*24*3600*1000).toISOString();
+    const recentSince = new Date(Date.now() - upDays*24*3600*1000).toISOString();
+
+    // 1) Pull top posts for inspo accounts
+    let { data: posts } = await db
+      .from('posts')
+      .select('post_id, username, engagement_rate, like_count, view_count, created_at')
+      .in('username', inspo)
+      .gte('created_at', since)
+      .order('engagement_rate', { ascending: false })
+      .limit(300);
+    posts = posts || [];
+    if (posts.length === 0) return [];
+
+    // 2) Pull images for those posts with embeddings, exclude known covers
+    const ids = [...new Set(posts.map(p=>p.post_id))];
+    const { data: imgs } = await db
+      .from('images')
+      .select('id, post_id, username, image_path, embedding, is_cover_slide, cover_slide_text, aesthetic, colors, season')
+      .in('post_id', ids)
+      .not('embedding', 'is', null)
+      .is('is_cover_slide', false)
+      .is('cover_slide_text', null)
+      .limit(2000);
+    const images = (imgs||[]).filter(r => Array.isArray(r.embedding));
+    if (images.length === 0) return [];
+
+    // 3) Compute weights (recent winners higher)
+    const postById = Object.fromEntries(posts.map(p=>[p.post_id, p]));
+    function weightFor(img){
+      const p = postById[img.post_id];
+      if (!p) return 1;
+      const wRecency = p.created_at >= recentSince ? 2.0 : 1.0;
+      const perf = Number(p.engagement_rate||0);
+      const wPerf = 1.0 + Math.max(0, Math.min(perf, 0.1)) * 4; // gentle boost up to ~1.4
+      return wRecency * wPerf;
+    }
+
+    // 4) Pick an anchor for this post: weighted mean of embeddings
+    function meanVec(rows){
+      if (rows.length === 0) return null;
+      const dim = rows[0].embedding.length;
+      const acc = new Array(dim).fill(0);
+      let tot = 0;
+      for (const r of rows){ const w = weightFor(r); tot += w; for (let i=0;i<dim;i++) acc[i]+= r.embedding[i]*w; }
+      if (tot === 0) return null;
+      for (let i=0;i<acc.length;i++) acc[i] /= tot;
+      // L2 normalize
+      let norm = Math.sqrt(acc.reduce((s,v)=>s+v*v,0)) || 1;
+      for (let i=0;i<acc.length;i++) acc[i] /= norm;
+      return acc;
+    }
+
+    const anchor = meanVec(images);
+    if (!anchor) return [];
+
+    // 5) Retrieve candidates nearest to anchor via client-side rank (fallback to SQL later)
+    function cosine(a,b){ let s=0; for (let i=0;i<a.length;i++) s+= a[i]*b[i]; return 1 - s; }
+    const ranked = images
+      .map(r => ({ ...r, dist: cosine(anchor, r.embedding) }))
+      .sort((a,b)=> a.dist - b.dist);
+
+    // 6) Pick with spacing and guardrails
+    const used = [];
+    function tooClose(e){ return used.some(u => cosine(u.embedding, e.embedding) < minDist); }
+    for (const r of ranked){ if (used.length >= count) break; if (!tooClose(r)) used.push(r); }
+    return used.slice(0, count);
   }
 
   /**
