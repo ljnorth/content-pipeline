@@ -105,10 +105,10 @@
           '<td class="muted">'+(inspoList||'-')+'</td>'+
           '<td><input type="checkbox" '+(cs.autogenEnabled?'checked':'')+' data-u="'+a.username+'" class="toggle"/></td>'+
           '<td>'+
-            '<button class="btn btn-outline" data-prev="'+a.username+'">Preview</button> '+
-            '<button class="btn btn-outline gen" data-u="'+a.username+'">Generate</button> '+
-            '<button class="btn btn-outline edit" data-u="'+a.username+'">Edit</button> '+
-            '<button class="btn btn-outline inspo-edit" data-u="'+a.username+'">Inspo</button>'+
+            '<button class="icon-btn preview-btn" title="Preview" data-prev="'+a.username+'">👁</button> '+
+            '<button class="icon-btn gen" title="Generate" data-u="'+a.username+'">⚡</button> '+
+            '<button class="icon-btn edit" title="Edit" data-u="'+a.username+'">✏️</button> '+
+            '<button class="icon-btn inspo-edit" title="Inspo" data-u="'+a.username+'">✨</button>'+
           '</td>';
         tbody.appendChild(tr);
       });
@@ -119,8 +119,8 @@
         };
       });
 
-      document.querySelectorAll('button.btn').forEach(btn => {
-        if (btn.dataset.prev) btn.onclick = () => window.open('/preview/' + btn.dataset.prev, '_blank');
+      document.querySelectorAll('button.preview-btn').forEach(btn => {
+        btn.onclick = () => window.open('/preview/' + btn.dataset.prev, '_blank');
       });
       document.querySelectorAll('button.gen').forEach(btn => {
         btn.onclick = async () => {
