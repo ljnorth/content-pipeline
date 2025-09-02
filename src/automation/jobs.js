@@ -12,6 +12,8 @@ export const JobTypes = {
   WEEKLY_INGEST: 'weekly_ingest',
   WASH_IMAGES: 'wash_images',
   EMBED_IMAGES: 'embed_images',
+  ANCHORS_REFRESH_DAILY: 'anchors_refresh_daily',
+  ANCHORS_RECALIBRATE_WEEKLY: 'anchors_recalibrate_weekly',
   DISCOVER_OWNED_POSTS: 'discover_owned_posts',
   FETCH_POST_METRICS: 'fetch_post_metrics',
   RUN_ONCE: 'run_once'
@@ -46,6 +48,37 @@ export const JobHandlers = {
       }
     }
     return { accounts: enabled.length };
+  },
+
+  async [JobTypes.ANCHORS_REFRESH_DAILY](run){
+    const { SupabaseClient } = await import('../database/supabase-client.js');
+    const db = new SupabaseClient();
+    const { data: accounts } = await db.client
+      .from('account_profiles')
+      .select('username, content_strategy')
+      .eq('is_active', true);
+    let refreshed = 0;
+    for (const acc of (accounts||[])){
+      const inspo = acc?.content_strategy?.inspoAccounts || [];
+      if (!Array.isArray(inspo) || inspo.length === 0) continue;
+      // Light-touch warmup: run a small anchor sample by calling generator's helper
+      try{
+        const mod = await import('./content-generator.js');
+        const gen = new mod.ContentGenerator();
+        // Warm compute to cache or validate data paths; ignore output
+        await gen.selectWithAnchors(acc.username, acc, 1, 1);
+        refreshed++;
+      }catch(_){ /* continue */ }
+    }
+    return { refreshed };
+  },
+
+  async [JobTypes.ANCHORS_RECALIBRATE_WEEKLY](run){
+    // Placeholder: heavier clustering could be added here later
+    const { SupabaseClient } = await import('../database/supabase-client.js');
+    const db = new SupabaseClient();
+    const { count } = await db.client.from('account_profiles').select('*', { count:'exact', head:true }).eq('is_active', true);
+    return { accounts: count || 0, message: 'weekly recalibration placeholder' };
   },
 
   async [JobTypes.DAILY_INGEST](run){

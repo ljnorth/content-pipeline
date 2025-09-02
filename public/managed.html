@@ -34,6 +34,7 @@
     <input id="ownerSlackId" placeholder="Owner Slack ID (U...)"/>
     <input id="ownerDisplayName" placeholder="Owner display name"/>
     <input id="inspoAccounts" placeholder="Inspo accounts (comma-separated)"/>
+    <button id="suggestInspo" class="btn btn-outline">Suggest</button>
     <select id="preferredGender">
       <option value="any" selected>Preferred: Any</option>
       <option value="men">Preferred: Men</option>
@@ -135,6 +136,15 @@
     };
 
     document.getElementById('genAll').onclick = async () => {
+    // Suggest inspo accounts by most-used sources
+    document.getElementById('suggestInspo').onclick = async () => {
+      try{
+        const res = await fetch('/api/analytics/source-usage');
+        const rows = await res.json();
+        const top = (rows||[]).slice(0,3).map(r => r.source_username || r.username).filter(Boolean);
+        if (top.length > 0) document.getElementById('inspoAccounts').value = top.join(',');
+      }catch(_){ /* ignore */ }
+    };
       const btn = document.getElementById('genAll');
       setStatus('Triggering daily generation for all enabled accounts…');
       btn.disabled = true;
