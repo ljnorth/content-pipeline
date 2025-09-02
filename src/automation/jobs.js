@@ -76,6 +76,15 @@ export const JobHandlers = {
     const storage = new DatabaseStorage();
     const posts = await acquirer.process(accounts);
     const storeRes = await storage.process(posts);
+
+    // Light-touch embeddings for newly added images
+    try {
+      const { ImageEmbeddings } = await import('../stages/image-embeddings.js');
+      const emb = new ImageEmbeddings();
+      // Small batch to avoid long-running job here
+      await emb.embedMissing(200);
+    } catch(_){ /* best-effort, continue */ }
+
     return { accounts: accounts.length, scrapedPosts: posts.length, stored: storeRes.successCount, errors: storeRes.errorCount };
   },
 
@@ -105,6 +114,14 @@ export const JobHandlers = {
     const storage = new DatabaseStorage();
     const posts = await acquirer.process(accounts);
     const storeRes = await storage.process(posts);
+
+    // Light-touch embeddings after weekly ingest
+    try {
+      const { ImageEmbeddings } = await import('../stages/image-embeddings.js');
+      const emb = new ImageEmbeddings();
+      await emb.embedMissing(200);
+    } catch(_){ /* best-effort */ }
+
     return { accounts: accounts.length, scrapedPosts: posts.length, stored: storeRes.successCount, errors: storeRes.errorCount };
   },
 
@@ -255,10 +272,31 @@ export const JobHandlers = {
 
   async [JobTypes.EMBED_IMAGES](run){
     const { ImageEmbeddings } = await import('../stages/image-embeddings.js');
+    const { SupabaseClient } = await import('../database/supabase-client.js');
+    const { DbQueue } = await import('./queue-db.js');
     const batch = parseInt((run.payload && run.payload.batch) || '200', 10);
     const emb = new ImageEmbeddings();
     const res = await emb.embedMissing(batch);
-    return res;
+
+    // Auto-enqueue follow-up if there are still missing embeddings
+    const db = new SupabaseClient();
+    const { count } = await db.client
+      .from('images')
+      .select('*', { count: 'exact', head: true })
+      .is('embedding', null);
+    if ((count || 0) > 0){
+      const { count: queuedCount } = await db.client
+        .from('job_runs')
+        .select('*', { count: 'exact', head: true })
+        .eq('job_type', JobTypes.EMBED_IMAGES)
+        .eq('status', 'queued');
+      if ((queuedCount || 0) === 0){
+        const q = new DbQueue();
+        await q.enqueue(JobTypes.EMBED_IMAGES, { batch, idempotency_key: `embed_images:${Date.now()}`, force: true }, {});
+      }
+    }
+
+    return { ...res, remaining: count || 0 };
   },
 
   async [JobTypes.RUN_ONCE](run){ return { echo: run.payload || {} }; }
