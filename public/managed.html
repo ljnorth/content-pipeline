@@ -188,18 +188,20 @@
     document.getElementById('previewAnchorBtn').onclick = async () => {
       const u = document.getElementById('previewUser').value.replace('@','').trim();
       if (!u) return setStatus('Enter a managed username to preview.', 'err');
-      setStatus('Loading anchor preview…');
+      setStatus('Generating preview…');
       try{
-        const res = await fetch('/api/preview-anchors?username=' + encodeURIComponent(u) + '&k=24');
+        const res = await fetch('/api/generate-daily?username=' + encodeURIComponent(u) + '&preview=1');
         const json = await res.json();
         const grid = document.getElementById('previewGrid');
         grid.innerHTML = '';
-        (json.images||[]).forEach(img => {
-          const a = document.createElement('a'); a.href = img.image_path; a.target = '_blank';
-          a.innerHTML = '<img src="'+img.image_path+'" style="width:100%;height:100%;object-fit:cover;border-radius:6px"/>';
+        const posts = (json.results?.[0]?.postsData) || [];
+        const imgs = posts.flatMap(p => p.images || []).slice(0, 24);
+        imgs.forEach(img => {
+          const a = document.createElement('a'); const src = img.imagePath || img.image_path; a.href = src; a.target = '_blank';
+          a.innerHTML = '<img src="'+src+'" style="width:100%;height:100%;object-fit:cover;border-radius:6px"/>';
           grid.appendChild(a);
         });
-        setStatus(`Loaded ${json.images?.length||0} images for preview.`, 'ok');
+        setStatus(`Loaded ${imgs.length} images for preview.`, 'ok');
       }catch(e){ setStatus('Preview failed: '+e.message, 'err'); }
     };
       const btn = document.getElementById('genAll');

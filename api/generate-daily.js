@@ -8,6 +8,8 @@ export default async function handler(req, res) {
     const slack = new EnhancedSlackAPI();
 
     const username = req.method === 'POST' ? req.body?.username : req.query?.username;
+    const previewFlag = req.method === 'POST' ? (req.body?.preview ?? req.query?.preview) : req.query?.preview;
+    const preview = String(previewFlag).toLowerCase() === '1' || String(previewFlag).toLowerCase() === 'true';
 
     let accounts = [];
     if (username) {
@@ -68,8 +70,12 @@ export default async function handler(req, res) {
           posts = await generator.generateContentForAccount(acc);
         }
 
+        // If preview mode, skip Slack and just return posts
+        if (preview) {
+          results.push({ account: acc.username, success: true, posts: posts.length, preview: true, postsData: posts });
+        }
         // If Slack is not configured, report this clearly
-        if (!slack.enabled) {
+        else if (!slack.enabled) {
           results.push({ account: acc.username, success: false, posts: posts.length, fallback: useFallback, error: 'Slack webhook not configured' });
         } else {
           const slackResult = await slack.sendAccountConsolidated({ account: acc.username, posts });
