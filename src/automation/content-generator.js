@@ -123,6 +123,11 @@ export class ContentGenerator {
         const result = await this.selectWithAnchors(account.username, strategy, imagesPerPost, postNumber);
         images = result.selected;
         anchorVector = result.anchor;
+        if (options?.preview === true) {
+          // Attach extra debug info for UI preview only
+          options.__anchorExamples = result.anchorExamples;
+          options.__anchorDebug = result.debug;
+        }
       } else {
         this.logger.info(`🔍 Getting curated images for ${account.username} (fallback)...`);
         images = await this.getCuratedImages(account.username, strategy, imagesPerPost, { selectionMode: 'rerollish' });
@@ -182,6 +187,8 @@ Please run the content pipeline to scrape more content or adjust the account's c
       };
       if (options?.preview === true && Array.isArray(anchorVector)) {
         post.anchor = anchorVector;
+        if (Array.isArray(options.__anchorExamples)) post.anchorExamples = options.__anchorExamples;
+        if (options.__anchorDebug) post.anchorDebug = options.__anchorDebug;
       }
 
       this.logger.info(`💾 Saving generated post to database...`);
@@ -337,7 +344,7 @@ Please run the content pipeline to scrape more content or adjust the account's c
     const { AnchorBuilder } = await import('./anchors.js');
     const ab = new AnchorBuilder();
     const { anchor, candidates } = await ab.buildAnchorsFromInspo(inspo, windowDays);
-    if (!anchor) return { selected: [], anchor: null };
+    if (!anchor) return { selected: [], anchor: null, anchorExamples: [], debug: { windowDays, candidateCount: 0 } };
     const nn = await ab.nearestBySql(anchor, 120, null);
     // Enforce spacing
     function cosine(a,b){ let s=0; for (let i=0;i<a.length;i++) s+= a[i]*b[i]; return s; }
@@ -351,7 +358,15 @@ Please run the content pipeline to scrape more content or adjust the account's c
       // Fallback: fill from candidates list with spacing
       for (const r of candidates){ if (used.length >= count) break; if (!used.some(u => distOf(u.embedding, r.embedding) < minDist)) used.push({ ...r, dist: distOf(anchor, r.embedding) }); }
     }
-    return { selected: used.slice(0, count), anchor };
+    // Build top-weighted examples that formed the anchor
+    const examples = (candidates||[])
+      .map(r => ({ id: r.id, image_path: r.image_path, username: r.username, dist: distOf(anchor, r.embedding), weight: ab.weightFor(r._post.created_at, r._post.engagement_rate) }))
+      .sort((a,b) => b.weight - a.weight)
+      .slice(0, 12);
+    // Debug stats for UI
+    const dists = used.map(u => u.dist).filter(x => typeof x === 'number' && isFinite(x));
+    const dbg = { windowDays, candidateCount: (candidates||[]).length, selectedCount: used.length, minDist: dists.length? Math.min(...dists): null, maxDist: dists.length? Math.max(...dists): null, avgDist: dists.length? dists.reduce((s,v)=>s+v,0)/dists.length: null };
+    return { selected: used.slice(0, count), anchor, anchorExamples: examples, debug: dbg };
   }
 
   /**
