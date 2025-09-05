@@ -346,6 +346,7 @@ Please run the content pipeline to scrape more content or adjust the account's c
     const { anchor, candidates } = await ab.buildAnchorsFromInspo(inspo, windowDays);
     if (!anchor) return { selected: [], anchor: null, anchorExamples: [], debug: { windowDays, candidateCount: 0 } };
     // Optional gender filter
+    const preferredGender = (strategy?.content_strategy?.preferredGender || 'any').toLowerCase();
     let usernamesFilter = null;
     if (preferredGender === 'men' || preferredGender === 'women') {
       try {

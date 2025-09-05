@@ -26,12 +26,9 @@ export default async function handler(req, res) {
     const results = [];
 
     const useFallback = !process.env.OPENAI_API_KEY;
-    let generator = null;
-    if (!useFallback) {
-      const mod = await import('../src/automation/content-generator.js');
-      const { ContentGenerator } = mod;
-      generator = new ContentGenerator();
-    }
+    const mod = await import('../src/automation/content-generator.js');
+    const { ContentGenerator } = mod;
+    const generator = new ContentGenerator();
     const supabaseLite = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
     // Helper: simple random images selector
@@ -55,27 +52,17 @@ export default async function handler(req, res) {
     for (const acc of accounts) {
       try {
         let posts;
-        if (useFallback) {
-          // Generate 3 simple posts with 10 images each
-          posts = [];
-          for (let i = 1; i <= 3; i++) {
-            const images = await pickRandomImages(10);
-            posts.push({
-              postNumber: i,
-              caption: `Daily content for @${acc.username}`,
-              images
-            });
-          }
-        } else {
-          posts = await generator.generateContentForAccount(acc, { preview });
-        }
+        // Always use curated/anchor selection; if OpenAI is missing, run in preview mode to skip captions
+        const effectivePreview = preview || useFallback;
+        posts = await generator.generateContentForAccount(acc, { preview: effectivePreview });
 
         // If preview mode, skip Slack and just return posts
         if (preview) {
           results.push({ account: acc.username, success: true, posts: posts.length, preview: true, postsData: posts });
-        }
-        // If Slack is not configured, report this clearly
-        else if (!slack.enabled) {
+        } else if (useFallback) {
+          // No captions without OpenAI; return result instead of Slack so users can preview
+          results.push({ account: acc.username, success: true, posts: posts.length, fallback: true, postsData: posts });
+        } else if (!slack.enabled) {
           results.push({ account: acc.username, success: false, posts: posts.length, fallback: useFallback, error: 'Slack webhook not configured' });
         } else {
           const slackResult = await slack.sendAccountConsolidated({ account: acc.username, posts });
