@@ -6,7 +6,8 @@ export class ContentGenerator {
   constructor() {
     this.logger = new Logger();
     this.db = new SupabaseClient();
-    this.openai = new OpenAI();
+    const apiKey = process.env.OPENAI_API_KEY;
+    this.openai = apiKey ? new OpenAI({ apiKey }) : null;
     // Optional run context shared across accounts to enforce cross-account variety
     this.runContext = { usedImageIds: new Set() };
   }
@@ -153,9 +154,19 @@ export class ContentGenerator {
           hashtags: ''
         };
       } else {
-        this.logger.info(`🤖 Generating content with AI for ${images.length} images...`);
-        // Generate caption and hashtags
-        content = await this.generatePostContent(images, strategy, postNumber);
+        if (!this.openai) {
+          this.logger.warn(`⚠️ OPENAI_API_KEY missing; skipping caption generation in non-preview mode`);
+          content = {
+            theme: 'no-ai-key',
+            caption: '',
+            primaryAesthetic: images[0]?.aesthetic || '',
+            hashtags: ''
+          };
+        } else {
+          this.logger.info(`🤖 Generating content with AI for ${images.length} images...`);
+          // Generate caption and hashtags
+          content = await this.generatePostContent(images, strategy, postNumber);
+        }
       }
       
       this.logger.info(`✅ AI content generated successfully - Theme: ${content.theme}`);
