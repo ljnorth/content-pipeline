@@ -67,7 +67,7 @@ export default async function handler(req, res) {
             });
           }
         } else {
-          posts = await generator.generateContentForAccount(acc);
+          posts = await generator.generateContentForAccount(acc, { preview });
         }
 
         // If preview mode, skip Slack and just return posts

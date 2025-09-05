@@ -71,7 +71,7 @@ export class ContentGenerator {
     for (let i = 1; i <= 3; i++) {
       this.logger.info(`📝 Generating post ${i}/3 for ${account.username}`);
       try {
-        const post = await this.generateSinglePost(account, strategy, i);
+        const post = await this.generateSinglePost(account, strategy, i, options);
         // Track image usage per source (best-effort)
         try {
           const { SupabaseClient } = await import('../database/supabase-client.js');
@@ -109,7 +109,7 @@ export class ContentGenerator {
   /**
    * Generate a single post with 5 images
    */
-  async generateSinglePost(account, strategy, postNumber) {
+  async generateSinglePost(account, strategy, postNumber, options = {}) {
     this.logger.info(`🎯 Starting single post generation for ${account.username}, post ${postNumber}`);
     
     try {
@@ -117,10 +117,12 @@ export class ContentGenerator {
       const inspo = Array.isArray(strategy?.content_strategy?.inspoAccounts) ? strategy.content_strategy.inspoAccounts : [];
       const imagesPerPost = Number(strategy?.content_strategy?.selection?.imagesPerPost || 6);
       let images = [];
+      let anchorVector = null;
       if (inspo.length > 0) {
         this.logger.info(`🎯 Using inspo anchors for ${account.username} (post ${postNumber})`);
-        const picks = await this.selectWithAnchors(account.username, strategy, imagesPerPost, postNumber);
-        images = picks;
+        const result = await this.selectWithAnchors(account.username, strategy, imagesPerPost, postNumber);
+        images = result.selected;
+        anchorVector = result.anchor;
       } else {
         this.logger.info(`🔍 Getting curated images for ${account.username} (fallback)...`);
         images = await this.getCuratedImages(account.username, strategy, imagesPerPost, { selectionMode: 'rerollish' });
@@ -156,7 +158,8 @@ Please run the content pipeline to scrape more content or adjust the account's c
           imagePath: img.image_path,
           aesthetic: img.aesthetic,
           colors: img.colors,
-          season: img.season
+          season: img.season,
+          dist: (typeof img.dist === 'number') ? img.dist : undefined
         })),
         caption: content.caption,
         hashtags: content.hashtags,
@@ -167,11 +170,16 @@ Please run the content pipeline to scrape more content or adjust the account's c
         },
         generatedAt: new Date().toISOString()
       };
+      if (options?.preview === true && Array.isArray(anchorVector)) {
+        post.anchor = anchorVector;
+      }
 
       this.logger.info(`💾 Saving generated post to database...`);
       
-      // Save to database
-      await this.saveGeneratedPost(post);
+      // Save to database unless preview mode
+      if (!options?.preview) {
+        await this.saveGeneratedPost(post);
+      }
       
       this.logger.info(`✅ Post ${postNumber} generated: ${content.theme} (${images.length} images)`);
       return post;
@@ -319,17 +327,21 @@ Please run the content pipeline to scrape more content or adjust the account's c
     const { AnchorBuilder } = await import('./anchors.js');
     const ab = new AnchorBuilder();
     const { anchor, candidates } = await ab.buildAnchorsFromInspo(inspo, windowDays);
-    if (!anchor) return [];
+    if (!anchor) return { selected: [], anchor: null };
     const nn = await ab.nearestBySql(anchor, 120, null);
     // Enforce spacing
     function cosine(a,b){ let s=0; for (let i=0;i<a.length;i++) s+= a[i]*b[i]; return s; }
     const used = [];
-    for (const r of nn){ if (used.length >= count) break; if (!used.some(u => (1 - cosine(u.embedding, r.embedding)) < minDist)) used.push(r); }
+    function distOf(a,b){ return 1 - cosine(a,b); }
+    for (const r of nn){
+      if (used.length >= count) break;
+      if (!used.some(u => distOf(u.embedding, r.embedding) < minDist)) used.push({ ...r, dist: distOf(anchor, r.embedding) });
+    }
     if (used.length < count && candidates && candidates.length > 0){
       // Fallback: fill from candidates list with spacing
-      for (const r of candidates){ if (used.length >= count) break; if (!used.some(u => (1 - cosine(u.embedding, r.embedding)) < minDist)) used.push(r); }
+      for (const r of candidates){ if (used.length >= count) break; if (!used.some(u => distOf(u.embedding, r.embedding) < minDist)) used.push({ ...r, dist: distOf(anchor, r.embedding) }); }
     }
-    return used.slice(0, count);
+    return { selected: used.slice(0, count), anchor };
   }
 
   /**

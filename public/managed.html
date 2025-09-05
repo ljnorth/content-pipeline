@@ -197,20 +197,22 @@
       if (!u) return setStatus('Enter a managed username to preview.', 'err');
       setStatus('Generating preview…');
       try{
-        // Pull anchor neighbors directly to show distances
-        const res = await fetch('/api/preview-anchors?username=' + encodeURIComponent(u) + '&k=10');
+        // Call main generator in preview mode to get actual selected images with distances
+        const res = await fetch('/api/generate-daily?username=' + encodeURIComponent(u) + '&preview=1');
         const json = await res.json();
         const grid = document.getElementById('previewGrid');
         grid.innerHTML = '';
-        const imgs = (json.images||[]);
+        const post0 = (json.results?.[0]?.postsData?.[0]) || null;
+        const anchor = post0?.anchor || null;
+        const imgs = (post0?.images || []).slice(0,10);
         imgs.forEach(img => {
           const wrap = document.createElement('div'); wrap.className = 'thumb-wrap';
-          const a = document.createElement('a'); const src = img.image_path; a.href = src; a.target = '_blank';
+          const a = document.createElement('a'); const src = img.imagePath || img.image_path; a.href = src; a.target = '_blank';
           a.innerHTML = '<img class="thumb" src="'+src+'"/>';
           const badge = document.createElement('div'); badge.className = 'dist-badge'; badge.textContent = (typeof img.dist === 'number' ? img.dist.toFixed(3) : '-');
           wrap.appendChild(a); wrap.appendChild(badge); grid.appendChild(wrap);
         });
-        setStatus(`Loaded ${imgs.length} images for preview.`, 'ok');
+        setStatus(`Loaded ${imgs.length} images for preview.` + (anchor ? ' (anchor attached)' : ''), 'ok');
       }catch(e){ setStatus('Preview failed: '+e.message, 'err'); }
     };
 
