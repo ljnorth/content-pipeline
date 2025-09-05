@@ -345,7 +345,20 @@ Please run the content pipeline to scrape more content or adjust the account's c
     const ab = new AnchorBuilder();
     const { anchor, candidates } = await ab.buildAnchorsFromInspo(inspo, windowDays);
     if (!anchor) return { selected: [], anchor: null, anchorExamples: [], debug: { windowDays, candidateCount: 0 } };
-    const nn = await ab.nearestBySql(anchor, 120, null);
+    // Optional gender filter
+    let usernamesFilter = null;
+    if (preferredGender === 'men' || preferredGender === 'women') {
+      try {
+        const { data: genderAccounts } = await this.db.client
+          .from('accounts')
+          .select('username')
+          .contains('tags', [preferredGender]);
+        if (Array.isArray(genderAccounts) && genderAccounts.length > 0) {
+          usernamesFilter = genderAccounts.map(a => a.username);
+        }
+      } catch(_) {}
+    }
+    const nn = await ab.nearestBySql(anchor, 120, usernamesFilter);
     // Enforce spacing
     function cosine(a,b){ let s=0; for (let i=0;i<a.length;i++) s+= a[i]*b[i]; return s; }
     const used = [];
@@ -355,8 +368,11 @@ Please run the content pipeline to scrape more content or adjust the account's c
       if (!used.some(u => distOf(u.embedding, r.embedding) < minDist)) used.push({ ...r, dist: distOf(anchor, r.embedding) });
     }
     if (used.length < count && candidates && candidates.length > 0){
+      const filteredCandidates = Array.isArray(usernamesFilter) && usernamesFilter.length > 0
+        ? candidates.filter(c => usernamesFilter.includes(c.username))
+        : candidates;
       // Fallback: fill from candidates list with spacing
-      for (const r of candidates){ if (used.length >= count) break; if (!used.some(u => distOf(u.embedding, r.embedding) < minDist)) used.push({ ...r, dist: distOf(anchor, r.embedding) }); }
+      for (const r of filteredCandidates){ if (used.length >= count) break; if (!used.some(u => distOf(u.embedding, r.embedding) < minDist)) used.push({ ...r, dist: distOf(anchor, r.embedding) }); }
     }
     // Build top-weighted examples that formed the anchor
     const examples = (candidates||[])
