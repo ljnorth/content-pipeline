@@ -65,11 +65,12 @@ export class ContentGenerator {
     
     // Get account's content strategy and preferences
     const strategy = await this.getAccountStrategy(account.username);
-    const selectionMode = strategy?.content_strategy?.selectionMode || options.selectionMode || 'rerollish';
+    const selectionMode = 'anchor_only';
+    const runTag = options?.runId ? `[run:${options.runId}] ` : '';
     
     // Generate 3 different posts
     for (let i = 1; i <= 3; i++) {
-      this.logger.info(`📝 Generating post ${i}/3 for ${account.username}`);
+      this.logger.info(`${runTag}📝 Generating post ${i}/3 for ${account.username}`);
       try {
         const post = await this.generateSinglePost(account, strategy, i, options);
         // Track image usage per source (best-effort)
@@ -110,39 +111,34 @@ export class ContentGenerator {
    * Generate a single post with 5 images
    */
   async generateSinglePost(account, strategy, postNumber, options = {}) {
-    this.logger.info(`🎯 Starting single post generation for ${account.username}, post ${postNumber}`);
+    const runTag = options?.runId ? `[run:${options.runId}] ` : '';
+    this.logger.info(`${runTag}🎯 Starting single post generation for ${account.username}, post ${postNumber}`);
     
     try {
-      // Prefer anchor-driven selection if inspo accounts configured
+      // Enforce: anchor + gender only (no fallbacks)
       const inspo = Array.isArray(strategy?.content_strategy?.inspoAccounts) ? strategy.content_strategy.inspoAccounts : [];
       const imagesPerPost = Number(strategy?.content_strategy?.selection?.imagesPerPost || 6);
       let images = [];
       let anchorVector = null;
-      if (inspo.length > 0) {
-        this.logger.info(`🎯 Using inspo anchors for ${account.username} (post ${postNumber})`);
-        const result = await this.selectWithAnchors(account.username, strategy, imagesPerPost, postNumber);
-        images = result.selected;
-        anchorVector = result.anchor;
-        if (options?.preview === true) {
-          // Attach extra debug info for UI preview only
-          options.__anchorExamples = result.anchorExamples;
-          options.__anchorDebug = result.debug;
-        }
-      } else {
-        this.logger.info(`🔍 Getting curated images for ${account.username} (fallback)...`);
-        images = await this.getCuratedImages(account.username, strategy, imagesPerPost, { selectionMode: 'rerollish' });
+      if (inspo.length === 0) {
+        const err = `No inspoAccounts configured for @${account.username}. Please add 1-3 inspo accounts in Managed → Inspo.`;
+        this.logger.error(`${runTag}❌ ${err}`);
+        throw new Error(err);
+      }
+      this.logger.info(`${runTag}🎯 Using inspo anchors for ${account.username} (post ${postNumber}). inspo=${inspo.join(', ')}`);
+      const result = await this.selectWithAnchors(account.username, strategy, imagesPerPost, postNumber, options);
+      images = result.selected;
+      anchorVector = result.anchor;
+      if (options?.preview === true) {
+        // Attach extra debug info for UI preview only
+        options.__anchorExamples = result.anchorExamples;
+        options.__anchorDebug = result.debug;
       }
       
-      this.logger.info(`📊 Retrieved ${images.length} curated images`);
+      this.logger.info(`${runTag}📊 Retrieved ${images.length} selected images`);
       
       if (images.length < imagesPerPost) {
-        const errorMsg = `Not enough suitable images found for ${account.username}. Found ${images.length}, need 5. This indicates either:
-1. Not enough content has been scraped and analyzed for this account's strategy
-2. The content strategy filters (aesthetic: ${strategy.content_strategy?.aestheticFocus?.join(', ') || 'none'}, colors: ${strategy.content_strategy?.colorPalette?.join(', ') || 'none'}) are too restrictive
-3. Images are missing required analysis data (aesthetic, colors, season)
-4. Too many images have been recently used (deduplication rules)
-
-Please run the content pipeline to scrape more content or adjust the account's content strategy.`;
+        const errorMsg = `Not enough suitable images found for ${account.username}. Found ${images.length}, need ${imagesPerPost}. Ensure inspo winners exist and source genders are labeled.`;
         this.logger.error(`❌ ${errorMsg}`);
         throw new Error(errorMsg);
       }
@@ -198,12 +194,12 @@ Please run the content pipeline to scrape more content or adjust the account's c
         await this.saveGeneratedPost(post);
       }
       
-      this.logger.info(`✅ Post ${postNumber} generated: ${content.theme} (${images.length} images)`);
+      this.logger.info(`${runTag}✅ Post ${postNumber} generated: ${content.theme} (${images.length} images)`);
       return post;
       
     } catch (error) {
-      this.logger.error(`❌ Failed to generate single post for ${account.username}: ${error.message}`);
-      this.logger.error(`❌ Stack trace: ${error.stack}`);
+      this.logger.error(`${runTag}❌ Failed to generate single post for ${account.username}: ${error.message}`);
+      this.logger.error(`${runTag}❌ Stack trace: ${error.stack}`);
       throw error; // Re-throw to be caught by the calling function
     }
   }
@@ -335,17 +331,24 @@ Please run the content pipeline to scrape more content or adjust the account's c
   /**
    * Anchor-driven selection using inspo accounts' recent winners
    */
-  async selectWithAnchors(username, strategy, count = 6, postNumber = 1){
+  async selectWithAnchors(username, strategy, count = 6, postNumber = 1, options = {}){
     const inspo = (strategy?.content_strategy?.inspoAccounts||[]).map(s=>String(s).replace('@',''));
     const windowDays = Number(strategy?.content_strategy?.anchorSettings?.windowDays || 90);
     const minDist = Number(strategy?.content_strategy?.selection?.minIntraPostDistance || 0.18);
+    const runTag = options?.runId ? `[run:${options.runId}] ` : '';
 
     // Build anchor via helper (includes cover filtering and weighting)
     const { AnchorBuilder } = await import('./anchors.js');
     const ab = new AnchorBuilder();
     const { anchor, candidates } = await ab.buildAnchorsFromInspo(inspo, windowDays);
-    if (!anchor) return { selected: [], anchor: null, anchorExamples: [], debug: { windowDays, candidateCount: 0 } };
-    // Optional gender filter
+    const candidateCount = (candidates||[]).length;
+    this.logger.info(`${runTag}🧱 Anchor build: inspo=${inspo.length}, windowDays=${windowDays}, candidates=${candidateCount}, anchor=${anchor? 'yes':'no'}`);
+    if (!anchor) {
+      const msg = `Anchor could not be built (no candidates). Ensure inspo winners exist in the last ${windowDays} days.`;
+      this.logger.error(`${runTag}❌ ${msg}`);
+      throw new Error(msg);
+    }
+    // Gender filter REQUIRED when men/women
     const preferredGender = (strategy?.content_strategy?.preferredGender || 'any').toLowerCase();
     let usernamesFilter = null;
     if (preferredGender === 'men' || preferredGender === 'women') {
@@ -354,27 +357,41 @@ Please run the content pipeline to scrape more content or adjust the account's c
           .from('accounts')
           .select('username')
           .contains('tags', [preferredGender]);
-        if (Array.isArray(genderAccounts) && genderAccounts.length > 0) {
-          usernamesFilter = genderAccounts.map(a => a.username);
+        const cnt = Array.isArray(genderAccounts) ? genderAccounts.length : 0;
+        this.logger.info(`${runTag}🚻 Gender filter: preferred=${preferredGender}, matchedSources=${cnt}`);
+        if (!cnt) {
+          const msg = `No source accounts tagged with '${preferredGender}'. Label sources in Sources → Gender.`;
+          this.logger.error(`${runTag}❌ ${msg}`);
+          throw new Error(msg);
         }
+        usernamesFilter = genderAccounts.map(a => a.username);
       } catch(_) {}
     }
     const nn = await ab.nearestBySql(anchor, 120, usernamesFilter);
+    this.logger.info(`${runTag}🔎 Nearest search: k=120, usernamesFilter=${Array.isArray(usernamesFilter)?usernamesFilter.length:'—'}, returned=${Array.isArray(nn)?nn.length:0}`);
+    // Fetch embeddings for spacing if not present
+    const ids = (nn||[]).map(r => r.id);
+    let embMap = new Map();
+    if (ids.length) {
+      const { data: embRows } = await this.db.client
+        .from('images')
+        .select('id, embedding, username')
+        .in('id', ids);
+      for (const row of (embRows||[])) {
+        if (Array.isArray(row.embedding)) embMap.set(row.id, row.embedding);
+      }
+    }
     // Enforce spacing
     function cosine(a,b){ let s=0; for (let i=0;i<a.length;i++) s+= a[i]*b[i]; return s; }
     const used = [];
     function distOf(a,b){ return 1 - cosine(a,b); }
-    for (const r of nn){
+    for (const r of (nn||[])){
       if (used.length >= count) break;
-      if (!used.some(u => distOf(u.embedding, r.embedding) < minDist)) used.push({ ...r, dist: distOf(anchor, r.embedding) });
+      const rEmb = embMap.get(r.id);
+      if (!Array.isArray(rEmb)) continue;
+      if (!used.some(u => distOf(u._embedding, rEmb) < minDist)) used.push({ ...r, _embedding: rEmb, dist: distOf(anchor, rEmb) });
     }
-    if (used.length < count && candidates && candidates.length > 0){
-      const filteredCandidates = Array.isArray(usernamesFilter) && usernamesFilter.length > 0
-        ? candidates.filter(c => usernamesFilter.includes(c.username))
-        : candidates;
-      // Fallback: fill from candidates list with spacing
-      for (const r of filteredCandidates){ if (used.length >= count) break; if (!used.some(u => distOf(u.embedding, r.embedding) < minDist)) used.push({ ...r, dist: distOf(anchor, r.embedding) }); }
-    }
+    // No fallback fill — strict mode
     // Build top-weighted examples that formed the anchor
     const examples = (candidates||[])
       .map(r => ({ id: r.id, image_path: r.image_path, username: r.username, dist: distOf(anchor, r.embedding), weight: ab.weightFor(r._post.created_at, r._post.engagement_rate) }))
@@ -382,8 +399,20 @@ Please run the content pipeline to scrape more content or adjust the account's c
       .slice(0, 12);
     // Debug stats for UI
     const dists = used.map(u => u.dist).filter(x => typeof x === 'number' && isFinite(x));
-    const dbg = { windowDays, candidateCount: (candidates||[]).length, selectedCount: used.length, minDist: dists.length? Math.min(...dists): null, maxDist: dists.length? Math.max(...dists): null, avgDist: dists.length? dists.reduce((s,v)=>s+v,0)/dists.length: null };
-    return { selected: used.slice(0, count), anchor, anchorExamples: examples, debug: dbg };
+    const dbg = {
+      runId: options?.runId || null,
+      windowDays,
+      preferredGender,
+      usernamesFilterCount: Array.isArray(usernamesFilter)?usernamesFilter.length:0,
+      candidateCount: (candidates||[]).length,
+      nnCount: (nn||[]).length,
+      selectedCount: used.length,
+      minDist: dists.length? Math.min(...dists): null,
+      maxDist: dists.length? Math.max(...dists): null,
+      avgDist: dists.length? dists.reduce((s,v)=>s+v,0)/dists.length: null
+    };
+    this.logger.info(`${runTag}✅ Selected ${used.length}/${count} images (minDist=${dbg.minDist?.toFixed?.(3) ?? '-'}, avg=${dbg.avgDist?.toFixed?.(3) ?? '-'}, max=${dbg.maxDist?.toFixed?.(3) ?? '-'})`);
+    return { selected: used.slice(0, count).map(({ _embedding, ...rest }) => rest), anchor, anchorExamples: examples, debug: dbg };
   }
 
   /**

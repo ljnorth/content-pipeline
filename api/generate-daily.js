@@ -9,6 +9,7 @@ export default async function handler(req, res) {
 
     const username = req.method === 'POST' ? req.body?.username : req.query?.username;
     const previewFlag = req.method === 'POST' ? (req.body?.preview ?? req.query?.preview) : req.query?.preview;
+    const runId = req.method === 'POST' ? (req.body?.runId ?? req.query?.runId) : req.query?.runId;
     const preview = String(previewFlag).toLowerCase() === '1' || String(previewFlag).toLowerCase() === 'true';
 
     let accounts = [];
@@ -52,16 +53,16 @@ export default async function handler(req, res) {
     for (const acc of accounts) {
       try {
         let posts;
-        // Always use curated/anchor selection; if OpenAI is missing, run in preview mode to skip captions
+        // Enforce anchor+gender only; if OpenAI is missing, run in preview mode to skip captions
         const effectivePreview = preview || useFallback;
-        posts = await generator.generateContentForAccount(acc, { preview: effectivePreview });
+        posts = await generator.generateContentForAccount(acc, { preview: effectivePreview, runId });
 
         // If preview mode, skip Slack and just return posts
         if (preview) {
-          results.push({ account: acc.username, success: true, posts: posts.length, preview: true, postsData: posts });
+          results.push({ account: acc.username, success: true, posts: posts.length, preview: true, postsData: posts, runId });
         } else if (useFallback) {
           // No captions without OpenAI; return result instead of Slack so users can preview
-          results.push({ account: acc.username, success: true, posts: posts.length, fallback: true, postsData: posts });
+          results.push({ account: acc.username, success: true, posts: posts.length, fallback: true, postsData: posts, runId });
         } else if (!slack.enabled) {
           results.push({ account: acc.username, success: false, posts: posts.length, fallback: useFallback, error: 'Slack webhook not configured' });
         } else {
