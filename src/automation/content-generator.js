@@ -142,10 +142,20 @@ Please run the content pipeline to scrape more content or adjust the account's c
         throw new Error(errorMsg);
       }
 
-      this.logger.info(`🤖 Generating content with AI for ${images.length} images...`);
-      
-      // Generate caption and hashtags
-      const content = await this.generatePostContent(images, strategy, postNumber);
+      let content;
+      if (options?.preview === true) {
+        this.logger.info(`🧪 Preview mode: skipping caption generation`);
+        content = {
+          theme: 'preview',
+          caption: '',
+          primaryAesthetic: images[0]?.aesthetic || '',
+          hashtags: ''
+        };
+      } else {
+        this.logger.info(`🤖 Generating content with AI for ${images.length} images...`);
+        // Generate caption and hashtags
+        content = await this.generatePostContent(images, strategy, postNumber);
+      }
       
       this.logger.info(`✅ AI content generated successfully - Theme: ${content.theme}`);
       
