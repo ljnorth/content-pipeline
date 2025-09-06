@@ -118,6 +118,22 @@ export class AnchorBuilder {
     return { anchor, coverCentroid, candidates: clean };
   }
 
+  async loadCachedAnchor(username){
+    const { data } = await this.db.client
+      .from('account_anchors')
+      .select('anchor, built_at, stats')
+      .eq('username', username)
+      .single();
+    return data || null;
+  }
+
+  async saveCachedAnchor(username, anchor, stats){
+    if (!Array.isArray(anchor)) return;
+    await this.db.client
+      .from('account_anchors')
+      .upsert({ username, anchor, built_at: new Date().toISOString(), stats: stats || {} });
+  }
+
   async nearestBySql(anchor, k = 50, usernames = null){
     const { data } = await this.db.client.rpc('nearest_images', { anchor, k, include_covers: false, usernames });
     return data || [];

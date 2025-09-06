@@ -47,8 +47,9 @@ export default async function handler(req, res) {
         .in('post_id', postIds)
         .not('embedding', 'is', null)
         .limit(20);
+      const sample = (imgs||[]).slice(0,5);
       imgCount = (imgs||[]).length;
-      imgSample = (imgs||[]).slice(0,5).map(r => ({ id: r.id, username: r.username, hasEmbedding: Array.isArray(r.embedding) }));
+      imgSample = sample.map(r => ({ id: r.id, username: r.username, typeof: typeof r.embedding, raw: r.embedding }));
     }
 
     // Gender usernames filter

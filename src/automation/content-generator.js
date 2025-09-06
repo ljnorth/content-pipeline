@@ -391,7 +391,16 @@ Please run the content pipeline to scrape more content or adjust the account's c
     // Build anchor via helper (includes cover filtering and weighting)
     const { AnchorBuilder } = await import('./anchors.js');
     const ab = new AnchorBuilder();
-    const { anchor, candidates } = await ab.buildAnchorsFromInspo(inspo, windowDays);
+    // Try cache first
+    let cached = null;
+    try { cached = await ab.loadCachedAnchor(username); } catch(_){}
+    let anchor = Array.isArray(cached?.anchor) ? cached.anchor : null;
+    let candidates = [];
+    if (!anchor) {
+      const built = await ab.buildAnchorsFromInspo(inspo, windowDays);
+      anchor = built.anchor; candidates = built.candidates;
+      try { await ab.saveCachedAnchor(username, anchor, { windowDays, inspo, candidateCount: (candidates||[]).length }); } catch(_){ }
+    }
     const candidateCount = (candidates||[]).length;
     this.logger.info(`${runTag}🧱 Anchor build: inspo=${inspo.length}, windowDays=${windowDays}, candidates=${candidateCount}, anchor=${anchor? 'yes':'no'}`);
     if (!anchor) {
