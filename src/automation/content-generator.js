@@ -428,7 +428,17 @@ Please run the content pipeline to scrape more content or adjust the account's c
           const dbg = { runId: options?.runId || null, windowDays, preferredGender, usernamesFilterCount: 0, candidateCount, nnCount: 0, selectedCount: 0, error: 'no_gender_sources' };
           return { selected: [], anchor, anchorExamples: [], debug: dbg };
         }
-        usernamesFilter = genderAccounts.map(a => a.username);
+        // Normalize usernames to match images.username which may store with or without '@'
+        const rawUsernames = (genderAccounts || []).map(a => String(a.username || '').trim()).filter(Boolean);
+        const set = new Set();
+        for (const u of rawUsernames) {
+          const plain = u.replace(/^@/, '');
+          if (!plain) continue;
+          set.add(u);
+          set.add(plain);
+          set.add(`@${plain}`);
+        }
+        usernamesFilter = Array.from(set);
       } catch(_) {}
     }
     const nn = await ab.nearestBySql(anchor, 120, usernamesFilter);
