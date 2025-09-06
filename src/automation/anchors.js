@@ -13,10 +13,14 @@ export class AnchorBuilder {
   async getInspoWinnerImages(inspoUsernames, windowDays){
     const since = new Date(Date.now() - windowDays*24*3600*1000).toISOString();
     // Posts by inspo accounts, recent window
+    const usernames = Array.from(new Set([
+      ...inspoUsernames,
+      ...inspoUsernames.map(u => u.startsWith('@') ? u : `@${u}`)
+    ]));
     let { data: posts } = await this.db.client
       .from('posts')
       .select('post_id, username, engagement_rate, like_count, view_count, created_at')
-      .in('username', inspoUsernames)
+      .in('username', usernames)
       .gte('created_at', since)
       .order('engagement_rate', { ascending: false })
       .limit(500);
