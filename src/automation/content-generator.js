@@ -394,7 +394,8 @@ Please run the content pipeline to scrape more content or adjust the account's c
     if (!anchor) {
       const msg = `Anchor could not be built (no candidates). Ensure inspo winners exist in the last ${windowDays} days.`;
       this.logger.error(`${runTag}❌ ${msg}`);
-      throw new Error(msg);
+      const dbg = { runId: options?.runId || null, windowDays, preferredGender: (strategy?.preferred_gender || strategy?.content_strategy?.preferredGender || 'any'), usernamesFilterCount: 0, candidateCount, nnCount: 0, selectedCount: 0, error: 'no_anchor' };
+      return { selected: [], anchor: null, anchorExamples: [], debug: dbg };
     }
     // Gender filter REQUIRED when men/women
     const preferredGender = (strategy?.preferred_gender || strategy?.content_strategy?.preferredGender || 'any').toLowerCase();
@@ -421,7 +422,8 @@ Please run the content pipeline to scrape more content or adjust the account's c
         if (!cnt) {
           const msg = `No source accounts tagged with '${preferredGender}'. Label sources in Sources → Gender.`;
           this.logger.error(`${runTag}❌ ${msg}`);
-          throw new Error(msg);
+          const dbg = { runId: options?.runId || null, windowDays, preferredGender, usernamesFilterCount: 0, candidateCount, nnCount: 0, selectedCount: 0, error: 'no_gender_sources' };
+          return { selected: [], anchor, anchorExamples: [], debug: dbg };
         }
         usernamesFilter = genderAccounts.map(a => a.username);
       } catch(_) {}
@@ -450,7 +452,7 @@ Please run the content pipeline to scrape more content or adjust the account's c
       if (!Array.isArray(rEmb)) continue;
       if (!used.some(u => distOf(u._embedding, rEmb) < minDist)) used.push({ ...r, _embedding: rEmb, dist: distOf(anchor, rEmb) });
     }
-    // No fallback fill — strict mode
+    // No fallback fill — strict mode; include nnCount in debug already
     // Build top-weighted examples that formed the anchor
     const examples = (candidates||[])
       .map(r => ({ id: r.id, image_path: r.image_path, username: r.username, dist: distOf(anchor, r.embedding), weight: ab.weightFor(r._post.created_at, r._post.engagement_rate) }))
