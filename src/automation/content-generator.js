@@ -127,6 +127,21 @@ export class ContentGenerator {
       if (inspo.length === 0) {
         const err = `No inspoAccounts configured for @${account.username}. Please add 1-3 inspo accounts in Managed → Inspo.`;
         this.logger.error(`${runTag}❌ ${err}`);
+        if (options?.preview === true) {
+          // Return debug-only stub in preview
+          const post = {
+            accountUsername: account.username,
+            postNumber,
+            images: [],
+            caption: '',
+            hashtags: '',
+            generatedAt: new Date().toISOString(),
+            anchor: null,
+            anchorExamples: [],
+            anchorDebug: { runId: options?.runId || null, reason: 'no_inspo_accounts' }
+          };
+          return post;
+        }
         throw new Error(err);
       }
       this.logger.info(`${runTag}🎯 Using inspo anchors for ${account.username} (post ${postNumber}). inspo=${inspo.join(', ')}`);
@@ -144,6 +159,21 @@ export class ContentGenerator {
       if (images.length < imagesPerPost) {
         const errorMsg = `Not enough suitable images found for ${account.username}. Found ${images.length}, need ${imagesPerPost}. Ensure inspo winners exist and source genders are labeled.`;
         this.logger.error(`❌ ${errorMsg}`);
+        if (options?.preview === true) {
+          // Return debug-only stub so UI can show reasons
+          const post = {
+            accountUsername: account.username,
+            postNumber,
+            images: images.map(img => ({ id: img.id, imagePath: img.image_path, dist: img.dist })),
+            caption: '',
+            hashtags: '',
+            generatedAt: new Date().toISOString(),
+            anchor: Array.isArray(anchorVector) ? anchorVector : null
+          };
+          if (options.__anchorExamples) post.anchorExamples = options.__anchorExamples;
+          if (options.__anchorDebug) post.anchorDebug = options.__anchorDebug;
+          return post;
+        }
         throw new Error(errorMsg);
       }
 
