@@ -35,25 +35,58 @@ export class AnchorBuilder {
       ...inspoUsernames,
       ...inspoUsernames.map(u => u.startsWith('@') ? u : `@${u}`)
     ]));
-    let { data: posts } = await this.db.client
-      .from('posts')
-      .select('post_id, username, engagement_rate, like_count, view_count, created_at')
-      .in('username', usernames)
-      .gte('created_at', since)
-      .order('engagement_rate', { ascending: false })
-      .limit(500);
-    posts = posts || [];
+    let posts = [];
+    // Try rich selection first; if the schema lacks metrics columns, fall back to minimal
+    try {
+      const res = await this.db.client
+        .from('posts')
+        .select('post_id, username, engagement_rate, created_at')
+        .in('username', usernames)
+        .gte('created_at', since)
+        .order('engagement_rate', { ascending: false })
+        .limit(500);
+      if (res.data) posts = res.data;
+      if (res.error) throw res.error;
+    } catch(_){
+      // Minimal fallback: just recency
+      const res2 = await this.db.client
+        .from('posts')
+        .select('post_id, username, created_at')
+        .in('username', usernames)
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(500);
+      posts = res2.data || [];
+    }
     if (posts.length === 0) return [];
     const ids = [...new Set(posts.map(p=>p.post_id))];
-    const { data: imgs } = await this.db.client
-      .from('images')
-      .select('id, post_id, username, image_path, embedding, is_cover_slide, cover_slide_text, uniformity_score, aesthetic, colors, season, created_at')
-      .in('post_id', ids)
-      .not('embedding', 'is', null)
-      .limit(3000);
+    let imgs = [];
+    try {
+      const r1 = await this.db.client
+        .from('images')
+        .select('id, post_id, username, image_path, embedding, is_cover_slide, cover_slide_text, uniformity_score, aesthetic, colors, season, created_at')
+        .in('post_id', ids)
+        .not('embedding', 'is', null)
+        .limit(3000);
+      if (r1.data) imgs = r1.data;
+      if (r1.error) throw r1.error;
+    } catch(_){
+      // Minimal fallback
+      const r2 = await this.db.client
+        .from('images')
+        .select('id, post_id, username, image_path, embedding, created_at')
+        .in('post_id', ids)
+        .not('embedding', 'is', null)
+        .limit(3000);
+      imgs = r2.data || [];
+    }
     const byId = Object.fromEntries(posts.map(p=>[p.post_id, p]));
     const normalized = (imgs||[]).map(r=> ({ ...r, embedding: this.normalizeEmbedding(r.embedding) }));
-    return normalized.filter(r=> Array.isArray(r.embedding)).map(r=>({ ...r, _post: byId[r.post_id] })).filter(r=> !!r._post);
+    // Ensure engagement_rate exists for weighting
+    return normalized
+      .filter(r=> Array.isArray(r.embedding))
+      .map(r=>({ ...r, _post: Object.assign({ engagement_rate: 0 }, byId[r.post_id] || {}) }))
+      .filter(r=> !!r._post);
   }
 
   async computeCoverCentroid(windowDays = 180){
