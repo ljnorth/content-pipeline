@@ -382,8 +382,10 @@ Please run the content pipeline to scrape more content or adjust the account's c
         : (strategy?.content_strategy?.inspoAccounts||[]))
     ).map(s=>String(s).replace('@',''));
     const windowDays = Number(strategy?.content_strategy?.anchorSettings?.windowDays || 90);
-    // Allow very similar images; prevent near-duplicates only (default 0.02)
-    const minDist = Number(strategy?.content_strategy?.selection?.minIntraPostDistance ?? 0.02);
+    // Only prevent exact duplicate IDs; enforce a MAX distance to anchor to keep images very similar
+    const maxAnchorDistance = Number(
+      strategy?.content_strategy?.selection?.maxAnchorDistance ?? 0.25
+    );
     const runTag = options?.runId ? `[run:${options.runId}] ` : '';
 
     // Build anchor via helper (includes cover filtering and weighting)
@@ -452,8 +454,9 @@ Please run the content pipeline to scrape more content or adjust the account's c
       const rEmb = embMap.get(r.id);
       if (!Array.isArray(rEmb)) continue;
       const isDuplicateId = used.some(u => u.id === r.id);
-      const tooClose = minDist > 0 ? used.some(u => distOf(u._embedding, rEmb) < minDist) : false;
-      if (!isDuplicateId && !tooClose) used.push({ ...r, _embedding: rEmb, dist: distOf(anchor, rEmb) });
+      const d = distOf(anchor, rEmb);
+      if (typeof maxAnchorDistance === 'number' && isFinite(maxAnchorDistance) && d > maxAnchorDistance) continue;
+      if (!isDuplicateId) used.push({ ...r, _embedding: rEmb, dist: d });
     }
     // No fallback fill — strict mode; include nnCount in debug already
     // Build top-weighted examples that formed the anchor
@@ -471,6 +474,7 @@ Please run the content pipeline to scrape more content or adjust the account's c
       candidateCount: (candidates||[]).length,
       nnCount: (nn||[]).length,
       selectedCount: used.length,
+      maxAnchorDistance,
       minDist: dists.length? Math.min(...dists): null,
       maxDist: dists.length? Math.max(...dists): null,
       avgDist: dists.length? dists.reduce((s,v)=>s+v,0)/dists.length: null
