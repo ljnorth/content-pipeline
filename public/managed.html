@@ -202,7 +202,8 @@
       setStatus('Generating preview…');
       try{
         // Call main generator in preview mode to get actual selected images with distances
-        const res = await fetch('/api/generate-daily?username=' + encodeURIComponent(u) + '&preview=1');
+        const runId = 'ui_' + Date.now();
+        const res = await fetch('/api/generate-daily?username=' + encodeURIComponent(u) + '&preview=1&runId=' + encodeURIComponent(runId));
         const json = await res.json();
         const info = document.getElementById('anchorInfo');
         const info2 = document.getElementById('anchorInfo2');
@@ -230,7 +231,7 @@
         const examples = post0?.anchorExamples || [];
         if (dbg){
           info.textContent = `windowDays=${dbg.windowDays} | candidates=${dbg.candidateCount} | nn=${dbg.nnCount ?? '-'} | selected=${dbg.selectedCount} | min=${dbg.minDist?.toFixed?.(3) ?? '-'} avg=${dbg.avgDist?.toFixed?.(3) ?? '-'} max=${dbg.maxDist?.toFixed?.(3) ?? '-'}`;
-          info2.textContent = `preferred=${dbg.preferredGender || '-'} | usernamesFilter=${dbg.usernamesFilterCount ?? '-'} | runId=${dbg.runId || '-'}`;
+          info2.textContent = `preferred=${dbg.preferredGender || '-'} | usernamesFilter=${dbg.usernamesFilterCount ?? '-'} | runId=${dbg.runId || '-'} | inspo=${Array.isArray(dbg.inspo)? dbg.inspo.join(', '): '-'}`;
           raw.textContent = JSON.stringify(dbg, null, 2);
         }
         examples.forEach(img => {

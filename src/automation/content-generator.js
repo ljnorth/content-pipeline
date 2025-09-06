@@ -470,6 +470,7 @@ Please run the content pipeline to scrape more content or adjust the account's c
       runId: options?.runId || null,
       windowDays,
       preferredGender,
+      inspo: inspo,
       usernamesFilterCount: Array.isArray(usernamesFilter)?usernamesFilter.length:0,
       candidateCount: (candidates||[]).length,
       nnCount: (nn||[]).length,
