@@ -117,7 +117,10 @@ export class ContentGenerator {
     
     try {
       // Enforce: anchor + gender only (no fallbacks)
-      const inspo = Array.isArray(strategy?.content_strategy?.inspoAccounts) ? strategy.content_strategy.inspoAccounts : [];
+      // Read inspo from explicit column if present, else from JSON
+      const inspo = Array.isArray(strategy?.inspo_accounts) && strategy.inspo_accounts.length
+        ? strategy.inspo_accounts
+        : (Array.isArray(strategy?.content_strategy?.inspoAccounts) ? strategy.content_strategy.inspoAccounts : []);
       const imagesPerPost = Number(strategy?.content_strategy?.selection?.imagesPerPost || 6);
       let images = [];
       let anchorVector = null;
@@ -343,7 +346,11 @@ Please run the content pipeline to scrape more content or adjust the account's c
    * Anchor-driven selection using inspo accounts' recent winners
    */
   async selectWithAnchors(username, strategy, count = 6, postNumber = 1, options = {}){
-    const inspo = (strategy?.content_strategy?.inspoAccounts||[]).map(s=>String(s).replace('@',''));
+    const inspo = (
+      (Array.isArray(strategy?.inspo_accounts) && strategy.inspo_accounts.length
+        ? strategy.inspo_accounts
+        : (strategy?.content_strategy?.inspoAccounts||[]))
+    ).map(s=>String(s).replace('@',''));
     const windowDays = Number(strategy?.content_strategy?.anchorSettings?.windowDays || 90);
     const minDist = Number(strategy?.content_strategy?.selection?.minIntraPostDistance || 0.18);
     const runTag = options?.runId ? `[run:${options.runId}] ` : '';
@@ -360,14 +367,25 @@ Please run the content pipeline to scrape more content or adjust the account's c
       throw new Error(msg);
     }
     // Gender filter REQUIRED when men/women
-    const preferredGender = (strategy?.content_strategy?.preferredGender || 'any').toLowerCase();
+    const preferredGender = (strategy?.preferred_gender || strategy?.content_strategy?.preferredGender || 'any').toLowerCase();
     let usernamesFilter = null;
     if (preferredGender === 'men' || preferredGender === 'women') {
       try {
-        const { data: genderAccounts } = await this.db.client
+        // Prefer explicit accounts.gender; fallback to tags contains
+        let genderAccounts = [];
+        const { data: g1 } = await this.db.client
           .from('accounts')
           .select('username')
-          .contains('tags', [preferredGender]);
+          .eq('gender', preferredGender);
+        if (Array.isArray(g1) && g1.length) {
+          genderAccounts = g1;
+        } else {
+          const { data: g2 } = await this.db.client
+            .from('accounts')
+            .select('username')
+            .contains('tags', [preferredGender]);
+          genderAccounts = g2 || [];
+        }
         const cnt = Array.isArray(genderAccounts) ? genderAccounts.length : 0;
         this.logger.info(`${runTag}🚻 Gender filter: preferred=${preferredGender}, matchedSources=${cnt}`);
         if (!cnt) {

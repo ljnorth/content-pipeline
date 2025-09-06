@@ -22,6 +22,12 @@ export default async function handler(req, res) {
         is_active: true,
         owner_slack_id: ownerSlackId || null,
         owner_display_name: ownerDisplayName || null,
+        preferred_gender: ['men','women','any'].includes(preferredGender) ? preferredGender : 'any',
+        inspo_accounts: Array.isArray(inspoAccounts)
+          ? inspoAccounts.filter(Boolean).map(s => String(s).replace('@',''))
+          : (typeof inspoAccounts === 'string' && inspoAccounts.trim().length
+            ? inspoAccounts.split(',').map(s=>s.trim().replace('@','')).filter(Boolean)
+            : []),
         content_strategy: {
           goal: goal || null,
           audience: audience || null,
@@ -77,6 +83,14 @@ export default async function handler(req, res) {
 
       const nextUpdate = {
         content_strategy,
+        preferred_gender: ['men','women','any'].includes(preferredGender) ? preferredGender : undefined,
+        inspo_accounts: (typeof inspoAccounts !== 'undefined')
+          ? (Array.isArray(inspoAccounts)
+              ? inspoAccounts.filter(Boolean).map(s=>String(s).replace('@',''))
+              : (typeof inspoAccounts === 'string' && inspoAccounts.trim().length
+                  ? inspoAccounts.split(',').map(s=>s.trim().replace('@','')).filter(Boolean)
+                  : []))
+          : undefined,
         owner_slack_id: typeof ownerSlackId === 'string' ? ownerSlackId : undefined,
         owner_display_name: typeof ownerDisplayName === 'string' ? ownerDisplayName : undefined
       };

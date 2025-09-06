@@ -20,9 +20,11 @@ export default async function handler(req, res) {
       if (gender && (gender === 'men' || gender === 'women')) {
         if (!nextTags.includes(gender)) nextTags.push(gender);
       }
+      const base = { username, url, tags: nextTags, active };
+      if (gender === 'men' || gender === 'women') base.gender = gender;
       const { error } = await supabase
         .from('accounts')
-        .upsert({ username, url, tags: nextTags, active }, { onConflict: 'username' });
+        .upsert(base, { onConflict: 'username' });
       if (error) throw error;
       return res.json({ success: true });
     }
