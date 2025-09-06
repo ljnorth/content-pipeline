@@ -135,7 +135,10 @@ export class AnchorBuilder {
   }
 
   async nearestBySql(anchor, k = 50, usernames = null){
-    const { data } = await this.db.client.rpc('nearest_images', { anchor, k, include_covers: false, usernames });
+    // Ensure the anchor is passed in pgvector text form so PostgREST can cast it
+    const vecParam = Array.isArray(anchor) ? `[${anchor.join(',')}]` : anchor;
+    const { data, error } = await this.db.client.rpc('nearest_images', { anchor: vecParam, k, include_covers: false, usernames });
+    if (error) { console.error('nearest_images RPC error:', error.message || error); return []; }
     return data || [];
   }
 }
