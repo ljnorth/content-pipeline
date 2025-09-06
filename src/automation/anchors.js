@@ -10,6 +10,24 @@ function cosineSim(a,b){ let s=0; for (let i=0;i<a.length;i++) s += a[i]*b[i]; r
 export class AnchorBuilder {
   constructor(){ this.db = new SupabaseClient(); }
 
+  // Normalize various embedding representations (pgvector via PostgREST)
+  normalizeEmbedding(e){
+    if (Array.isArray(e)) return e;
+    if (e == null) return null;
+    if (typeof e === 'string') {
+      try {
+        let s = e.trim();
+        // Convert "(1,2,3)" to "[1,2,3]" if needed
+        if (s.startsWith('(') && s.endsWith(')')) {
+          s = '[' + s.slice(1, -1) + ']';
+        }
+        const arr = JSON.parse(s);
+        if (Array.isArray(arr)) return arr.map(Number);
+      } catch { /* ignore */ }
+    }
+    return null;
+  }
+
   async getInspoWinnerImages(inspoUsernames, windowDays){
     const since = new Date(Date.now() - windowDays*24*3600*1000).toISOString();
     // Posts by inspo accounts, recent window
@@ -34,7 +52,8 @@ export class AnchorBuilder {
       .not('embedding', 'is', null)
       .limit(3000);
     const byId = Object.fromEntries(posts.map(p=>[p.post_id, p]));
-    return (imgs||[]).filter(r=> Array.isArray(r.embedding)).map(r=>({ ...r, _post: byId[r.post_id] })).filter(r=> !!r._post);
+    const normalized = (imgs||[]).map(r=> ({ ...r, embedding: this.normalizeEmbedding(r.embedding) }));
+    return normalized.filter(r=> Array.isArray(r.embedding)).map(r=>({ ...r, _post: byId[r.post_id] })).filter(r=> !!r._post);
   }
 
   async computeCoverCentroid(windowDays = 180){
