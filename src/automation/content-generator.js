@@ -473,9 +473,15 @@ Please run the content pipeline to scrape more content or adjust the account's c
         if (Array.isArray(v)) embMap.set(row.id, v);
       }
     }
-    // Enforce spacing
+    // Enforce spacing + exact-duplicate suppression via embedding fingerprint
     function cosine(a,b){ let s=0; for (let i=0;i<a.length;i++) s+= a[i]*b[i]; return s; }
     const used = [];
+    const seenEmbeddings = new Set();
+    function fpVec(v){
+      // Round to make the fingerprint stable across minor float noise; tight for "exactness"
+      // Using 1e6 keeps equal embeddings equal; near-identical will differ.
+      return v.map(x => Math.round(x * 1e6)).join(',');
+    }
     function distOf(a,b){ return 1 - cosine(a,b); }
     for (const r of (nn||[])){
       if (used.length >= count) break;
@@ -484,7 +490,11 @@ Please run the content pipeline to scrape more content or adjust the account's c
       const isDuplicateId = used.some(u => u.id === r.id);
       const d = distOf(anchor, rEmb);
       if (typeof maxAnchorDistance === 'number' && isFinite(maxAnchorDistance) && d > maxAnchorDistance) continue;
-      if (!isDuplicateId) used.push({ ...r, _embedding: rEmb, dist: d });
+      const key = fpVec(rEmb);
+      if (isDuplicateId) continue;
+      if (seenEmbeddings.has(key)) continue; // same exact image (identical embedding)
+      seenEmbeddings.add(key);
+      used.push({ ...r, _embedding: rEmb, dist: d });
     }
     // No fallback fill — strict mode; include nnCount in debug already
     // Build top-weighted examples that formed the anchor
