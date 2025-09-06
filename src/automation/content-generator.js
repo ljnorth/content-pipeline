@@ -399,7 +399,8 @@ Please run the content pipeline to scrape more content or adjust the account's c
     if (!anchor) {
       const built = await ab.buildAnchorsFromInspo(inspo, windowDays);
       anchor = built.anchor; candidates = built.candidates;
-      try { await ab.saveCachedAnchor(username, anchor, { windowDays, inspo, candidateCount: (candidates||[]).length }); } catch(_){ }
+      const filterStats = built.filterStats || null;
+      try { await ab.saveCachedAnchor(username, anchor, { windowDays, inspo, candidateCount: (candidates||[]).length, filterStats }); } catch(_){ }
     }
     const candidateCount = (candidates||[]).length;
     this.logger.info(`${runTag}🧱 Anchor build: inspo=${inspo.length}, windowDays=${windowDays}, candidates=${candidateCount}, anchor=${anchor? 'yes':'no'}`);
@@ -507,6 +508,13 @@ Please run the content pipeline to scrape more content or adjust the account's c
       maxDist: dists.length? Math.max(...dists): null,
       avgDist: dists.length? dists.reduce((s,v)=>s+v,0)/dists.length: null
     };
+    // If we have filter stats (covers/uniform backgrounds), include them in debug
+    try {
+      if (!dbg.filterStats) {
+        const cache = await ab.loadCachedAnchor(username);
+        if (cache?.stats?.filterStats) dbg.filterStats = cache.stats.filterStats;
+      }
+    } catch(_){}
     this.logger.info(`${runTag}✅ Selected ${used.length}/${count} images (minDist=${dbg.minDist?.toFixed?.(3) ?? '-'}, avg=${dbg.avgDist?.toFixed?.(3) ?? '-'}, max=${dbg.maxDist?.toFixed?.(3) ?? '-'})`);
     return { selected: used.slice(0, count).map(({ _embedding, ...rest }) => rest), anchor, anchorExamples: examples, debug: dbg };
   }

@@ -106,16 +106,45 @@ export class AnchorBuilder {
   async buildAnchorsFromInspo(inspoUsernames, windowDays = 90){
     const raw = await this.getInspoWinnerImages(inspoUsernames, windowDays);
     const coverCentroid = await this.computeCoverCentroid();
-    // Strict cover filtering first
-    let clean = this.filterCovers(raw, coverCentroid);
+    // Strict cover/uniform filtering with stats
+    const uniformityThreshold = 0.92;
+    const coverSimThreshold = 0.92;
+    const rawCount = raw.length;
+    let droppedByFlag = 0;
+    let droppedByUniformity = 0;
+    let droppedByCoverSim = 0;
+    const strictKeptArr = [];
+    for (const r of raw) {
+      if (r.is_cover_slide === true || r.cover_slide_text) { droppedByFlag++; continue; }
+      if (typeof r.uniformity_score === 'number' && r.uniformity_score >= uniformityThreshold) { droppedByUniformity++; continue; }
+      if (coverCentroid) {
+        const sim = cosineSim(l2Normalize(r.embedding), coverCentroid);
+        if (sim >= coverSimThreshold) { droppedByCoverSim++; continue; }
+      }
+      strictKeptArr.push(r);
+    }
+
+    let clean = strictKeptArr;
+    let relaxedApplied = false;
     // If too strict (no candidates), relax: drop only explicit covers (keep uniform backgrounds/text rule off)
     if (clean.length === 0 && raw.length > 0) {
+      relaxedApplied = true;
       clean = raw.filter(r => !(r.is_cover_slide === true || r.cover_slide_text));
     }
     // Last resort: use raw so an anchor can still be formed
     if (clean.length === 0) clean = raw;
     const anchor = this.buildWeightedMean(clean);
-    return { anchor, coverCentroid, candidates: clean };
+    const filterStats = {
+      rawCount,
+      strictKept: strictKeptArr.length,
+      relaxedUsed: clean.length,
+      droppedByFlag,
+      droppedByUniformity,
+      droppedByCoverSim,
+      relaxedApplied,
+      thresholds: { uniformityThreshold, coverSimThreshold }
+    };
+    return { anchor, coverCentroid, candidates: clean, filterStats };
   }
 
   async loadCachedAnchor(username){
