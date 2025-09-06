@@ -382,7 +382,8 @@ Please run the content pipeline to scrape more content or adjust the account's c
         : (strategy?.content_strategy?.inspoAccounts||[]))
     ).map(s=>String(s).replace('@',''));
     const windowDays = Number(strategy?.content_strategy?.anchorSettings?.windowDays || 90);
-    const minDist = Number(strategy?.content_strategy?.selection?.minIntraPostDistance || 0.18);
+    // Allow very similar images; prevent near-duplicates only (default 0.02)
+    const minDist = Number(strategy?.content_strategy?.selection?.minIntraPostDistance ?? 0.02);
     const runTag = options?.runId ? `[run:${options.runId}] ` : '';
 
     // Build anchor via helper (includes cover filtering and weighting)
@@ -450,7 +451,9 @@ Please run the content pipeline to scrape more content or adjust the account's c
       if (used.length >= count) break;
       const rEmb = embMap.get(r.id);
       if (!Array.isArray(rEmb)) continue;
-      if (!used.some(u => distOf(u._embedding, rEmb) < minDist)) used.push({ ...r, _embedding: rEmb, dist: distOf(anchor, rEmb) });
+      const isDuplicateId = used.some(u => u.id === r.id);
+      const tooClose = minDist > 0 ? used.some(u => distOf(u._embedding, rEmb) < minDist) : false;
+      if (!isDuplicateId && !tooClose) used.push({ ...r, _embedding: rEmb, dist: distOf(anchor, rEmb) });
     }
     // No fallback fill — strict mode; include nnCount in debug already
     // Build top-weighted examples that formed the anchor
