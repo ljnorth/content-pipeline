@@ -455,13 +455,21 @@ Please run the content pipeline to scrape more content or adjust the account's c
     // Fetch embeddings for spacing if not present
     const ids = (nn||[]).map(r => r.id);
     let embMap = new Map();
+    function parseVec(e){
+      if (Array.isArray(e)) return e;
+      if (e && typeof e === 'string'){
+        try { return JSON.parse(e); } catch { return null; }
+      }
+      return null;
+    }
     if (ids.length) {
       const { data: embRows } = await this.db.client
         .from('images')
         .select('id, embedding, username')
         .in('id', ids);
       for (const row of (embRows||[])) {
-        if (Array.isArray(row.embedding)) embMap.set(row.id, row.embedding);
+        const v = parseVec(row.embedding);
+        if (Array.isArray(v)) embMap.set(row.id, v);
       }
     }
     // Enforce spacing
