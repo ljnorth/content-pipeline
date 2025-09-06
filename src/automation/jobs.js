@@ -110,10 +110,11 @@ export const JobHandlers = {
     const posts = await acquirer.process(accounts);
     const storeRes = await storage.process(posts);
 
-    // Enqueue embeddings job to process remaining/missing vectors asynchronously
+    // Enqueue wash job first (auto-chains), then embeddings
     try {
       const { DbQueue } = await import('./queue-db.js');
       const q = new DbQueue();
+      await q.enqueue(JobTypes.WASH_IMAGES, { batch: 500 });
       await q.enqueue(JobTypes.EMBED_IMAGES, { batch: 200 });
     } catch(_){ /* best-effort, continue */ }
 
@@ -147,10 +148,11 @@ export const JobHandlers = {
     const posts = await acquirer.process(accounts);
     const storeRes = await storage.process(posts);
 
-    // Enqueue embeddings job after weekly ingest
+    // Enqueue wash job first (auto-chains), then embeddings
     try {
       const { DbQueue } = await import('./queue-db.js');
       const q = new DbQueue();
+      await q.enqueue(JobTypes.WASH_IMAGES, { batch: 500 });
       await q.enqueue(JobTypes.EMBED_IMAGES, { batch: 200 });
     } catch(_){ /* best-effort */ }
 
@@ -298,6 +300,12 @@ export const JobHandlers = {
         await q.enqueue(JobTypes.WASH_IMAGES, { batch, idempotency_key: `wash_images:${Date.now()}`, force: true }, {});
       }
     }
+
+    // After a wash batch completes, ensure embeddings job is queued to process any new/changed images
+    try {
+      const q2 = new DbQueue();
+      await q2.enqueue(JobTypes.EMBED_IMAGES, { batch: 500 });
+    } catch(_){ /* best-effort */ }
 
     return { washed, remaining: count || 0 };
   },
