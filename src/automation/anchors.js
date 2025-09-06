@@ -83,7 +83,14 @@ export class AnchorBuilder {
   async buildAnchorsFromInspo(inspoUsernames, windowDays = 90){
     const raw = await this.getInspoWinnerImages(inspoUsernames, windowDays);
     const coverCentroid = await this.computeCoverCentroid();
-    const clean = this.filterCovers(raw, coverCentroid);
+    // Strict cover filtering first
+    let clean = this.filterCovers(raw, coverCentroid);
+    // If too strict (no candidates), relax: drop only explicit covers (keep uniform backgrounds/text rule off)
+    if (clean.length === 0 && raw.length > 0) {
+      clean = raw.filter(r => !(r.is_cover_slide === true || r.cover_slide_text));
+    }
+    // Last resort: use raw so an anchor can still be formed
+    if (clean.length === 0) clean = raw;
     const anchor = this.buildWeightedMean(clean);
     return { anchor, coverCentroid, candidates: clean };
   }
