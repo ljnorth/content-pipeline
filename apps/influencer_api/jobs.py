@@ -14,8 +14,13 @@ q_default = Queue('default', connection=redis_conn)
 def job_generate_base(payload: dict) -> dict:
     db = SupabaseDB()
     username = (payload.get('persona') or {}).get('username') or payload.get('username')
-    job = db.create_job(status='running', stage='init')
-    job_id = job['id']
+    # If the web API already created a DB job, use it; otherwise create one here (worker-triggered runs)
+    job_id = payload.get('__db_job_id')
+    if job_id:
+        db.update_job(job_id, status='running', stage='init')
+    else:
+        job = db.create_job(status='running', stage='init')
+        job_id = job['id']
     try:
         if username:
             prof = db.get_account_profile(username)
