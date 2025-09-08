@@ -3,8 +3,8 @@ services:
     name: influencer-api
     env: python
     plan: standard
-    buildCommand: pip install --no-cache-dir -r apps/influencer-api/requirements.txt
-    startCommand: uvicorn apps.influencer-api.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install --no-cache-dir -r apps/influencer_api/requirements.txt
+    startCommand: uvicorn apps.influencer_api.main:app --host 0.0.0.0 --port $PORT
     autoDeploy: true
     envVars:
       - key: SUPABASE_URL
@@ -47,8 +47,8 @@ services:
     name: influencer-worker
     env: python
     plan: standard
-    buildCommand: pip install --no-cache-dir -r apps/influencer-api/requirements.txt
-    startCommand: python apps/influencer-api/worker/rq_worker.py
+    buildCommand: pip install --no-cache-dir -r apps/influencer_api/requirements.txt
+    startCommand: python apps/influencer_api/worker/rq_worker.py
     autoDeploy: true
     envVars:
       - key: REDIS_URL

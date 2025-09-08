@@ -25,7 +25,7 @@ def job_generate_base(payload: dict) -> dict:
         # DEMO anchor: upload a 1x1 PNG placeholder (replace with real generation later)
         store = SupabaseStorage()
         png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\x0cIDATx\x9cc\xf8\xff\xff?\x00\x05\xfe\x02\xfe\xa7\xbb\x0c\x88\x00\x00\x00\x00IEND\xaeB`\x82"
-        up = store.upload_bytes(png, f"{db.prefix if hasattr(db,'prefix') else 'influencer'}/raw/{job_id}/anchor.png", content_type='image/png')
+        up = store.upload_bytes(png, f"raw/{job_id}/anchor.png", content_type='image/png')
         db.insert_asset(job_id, 'base', up.url, meta={"demo": True})
         if username:
             db.set_account_influencer_model(username, str(job_id))
