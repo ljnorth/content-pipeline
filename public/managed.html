@@ -33,6 +33,12 @@
     <input id="audience" placeholder="Audience (plain text)"/>
     <input id="ownerSlackId" placeholder="Owner Slack ID (U...)"/>
     <input id="ownerDisplayName" placeholder="Owner display name"/>
+    <select id="contentStyle">
+      <option value="moodboard" selected>Style: Moodboard</option>
+      <option value="influencer_still">Style: Influencer stills</option>
+      <option value="influencer_reel">Style: Influencer reels</option>
+    </select>
+    <input id="influencerTraits" placeholder='Influencer traits JSON (e.g. {"gender":"women"})'/>
     <div class="dropdown">
       <input id="inspoInput" placeholder="Add inspo account… (type to search)"/>
       <div id="inspoPanel" class="dropdown-panel hidden">
@@ -87,6 +93,16 @@
       </div>
     </div>
   </div>
+
+  <section class="section" style="margin-top:12px">
+    <h3>Influencer Tools (Gemini/Higgsfield)</h3>
+    <div class="row">
+      <input id="infPrompt" placeholder="Influencer image prompt" style="flex:1"/>
+      <input id="infImageUrl" placeholder="Optional guidance image URL" style="flex:1"/>
+      <button id="infPreview" class="btn btn-outline">Generate Still (Preview)</button>
+    </div>
+    <div id="infOutput" style="margin-top:8px"></div>
+  </section>
 
   <script type="module">
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -177,8 +193,14 @@
         ownerDisplayName: document.getElementById('ownerDisplayName').value,
         inspoAccounts: getSelectedInspo(),
         autogenEnabled: document.getElementById('autogenEnabled').checked,
-        preferredGender: document.getElementById('preferredGender').value
+        preferredGender: document.getElementById('preferredGender').value,
+        contentStyle: document.getElementById('contentStyle').value
       };
+      // Optional influencer traits
+      try{
+        const t = document.getElementById('influencerTraits').value.trim();
+        if (t) payload.influencerTraits = JSON.parse(t);
+      }catch(_){ /* ignore malformed */ }
       await fetch('/api/accounts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
       await loadProfiles();
     };
@@ -280,6 +302,24 @@
       }
     };
 
+    // Influencer preview (Gemini image generation)
+    document.getElementById('infPreview').onclick = async () => {
+      const prompt = document.getElementById('infPrompt').value || 'High-quality influencer outfit still';
+      const imageUrl = document.getElementById('infImageUrl').value || '';
+      const out = document.getElementById('infOutput');
+      out.innerHTML = 'Generating…';
+      try{
+        const res = await fetch('/api/gemini-preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prompt, imageUrl }) });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error||'request failed');
+        const img = new Image();
+        img.src = `data:${json.mimeType};base64,${json.base64}`;
+        img.style.maxWidth = '240px'; img.style.borderRadius = '8px';
+        out.innerHTML = '';
+        out.appendChild(img);
+      }catch(e){ out.textContent = 'Error: '+e.message; }
+    };
+
     // Auth guard
     const cfg = await loadConfig();
     const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true } });
@@ -324,8 +364,23 @@
         + '</select>';
       autoCell.innerHTML = '<label><input type="checkbox" class="inline autogen" '+(autogenEnabled?'checked':'')+'/> Auto</label>';
       actionsCell.innerHTML = '<input class="inline inspo" placeholder="Inspo accounts (comma-separated)" style="width: 95%; margin-bottom:6px" /> '
+        + '<div style="margin:6px 0">\n<select class="inline contentStyle" style="width:95%">\n<option value="moodboard">Style: Moodboard</option>\n<option value="influencer_still">Style: Influencer stills</option>\n<option value="influencer_reel">Style: Influencer reels</option>\n</select>\n</div>'
+        + '<textarea class="inline traits" placeholder="Influencer traits JSON" style="width: 95%; height: 64px; margin-bottom:6px"></textarea> '
         + '<button class="btn btn-primary save">Save</button> '
         + '<button class="btn btn-outline cancel">Cancel</button>';
+
+      // Fetch profile to seed content style and traits
+      (async () => {
+        try {
+          const res = await fetch('/api/accounts');
+          const arr = await res.json();
+          const p = (arr||[]).find(x=>x.username===username) || {};
+          const style = p.content_style || p.content_strategy?.contentStyle || 'moodboard';
+          actionsCell.querySelector('.contentStyle').value = style;
+          const traits = p.influencer_traits || {};
+          if (Object.keys(traits).length){ actionsCell.querySelector('.traits').value = JSON.stringify(traits); }
+        } catch(_){ }
+      })();
 
       actionsCell.querySelector('.save').onclick = async () => {
         const payload = {
@@ -336,8 +391,10 @@
           ownerDisplayName: tr.querySelector('.ownerName').value,
           inspoAccounts: tr.querySelector('.inspo').value,
           autogenEnabled: tr.querySelector('.autogen').checked,
-          preferredGender: tr.querySelector('.prefGender').value
+          preferredGender: tr.querySelector('.prefGender').value,
+          contentStyle: tr.querySelector('.contentStyle').value
         };
+        try{ const t = tr.querySelector('.traits').value.trim(); if (t) payload.influencerTraits = JSON.parse(t); }catch(e){ return setStatus('Invalid traits JSON', 'err'); }
         try {
           // Use PATCH to merge into existing content_strategy reliably
           await fetch('/api/accounts', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });

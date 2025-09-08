@@ -16,7 +16,9 @@ export const JobTypes = {
   ANCHORS_RECALIBRATE_WEEKLY: 'anchors_recalibrate_weekly',
   DISCOVER_OWNED_POSTS: 'discover_owned_posts',
   FETCH_POST_METRICS: 'fetch_post_metrics',
-  RUN_ONCE: 'run_once'
+  RUN_ONCE: 'run_once',
+  INFLUENCER_STILLS: 'influencer_stills',
+  INFLUENCER_REEL: 'influencer_reel'
 };
 
 export const JobHandlers = {
@@ -337,6 +339,56 @@ export const JobHandlers = {
     }
 
     return { ...res, remaining: count || 0 };
+  },
+
+  async [JobTypes.INFLUENCER_STILLS](run){
+    const { SupabaseClient } = await import('../database/supabase-client.js');
+    const { GeminiClient } = await import('../integrations/gemini.js');
+    const db = new SupabaseClient();
+    const gemini = new GeminiClient();
+    const payload = run.payload || {};
+    const username = payload.username;
+    if (!username) return { error: 'username required' };
+    // Pull latest generated post images as moodboard stand-ins (or a stored moodboard set)
+    const { data: gp } = await db.client
+      .from('generated_posts')
+      .select('images')
+      .eq('account_username', username)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const imgs = (gp?.[0]?.images || []).slice(0, 3);
+    if (imgs.length === 0) return { generated: 0, message: 'no recent images to guide' };
+    // Compose simple prompt; in future, use traits + outfit summarizer
+    const prompt = payload.prompt || 'High-quality influencer wearing an outfit matching the moodboard aesthetics. Fashion editorial, sharp details.';
+    const res = await gemini.generateFromImagesAndPrompt({ images: imgs.map(i => ({ url: i.imagePath || i.image_path, mimeType: 'image/jpeg' })), prompt });
+    // Store PNG into storage as influencer-stills
+    const { SupabaseStorage } = await import('../utils/supabase-storage.js');
+    const storage = new SupabaseStorage();
+    const buf = Buffer.from(res.base64, 'base64');
+    const tmp = `/tmp/${username}-influencer-still-${Date.now()}.png`;
+    const fs = await import('fs');
+    fs.writeFileSync(tmp, buf);
+    const up = await storage.uploadImage(tmp, username, `influencer-stills/${Date.now()}`, 'still.png');
+    try { fs.unlinkSync(tmp); } catch(_){ }
+    // Save simple record (best-effort)
+    try {
+      await db.client.from('influencer_outputs').insert({ account_username: username, kind: 'still', url: up.publicUrl });
+    } catch(_){ }
+    return { generated: 1, url: up.publicUrl };
+  },
+
+  async [JobTypes.INFLUENCER_REEL](run){
+    const { SupabaseClient } = await import('../database/supabase-client.js');
+    const { HiggsfieldClient } = await import('../integrations/higgsfield.js');
+    const db = new SupabaseClient();
+    const payload = run.payload || {};
+    const username = payload.username;
+    const image_url = payload.image_url; // expect an influencer still
+    if (!username || !image_url) return { error: 'username and image_url required' };
+    const prompt = payload.prompt || 'Fashion outfit breakdown, smooth camera motion, social-ready.';
+    const hf = new HiggsfieldClient();
+    const gen = await hf.generateImageToVideo({ prompt, image_url, duration: payload.duration || 8, aspect_ratio: payload.aspect || '9:16', resolution: '1080p' });
+    return { generation: gen };
   },
 
   async [JobTypes.RUN_ONCE](run){ return { echo: run.payload || {} }; }

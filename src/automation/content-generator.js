@@ -239,6 +239,21 @@ export class ContentGenerator {
       }
       
       this.logger.info(`${runTag}✅ Post ${postNumber} generated: ${content.theme} (${images.length} images)`);
+
+      // Optional post-generation: if account selected influencer stills/reel, enqueue jobs
+      try {
+        const style = strategy?.content_style || strategy?.content_strategy?.contentStyle || 'moodboard';
+        if (style === 'influencer_still' || style === 'influencer_reel'){
+          const { DbQueue } = await import('./queue-db.js');
+          const q = new DbQueue();
+          if (style === 'influencer_still'){
+            await q.enqueue('influencer_stills', { username: account.username, prompt: `High-quality influencer wearing outfit inspired by selected moodboard for @${account.username}` });
+          } else {
+            // For reels, first generate a still via separate UI/job, then pass image_url here
+            // If not available, skip silently
+          }
+        }
+      } catch(_){ /* best-effort */ }
       return post;
       
     } catch (error) {

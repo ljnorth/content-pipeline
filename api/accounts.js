@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      const { username, goal, audience, ownerSlackId, ownerDisplayName, autogenEnabled, preferredGender, inspoAccounts, anchorSettings, selection } = req.body || {};
+      const { username, goal, audience, ownerSlackId, ownerDisplayName, autogenEnabled, preferredGender, inspoAccounts, anchorSettings, selection, contentStyle, influencerTraits, influencerModelId, videoSettings } = req.body || {};
       if (!username) return res.status(400).json({ error: 'username is required' });
 
       const profile = {
@@ -28,6 +28,10 @@ export default async function handler(req, res) {
           : (typeof inspoAccounts === 'string' && inspoAccounts.trim().length
             ? inspoAccounts.split(',').map(s=>s.trim().replace('@','')).filter(Boolean)
             : []),
+        content_style: ['moodboard','influencer_still','influencer_reel'].includes(contentStyle) ? contentStyle : 'moodboard',
+        influencer_traits: (typeof influencerTraits === 'object' && influencerTraits !== null) ? influencerTraits : {},
+        influencer_model_id: typeof influencerModelId === 'string' ? influencerModelId : null,
+        video_settings: (typeof videoSettings === 'object' && videoSettings !== null) ? videoSettings : {},
         content_strategy: {
           goal: goal || null,
           audience: audience || null,
@@ -40,7 +44,8 @@ export default async function handler(req, res) {
               ? inspoAccounts.split(',').map(s=>s.trim().replace('@','')).filter(Boolean)
               : []),
           anchorSettings: anchorSettings || { windowDays: 90, upweightRecentDays: 14, clusters: 2 },
-          selection: selection || { imagesPerPost: 6, minIntraPostDistance: 0.18 }
+          selection: selection || { imagesPerPost: 6, minIntraPostDistance: 0.18 },
+          contentStyle: ['moodboard','influencer_still','influencer_reel'].includes(contentStyle) ? contentStyle : 'moodboard'
         }
       };
 
@@ -50,7 +55,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'PATCH') {
-      const { username, autogenEnabled, preferredGender, inspoAccounts, anchorSettings, selection, goal, audience, ownerSlackId, ownerDisplayName } = req.body || {};
+      const { username, autogenEnabled, preferredGender, inspoAccounts, anchorSettings, selection, goal, audience, ownerSlackId, ownerDisplayName, contentStyle, influencerTraits, influencerModelId, videoSettings } = req.body || {};
       if (!username) return res.status(400).json({ error: 'username is required' });
 
       // merge flag into content_strategy JSON
@@ -77,7 +82,8 @@ export default async function handler(req, res) {
           anchorSettings: anchorSettings || existing?.content_strategy?.anchorSettings || { windowDays: 90, upweightRecentDays: 14, clusters: 2 },
           selection: selection || existing?.content_strategy?.selection || { imagesPerPost: 6, minIntraPostDistance: 0.18 },
           goal: typeof goal === 'string' ? goal : (existing?.content_strategy?.goal || null),
-          audience: typeof audience === 'string' ? audience : (existing?.content_strategy?.audience || null)
+          audience: typeof audience === 'string' ? audience : (existing?.content_strategy?.audience || null),
+          contentStyle: ['moodboard','influencer_still','influencer_reel'].includes(contentStyle) ? contentStyle : (existing?.content_strategy?.contentStyle || 'moodboard')
         }
       );
 
@@ -92,7 +98,11 @@ export default async function handler(req, res) {
                   : []))
           : undefined,
         owner_slack_id: typeof ownerSlackId === 'string' ? ownerSlackId : undefined,
-        owner_display_name: typeof ownerDisplayName === 'string' ? ownerDisplayName : undefined
+        owner_display_name: typeof ownerDisplayName === 'string' ? ownerDisplayName : undefined,
+        content_style: ['moodboard','influencer_still','influencer_reel'].includes(contentStyle) ? contentStyle : undefined,
+        influencer_traits: (typeof influencerTraits === 'object' && influencerTraits !== null) ? influencerTraits : undefined,
+        influencer_model_id: typeof influencerModelId === 'string' ? influencerModelId : undefined,
+        video_settings: (typeof videoSettings === 'object' && videoSettings !== null) ? videoSettings : undefined
       };
       const cleaned = Object.fromEntries(Object.entries(nextUpdate).filter(([,v]) => typeof v !== 'undefined'));
       const { error } = await db.client
