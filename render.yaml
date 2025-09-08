@@ -1,0 +1,90 @@
+services:
+  - type: web
+    name: influencer-api
+    env: python
+    plan: standard
+    buildCommand: pip install --no-cache-dir -r apps/influencer-api/requirements.txt
+    startCommand: uvicorn apps.influencer-api.main:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: fashion-images
+      - key: SUPABASE_PREFIX_INFLUENCER
+        value: influencer
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_API_BASE
+        value: https://generativelanguage.googleapis.com
+      - key: HIGGSFIELD_API_KEY
+        sync: false
+      - key: HIGGSFIELD_BASE_URL
+        value: https://higgsfieldapi.com/api/v1
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: influencer-redis
+          property: connectionString
+      - key: REQUEST_TIMEOUT_MS
+        value: "60000"
+      - key: MAX_CONCURRENCY
+        value: "2"
+      - key: RETRY_BACKOFF_MS
+        value: "2000"
+      - key: INFLUENCER_DEMO_MODE
+        value: "true"
+      - key: MODEL_ACCEL
+        value: cpu
+      - key: HF_HOME
+        value: /opt/hf-cache
+
+  - type: worker
+    name: influencer-worker
+    env: python
+    plan: standard
+    buildCommand: pip install --no-cache-dir -r apps/influencer-api/requirements.txt
+    startCommand: python apps/influencer-api/worker/rq_worker.py
+    autoDeploy: true
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: influencer-redis
+          property: connectionString
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: fashion-images
+      - key: SUPABASE_PREFIX_INFLUENCER
+        value: influencer
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_API_BASE
+        value: https://generativelanguage.googleapis.com
+      - key: HIGGSFIELD_API_KEY
+        sync: false
+      - key: HIGGSFIELD_BASE_URL
+        value: https://higgsfieldapi.com/api/v1
+      - key: REQUEST_TIMEOUT_MS
+        value: "60000"
+      - key: MAX_CONCURRENCY
+        value: "2"
+      - key: RETRY_BACKOFF_MS
+        value: "2000"
+      - key: INFLUENCER_DEMO_MODE
+        value: "true"
+      - key: MODEL_ACCEL
+        value: cpu
+      - key: HF_HOME
+        value: /opt/hf-cache
+
+  - type: redis
+    name: influencer-redis
+    ipAllowList: []
