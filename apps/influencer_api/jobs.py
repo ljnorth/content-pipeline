@@ -34,8 +34,24 @@ def job_generate_base(payload: dict) -> dict:
         db.insert_asset(job_id, 'base', up.url, meta={"demo": True})
         if username:
             db.set_account_influencer_model(username, str(job_id))
-        db.update_job(job_id, status='completed', stage='base_generated')
-        return {"job_id": job_id, "anchor_url": up.url, "model_id": str(job_id)}
+        # Upscale (demo)
+        db.update_job(job_id, status='running', stage='upscale')
+        up2 = store.upload_bytes(png, f"upscaled/{job_id}/anchor_upscaled.png", content_type='image/png')
+        db.insert_asset(job_id, 'upscaled', up2.url, meta={"demo": True})
+        # Variants (demo)
+        db.update_job(job_id, status='running', stage='variants')
+        count = 3
+        try:
+            c = payload.get('counts') or {}
+            if isinstance(c, dict):
+                count = int(c.get('variants') or 3)
+        except Exception:
+            count = 3
+        for i in range(max(1, min(count, 50))):
+            v = store.upload_bytes(png, f"variants/{job_id}/v_{i+1}.png", content_type='image/png')
+            db.insert_asset(job_id, 'variant', v.url, meta={"demo": True, "index": i+1})
+        db.update_job(job_id, status='completed', stage='completed')
+        return {"job_id": job_id, "anchor_url": up.url, "model_id": str(job_id), "variants": count}
     except Exception as e:
         db.update_job(job_id, status='failed', stage='init', warnings=[str(e)])
         raise

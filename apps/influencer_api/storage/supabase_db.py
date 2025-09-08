@@ -58,3 +58,7 @@ class SupabaseDB:
 
     def list_assets(self, job_id: str) -> List[Dict[str, Any]]:
         return self.select('influencer_assets', { 'job_id': f'eq.{job_id}', 'order': 'created_at.desc' })
+
+    def get_asset(self, asset_id: str) -> Dict[str, Any] | None:
+        rows = self.select('influencer_assets', { 'id': f'eq.{asset_id}' })
+        return rows[0] if rows else None

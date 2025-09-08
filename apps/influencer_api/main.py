@@ -4,6 +4,7 @@ from pydantic import BaseModel
 import os
 from .jobs import enqueue_generate
 from .storage.supabase_db import SupabaseDB
+from .services.video.higgsfield_adapter import HiggsfieldClient
 
 app = FastAPI(title="Influencer API", version="1.0.0")
 app.add_middleware(
@@ -51,5 +52,14 @@ async def init_once(username: str):
 
 @app.post("/v1/influencer/video/{asset_id}")
 async def make_video(asset_id: str):
-    # TODO: call Higgsfield adapter
-    return {"queued": True, "asset_id": asset_id}
+    db = SupabaseDB()
+    asset = db.get_asset(asset_id)
+    if not asset:
+        return {"error": "asset not found"}
+    image_url = asset.get('url')
+    hf = HiggsfieldClient()
+    res = hf.create_image_to_video(image_url=image_url, prompt='Outfit breakdown reel', duration=8, aspect='9:16')
+    gen_id = res.get('generation_id') or res.get('id') or 'unknown'
+    # Write linkage for convenience
+    db.update_job(asset['job_id'], higgsfield_job_id=gen_id)
+    return {"queued": True, "asset_id": asset_id, "generation_id": gen_id}
