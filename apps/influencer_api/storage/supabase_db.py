@@ -51,3 +51,10 @@ class SupabaseDB:
     def insert_asset(self, job_id: str, kind: str, url: str, meta: Dict[str, Any] | None = None, width: int | None = None, height: int | None = None, hashv: str | None = None) -> Dict[str, Any]:
         body = { 'job_id': job_id, 'kind': kind, 'url': url, 'meta': meta or {}, 'width': width, 'height': height, 'hash': hashv }
         return self.insert('influencer_assets', body)
+
+    def get_job(self, job_id: str) -> Dict[str, Any] | None:
+        rows = self.select('influencer_jobs', { 'id': f'eq.{job_id}' })
+        return rows[0] if rows else None
+
+    def list_assets(self, job_id: str) -> List[Dict[str, Any]]:
+        return self.select('influencer_assets', { 'job_id': f'eq.{job_id}', 'order': 'created_at.desc' })

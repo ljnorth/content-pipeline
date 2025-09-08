@@ -37,5 +37,11 @@ def job_generate_base(payload: dict) -> dict:
 
 
 def enqueue_generate(payload: dict) -> str:
-    job = q_default.enqueue(job_generate_base, payload, job_timeout=600)
-    return job.get_id()
+    # Create DB job first so we can return influencer_jobs.id as the stable id
+    db = SupabaseDB()
+    row = db.create_job(status='queued', stage='queued')
+    job_id = row['id']
+    payload = dict(payload)
+    payload['__db_job_id'] = job_id
+    q_default.enqueue(job_generate_base, payload, job_timeout=600)
+    return job_id
