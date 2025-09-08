@@ -1,4 +1,3 @@
-from .typing import *  # type: ignore
 from pydantic import BaseModel
 from ..deps import get_settings
 import requests
