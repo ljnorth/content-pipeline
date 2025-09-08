@@ -7,16 +7,5 @@ redis==5.0.4
 rq==1.15.1
 httpx==0.27.0
 requests==2.32.3
-Pillow==10.3.0
-numpy==1.26.4
-opencv-python-headless==4.10.0.84
-supabase==2.4.5
-# Model stack (installed but gated by INFLUENCER_DEMO_MODE)
-torch==2.1.2
-transformers==4.41.1
-diffusers==0.30.0
-accelerate==0.33.0
-insightface==0.7.3
-onnxruntime==1.18.1
-realesrgan==0.3.0
-facexlib==0.3.0
+# NOTE: Model/image libs are intentionally omitted for now to avoid build issues on Python 3.13.
+# We will add them when moving to a GPU-capable host or after pinning a supported Python runtime.
