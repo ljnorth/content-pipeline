@@ -94,6 +94,35 @@
     </div>
   </div>
 
+  <!-- Persona modal -->
+  <div id="personaModal" class="modal-overlay">
+    <div class="modal">
+      <header><h3>Influencer Persona</h3><button id="personaClose" class="btn btn-outline">Close</button></header>
+      <div class="body" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">
+        <select id="pGender"></select>
+        <select id="pAge"></select>
+        <input id="pHeight" type="number" step="1" placeholder="Height (cm)" />
+        <input id="pWeight" type="number" step="0.1" placeholder="Weight (kg)" />
+        <select id="pEye"></select>
+        <select id="pEthnicity"></select>
+        <select id="pSkinTone"></select>
+        <input id="pHair" placeholder="Hair style (e.g., long straight)" />
+        <input id="pHairColor" placeholder="Hair color (e.g., black)" />
+        <div style="grid-column:1/-1">
+          <label class="muted" style="display:block;margin-bottom:6px">Skin features</label>
+          <div id="pSkinFeatures" class="options" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+        </div>
+        <div style="grid-column:1/-1">
+          <label class="muted" style="display:block;margin-bottom:6px">Style preset (rotates automatically at generation time)</label>
+          <select id="pStylePreset" style="width:100%"></select>
+        </div>
+      </div>
+      <div class="footer">
+        <button id="personaSave" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
   <section class="section" style="margin-top:12px">
     <h3>Influencer Tools (Gemini/Higgsfield)</h3>
     <div class="row">
@@ -102,6 +131,25 @@
       <button id="infPreview" class="btn btn-outline">Generate Still (Preview)</button>
     </div>
     <div id="infOutput" style="margin-top:8px"></div>
+  </section>
+
+  <section class="section" style="margin-top:12px">
+    <h3>Influencer Pipeline</h3>
+    <div class="row">
+      <select id="pipeUser" style="min-width:240px"></select>
+      <button id="pipeInit" class="btn btn-outline">Init Influencer</button>
+      <button id="pipeRun" class="btn btn-primary">Run Pipeline</button>
+      <input id="pipeJobId" placeholder="job_id" style="flex:1"/>
+      <button id="pipeStatus" class="btn btn-outline">Poll Status</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input id="pipeVariantAssetId" placeholder="variant asset_id for reel" style="flex:1"/>
+      <button id="pipeReel" class="btn btn-outline">Make Reel</button>
+      <input id="pipeGenId" placeholder="generation_id" style="flex:1"/>
+      <button id="pipeReelStatus" class="btn btn-outline">Poll Reel Status</button>
+    </div>
+    <pre id="pipeLog" class="muted" style="margin-top:8px; max-height:220px; overflow:auto; background:#0f0f0f; color:#bdbdbd; padding:8px; border-radius:6px"></pre>
+    <div id="pipeGrid" class="grid" style="margin-top:12px; display:grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); grid-auto-rows:120px; gap:8px"></div>
   </section>
 
   <script type="module">
@@ -130,7 +178,8 @@
             '<button class="icon-btn preview-btn" title="Preview" data-prev="'+a.username+'">👁</button> '+
             '<button class="icon-btn gen" title="Generate" data-u="'+a.username+'">⚡</button> '+
             '<button class="icon-btn edit" title="Edit" data-u="'+a.username+'">✏️</button> '+
-            '<button class="icon-btn inspo-edit" title="Inspo" data-u="'+a.username+'">✨</button>'+
+            '<button class="icon-btn inspo-edit" title="Inspo" data-u="'+a.username+'">✨</button> '+
+            '<button class="icon-btn persona-edit" title="Persona" data-u="'+a.username+'">🧬</button>'+
           '</td>';
         tbody.appendChild(tr);
         // Add to preview dropdown
@@ -181,6 +230,10 @@
       // Open inspo modal for a specific account
       document.querySelectorAll('button.inspo-edit').forEach(btn => {
         btn.onclick = () => openInspoModal(btn.dataset.u);
+      });
+      // Open persona modal for a specific account
+      document.querySelectorAll('button.persona-edit').forEach(btn => {
+        btn.onclick = () => openPersonaModal(btn.dataset.u);
       });
     }
 
@@ -318,6 +371,80 @@
         out.innerHTML = '';
         out.appendChild(img);
       }catch(e){ out.textContent = 'Error: '+e.message; }
+    };
+
+    // Populate pipeline user select using existing preview dropdown data
+    (function syncPipeUsers(){
+      const src = document.getElementById('previewUserSelect');
+      const dst = document.getElementById('pipeUser');
+      dst.innerHTML = src.innerHTML;
+    })();
+
+    document.getElementById('pipeInit').onclick = async () => {
+      const u = document.getElementById('pipeUser').value || '';
+      if (!u) return setStatus('Pick a user for Init.', 'err');
+      setStatus('Init influencer…');
+      try{
+        const res = await fetch('/api/influencer/init', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: u }) });
+        const j = await res.json();
+        document.getElementById('pipeJobId').value = j.job_id || '';
+        document.getElementById('pipeLog').textContent = JSON.stringify(j, null, 2);
+        setStatus('Init enqueued', 'ok');
+      }catch(e){ setStatus('Init failed: '+e.message, 'err'); }
+    };
+
+    document.getElementById('pipeRun').onclick = async () => {
+      const u = document.getElementById('pipeUser').value || '';
+      if (!u) return setStatus('Pick a user for Run.', 'err');
+      setStatus('Running pipeline…');
+      try{
+        const res = await fetch('/api/influencer/run', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: u, persona: { username: u } }) });
+        const j = await res.json();
+        document.getElementById('pipeJobId').value = j.job_id || '';
+        document.getElementById('pipeLog').textContent = JSON.stringify(j, null, 2);
+        setStatus('Run enqueued', 'ok');
+      }catch(e){ setStatus('Run failed: '+e.message, 'err'); }
+    };
+
+    document.getElementById('pipeStatus').onclick = async () => {
+      const id = document.getElementById('pipeJobId').value.trim();
+      if (!id) return setStatus('Enter job_id', 'err');
+      setStatus('Polling status…');
+      try{
+        const res = await fetch('/api/influencer/status?job_id=' + encodeURIComponent(id));
+        const j = await res.json();
+        document.getElementById('pipeLog').textContent = JSON.stringify(j, null, 2);
+        const grid = document.getElementById('pipeGrid'); grid.innerHTML='';
+        (j.assets||[]).forEach(a=>{ const d=document.createElement('div'); d.className='thumb-wrap'; d.innerHTML='<a href="'+a.url+'" target="_blank"><img class="thumb" src="'+a.url+'"/></a>'; grid.appendChild(d); });
+        // convenience: set first variant id
+        const v = (j.assets||[]).find(a=>a.kind==='variant');
+        if (v) document.getElementById('pipeVariantAssetId').value = v.id;
+        setStatus('Status loaded: '+(j.stage||j.status||'-'), 'ok');
+      }catch(e){ setStatus('Status failed: '+e.message, 'err'); }
+    };
+
+    document.getElementById('pipeReel').onclick = async () => {
+      const assetId = document.getElementById('pipeVariantAssetId').value.trim();
+      if (!assetId) return setStatus('Enter variant asset_id for reel', 'err');
+      try{
+        const res = await fetch('/api/influencer/video', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ asset_id: assetId }) });
+        const j = await res.json();
+        if (j.generation_id) document.getElementById('pipeGenId').value = j.generation_id;
+        document.getElementById('pipeLog').textContent = JSON.stringify(j, null, 2);
+        setStatus('Reel queued', 'ok');
+      }catch(e){ setStatus('Reel failed: '+e.message, 'err'); }
+    };
+
+    document.getElementById('pipeReelStatus').onclick = async () => {
+      const gen = document.getElementById('pipeGenId').value.trim();
+      const jobId = document.getElementById('pipeJobId').value.trim();
+      if (!gen) return setStatus('Enter generation_id', 'err');
+      try{
+        const res = await fetch('/api/influencer/video-status?generation_id='+encodeURIComponent(gen)+'&job_id='+encodeURIComponent(jobId));
+        const j = await res.json();
+        document.getElementById('pipeLog').textContent = JSON.stringify(j, null, 2);
+        setStatus('Reel status: '+(j.status||'-'), 'ok');
+      }catch(e){ setStatus('Reel status failed: '+e.message, 'err'); }
     };
 
     // Auth guard
@@ -487,6 +614,88 @@
       const payload = { username: modalAccount, inspoAccounts: Array.from(modalSelected) };
       try{ await fetch('/api/accounts', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) }); await loadProfiles(); }catch(_){ }
       inspoModal.classList.remove('open');
+    };
+
+    // Persona modal state
+    const personaModal = document.getElementById('personaModal');
+    document.getElementById('personaClose').onclick = ()=> personaModal.classList.remove('open');
+    let personaAccount = null;
+    const GENDERS = ['female','male','non-binary'];
+    const AGE_GROUPS = ['18-24','25-34','35-44','45-54'];
+    const EYE_COLORS = ['brown','dark brown','hazel','green','blue','gray','amber'];
+    const ETHNICITIES = ['Black','White','East Asian','South Asian','Latina','Middle Eastern','Mixed','Other'];
+    const SKIN_TONES = ['very fair','fair','light','light-medium','medium','olive','tan','brown','dark brown','deep'];
+    const SKIN_FEATURES = ['freckles','beauty marks','moles','wrinkles','laugh lines','dimples'];
+    const STYLE_PRESETS = ['streetwear monochrome','athleisure set','denim + tee','blazer + jeans','summer dress','knit + pleated skirt','cargo + crop top'];
+
+    function fillSelect(el, arr){ el.innerHTML = arr.map(v=>`<option value="${v}">${v}</option>`).join(''); }
+    fillSelect(document.getElementById('pGender'), GENDERS);
+    fillSelect(document.getElementById('pAge'), AGE_GROUPS);
+    fillSelect(document.getElementById('pEye'), EYE_COLORS);
+    fillSelect(document.getElementById('pEthnicity'), ETHNICITIES);
+    fillSelect(document.getElementById('pSkinTone'), SKIN_TONES);
+    fillSelect(document.getElementById('pStylePreset'), STYLE_PRESETS);
+    (function(){
+      const wrap = document.getElementById('pSkinFeatures');
+      SKIN_FEATURES.forEach(f=>{ const lbl=document.createElement('label'); lbl.innerHTML=`<input type="checkbox" data-v="${f}"> ${f}`; wrap.appendChild(lbl); });
+    })();
+
+    async function openPersonaModal(username){
+      personaAccount = username;
+      // Reset inputs
+      document.getElementById('pGender').value = 'female';
+      document.getElementById('pAge').value = '18-24';
+      document.getElementById('pHeight').value = '';
+      document.getElementById('pWeight').value = '';
+      document.getElementById('pEye').value = 'brown';
+      document.getElementById('pEthnicity').value = 'Mixed';
+      document.getElementById('pSkinTone').value = 'light-medium';
+      document.getElementById('pHair').value = '';
+      document.getElementById('pHairColor').value = '';
+      document.querySelectorAll('#pSkinFeatures input[type="checkbox"]').forEach(cb=> cb.checked=false);
+      document.getElementById('pStylePreset').value = STYLE_PRESETS[0];
+      // Load existing
+      try{
+        const res = await fetch('/api/accounts');
+        const arr = await res.json();
+        const p = (arr||[]).find(x=>x.username===username) || {};
+        const t = p.influencer_traits || {};
+        if (Object.keys(t).length){
+          if (t.gender) document.getElementById('pGender').value = t.gender;
+          if (t.age) document.getElementById('pAge').value = t.age;
+          if (t.height_cm) document.getElementById('pHeight').value = t.height_cm;
+          if (t.weight_kg) document.getElementById('pWeight').value = t.weight_kg;
+          if (t.eyeColor) document.getElementById('pEye').value = t.eyeColor;
+          if (t.ethnicity) document.getElementById('pEthnicity').value = t.ethnicity;
+          if (t.skinTone) document.getElementById('pSkinTone').value = t.skinTone;
+          if (Array.isArray(t.skinFeatures)) document.querySelectorAll('#pSkinFeatures input').forEach(cb=>{ cb.checked = t.skinFeatures.includes(cb.dataset.v); });
+          if (t.hair) document.getElementById('pHair').value = t.hair;
+          if (t.hairColor) document.getElementById('pHairColor').value = t.hairColor;
+          if (t.stylePreset) document.getElementById('pStylePreset').value = t.stylePreset;
+        }
+      }catch(_){ }
+      personaModal.classList.add('open');
+    }
+
+    document.getElementById('personaSave').onclick = async () => {
+      if (!personaAccount) return personaModal.classList.remove('open');
+      const skinFeatures = Array.from(document.querySelectorAll('#pSkinFeatures input:checked')).map(cb=>cb.dataset.v);
+      const traits = {
+        gender: document.getElementById('pGender').value,
+        age: document.getElementById('pAge').value,
+        height_cm: parseFloat(document.getElementById('pHeight').value || '0') || undefined,
+        weight_kg: parseFloat(document.getElementById('pWeight').value || '0') || undefined,
+        eyeColor: document.getElementById('pEye').value,
+        ethnicity: document.getElementById('pEthnicity').value,
+        skinTone: document.getElementById('pSkinTone').value,
+        skinFeatures,
+        hair: document.getElementById('pHair').value || undefined,
+        hairColor: document.getElementById('pHairColor').value || undefined,
+        stylePreset: document.getElementById('pStylePreset').value
+      };
+      const payload = { username: personaAccount, influencerTraits: traits, contentStyle: 'influencer_still' };
+      try{ await fetch('/api/accounts', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) }); await loadProfiles(); }catch(_){ }
+      personaModal.classList.remove('open');
     };
   </script>
   <footer class="center" style="gap:12px;margin:24px 0">
