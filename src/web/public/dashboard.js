@@ -2246,6 +2246,19 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch(e){ showError(e.message); }
         });
     }
+
+    // Enable influencer buttons when account is selected
+    const accountSelects = [document.getElementById('targetAccount'), document.getElementById('workflowAccount')].filter(Boolean);
+    accountSelects.forEach(sel => sel.addEventListener('change', () => {
+        const has = !!sel.value;
+        const ids = ['previewInfluencerBtn','trainInfluencerBtn','tryOnVideoBtn'];
+        ids.forEach(id => { const b=document.getElementById(id); if (b) b.disabled = !has; });
+    }));
+
+    // Influencer actions
+    document.getElementById('previewInfluencerBtn')?.addEventListener('click', previewInfluencerStill);
+    document.getElementById('trainInfluencerBtn')?.addEventListener('click', trainInfluencerModel);
+    document.getElementById('tryOnVideoBtn')?.addEventListener('click', tryOnVideoDemo);
 }); 
 
 // Aesthetic counts for live preview
@@ -2354,6 +2367,68 @@ async function generateForAccount() {
         console.error('Error generating content for account:', error);
         showError('Failed to generate content for account: ' + error.message);
     }
+}
+
+async function loadProfileFor(username){
+    const r = await fetch(`/api/account-profiles/${encodeURIComponent(username)}`);
+    if (!r.ok) throw new Error('Profile not found');
+    return await r.json();
+}
+
+async function previewInfluencerStill(){
+    try {
+        const username = document.getElementById('targetAccount').value || document.getElementById('workflowAccount').value;
+        if (!username) return showError('Select an account first');
+        const profile = await loadProfileFor(username);
+        const persona = profile?.content_strategy?.influencerPersona || null;
+        const garmentUrl = null; // optional
+        const res = await fetch('/api/influencer/preview-still', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, persona, garmentUrl }) });
+        const j = await res.json();
+        if (!res.ok || j.success === false) throw new Error(j.error || 'Failed to preview');
+        // Show result in Generated Content preview grid
+        const grid = document.getElementById('generatedContent');
+        document.getElementById('generationPreview').style.display = 'block';
+        grid.innerHTML = `<div class="image-card"><img src="${j.imageUrl}" alt="preview"/></div>`;
+        showSuccess('Preview generated');
+    } catch(e){ showError(e.message); }
+}
+
+async function trainInfluencerModel(){
+    try {
+        const username = document.getElementById('targetAccount').value || document.getElementById('workflowAccount').value;
+        if (!username) return showError('Select an account first');
+        const profile = await loadProfileFor(username);
+        const persona = profile?.content_strategy?.influencerPersona || null;
+        const res = await fetch('/api/influencer/train', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, persona }) });
+        const j = await res.json();
+        if (!res.ok || j.success === false) throw new Error(j.error || 'Failed to start training');
+        showSuccess(`Training started (job: ${j.jobId || '-'})`);
+    } catch(e){ showError(e.message); }
+}
+
+async function tryOnVideoDemo(){
+    try {
+        const username = document.getElementById('targetAccount').value || document.getElementById('workflowAccount').value;
+        if (!username) return showError('Select an account first');
+        const res = await fetch('/api/influencer/tryon-video', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, garmentUrl: null }) });
+        const j = await res.json();
+        if (!res.ok || j.success === false) throw new Error(j.error || 'Failed to start try-on');
+        // Poll status a few times
+        const genId = j.generationId;
+        const start = Date.now();
+        const poll = async () => {
+            const r2 = await fetch(`/api/influencer/video-status?generation_id=${encodeURIComponent(genId)}`);
+            const s = await r2.json();
+            if (s.status === 'completed' && s.videoUrl){
+                const grid = document.getElementById('generatedContent');
+                document.getElementById('generationPreview').style.display = 'block';
+                grid.innerHTML = `<video controls style="width:100%;max-width:480px;border-radius:10px"><source src="${s.videoUrl}" type="video/mp4"/></video>`;
+                showSuccess('Try-on video ready');
+            } else if (Date.now() - start < 60000) { setTimeout(poll, 1500); }
+            else { showError('Video generation timed out'); }
+        };
+        setTimeout(poll, 1500);
+    } catch(e){ showError(e.message); }
 }
 
 // TikTok OAuth Functions
