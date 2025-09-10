@@ -2125,6 +2125,127 @@ document.addEventListener('DOMContentLoaded', () => {
             createAccountProfile();
         });
     }
+
+    // Persona modal wiring
+    const openPersonaBtn = document.getElementById('openPersonaBtn');
+    const personaModalEl = document.getElementById('personaModal');
+    if (openPersonaBtn && personaModalEl) {
+        const modal = new bootstrap.Modal(personaModalEl);
+        // Static options
+        const GENDERS = ['women','men','non-binary'];
+        const AGE_GROUPS = ['18-24','25-34','35-44','45-54'];
+        const EYE_COLORS = ['brown','dark brown','hazel','green','blue','gray','amber'];
+        const ETHNICITIES = ['Black','White','East Asian','South Asian','Latina','Middle Eastern','Mixed','Other'];
+        const SKIN_TONES = ['very fair','fair','light','light-medium','medium','olive','tan','brown','dark brown','deep'];
+        const SKIN_FEATURES = ['freckles','beauty marks','moles','wrinkles','laugh lines','dimples'];
+        const STYLE_PRESETS = ['streetwear monochrome','athleisure set','denim + tee','blazer + jeans','summer dress','knit + pleated skirt','cargo + crop top'];
+
+        function fillSelect(id, arr){ const el = document.getElementById(id); if (el) el.innerHTML = arr.map(v=>`<option value="${v}">${v}</option>`).join(''); }
+        fillSelect('pGender', GENDERS);
+        fillSelect('pAge', AGE_GROUPS);
+        fillSelect('pEye', EYE_COLORS);
+        fillSelect('pEthnicity', ETHNICITIES);
+        fillSelect('pSkinTone', SKIN_TONES);
+        fillSelect('pStylePreset', STYLE_PRESETS);
+        // Skin features checkboxes
+        const sfWrap = document.getElementById('pSkinFeatures');
+        if (sfWrap && sfWrap.children.length === 0) {
+            SKIN_FEATURES.forEach(f=>{ const div=document.createElement('div'); div.innerHTML = `<label class="form-check-label"><input class="form-check-input me-1" type="checkbox" data-v="${f}"> ${f}</label>`; sfWrap.appendChild(div); });
+        }
+
+        function updatePersonaStatus(t){
+            const s = document.getElementById('personaStatus');
+            if (!s) return;
+            if (t && Object.keys(t).length){ s.textContent = `Persona: ${t.gender||'-'}/${t.age||'-'} | ${t.skinTone||'-'} | ${t.eyeColor||'-'}`; }
+            else { s.textContent = 'Persona: not set'; }
+        }
+
+        // Load existing persona for selected account if any
+        openPersonaBtn.addEventListener('click', async () => {
+            try {
+                // Try to infer current username from form
+                const u = (document.getElementById('profileUsername')?.value || '').trim();
+                // Reset defaults
+                document.getElementById('pGender').value = 'women';
+                document.getElementById('pAge').value = '18-24';
+                document.getElementById('pHeight').value = '';
+                document.getElementById('pWeight').value = '';
+                document.getElementById('pEye').value = 'brown';
+                document.getElementById('pEthnicity').value = 'Mixed';
+                document.getElementById('pSkinTone').value = 'light-medium';
+                document.getElementById('pHair').value = '';
+                document.getElementById('pHairColor').value = '';
+                document.querySelectorAll('#pSkinFeatures input[type="checkbox"]').forEach(cb => cb.checked = false);
+                document.getElementById('pStylePreset').value = STYLE_PRESETS[0];
+
+                if (u) {
+                    // Load profile to populate status if exists
+                    const resp = await fetch(`/api/account-profiles/${encodeURIComponent(u)}`);
+                    if (resp.ok){
+                        const prof = await resp.json();
+                        const t = prof?.content_strategy?.influencerPersona || null;
+                        if (t){
+                            if (t.gender) document.getElementById('pGender').value = t.gender;
+                            if (t.age) document.getElementById('pAge').value = t.age;
+                            if (t.height_cm) document.getElementById('pHeight').value = t.height_cm;
+                            if (t.weight_kg) document.getElementById('pWeight').value = t.weight_kg;
+                            if (t.eyeColor) document.getElementById('pEye').value = t.eyeColor;
+                            if (t.ethnicity) document.getElementById('pEthnicity').value = t.ethnicity;
+                            if (t.skinTone) document.getElementById('pSkinTone').value = t.skinTone;
+                            if (Array.isArray(t.skinFeatures)) document.querySelectorAll('#pSkinFeatures input').forEach(cb=> cb.checked = t.skinFeatures.includes(cb.dataset.v));
+                            if (t.hair) document.getElementById('pHair').value = t.hair;
+                            if (t.hairColor) document.getElementById('pHairColor').value = t.hairColor;
+                            if (t.stylePreset) document.getElementById('pStylePreset').value = t.stylePreset;
+                        }
+                        updatePersonaStatus(t);
+                    }
+                }
+                modal.show();
+            } catch(e){ showError('Failed to open persona modal: ' + e.message); }
+        });
+
+        document.getElementById('personaSaveBtn')?.addEventListener('click', async () => {
+            const u = (document.getElementById('profileUsername')?.value || '').trim();
+            if (!u) { showError('Enter a username first'); return; }
+            const skinFeatures = Array.from(document.querySelectorAll('#pSkinFeatures input:checked')).map(cb=>cb.dataset.v);
+            const traits = {
+                gender: document.getElementById('pGender').value,
+                age: document.getElementById('pAge').value,
+                height_cm: parseFloat(document.getElementById('pHeight').value || '0') || undefined,
+                weight_kg: parseFloat(document.getElementById('pWeight').value || '0') || undefined,
+                eyeColor: document.getElementById('pEye').value,
+                ethnicity: document.getElementById('pEthnicity').value,
+                skinTone: document.getElementById('pSkinTone').value,
+                skinFeatures,
+                hair: document.getElementById('pHair').value || undefined,
+                hairColor: document.getElementById('pHairColor').value || undefined,
+                stylePreset: document.getElementById('pStylePreset').value
+            };
+            try {
+                // Fetch existing profile to merge
+                const resp = await fetch(`/api/account-profiles/${encodeURIComponent(u)}`);
+                if (!resp.ok) { showError('Create and save the profile first, then set persona.'); return; }
+                const prof = await resp.json();
+                const content_strategy = Object.assign({}, prof.content_strategy || {}, { influencerPersona: traits });
+                const payload = {
+                    username: prof.username,
+                    displayName: prof.display_name,
+                    platform: prof.platform,
+                    accountType: prof.account_type,
+                    targetAudience: prof.target_audience,
+                    contentStrategy: content_strategy,
+                    performanceGoals: prof.performance_goals,
+                    postingSchedule: prof.posting_schedule
+                };
+                const r2 = await fetch(`/api/account-profiles/${encodeURIComponent(u)}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+                if (!r2.ok){ const j = await r2.json().catch(()=>({})); throw new Error(j.error || 'Failed to save persona'); }
+                showSuccess('Persona saved');
+                updatePersonaStatus(traits);
+                modal.hide();
+                loadAccountProfilesList();
+            } catch(e){ showError(e.message); }
+        });
+    }
 }); 
 
 // Aesthetic counts for live preview
