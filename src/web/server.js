@@ -852,7 +852,11 @@ app.post('/api/export-generation', async (req, res) => {
 
 // --- Influencer Preview & Try-On (demo-mode capable) ---
 const INFLUENCER_API_BASE = process.env.INFLUENCER_API_BASE || '';
-const INFLUENCER_DEMO_MODE = (process.env.INFLUENCER_DEMO_MODE || 'true').toLowerCase() === 'true';
+// Default: if a real API base is provided, demo-mode is OFF unless explicitly forced
+const _demoEnv = (process.env.INFLUENCER_DEMO_MODE || '').toLowerCase();
+const INFLUENCER_DEMO_MODE = _demoEnv
+  ? _demoEnv === 'true'
+  : (INFLUENCER_API_BASE ? false : true);
 const influencerJobs = new Map();
 
 app.post('/api/influencer/preview-still', async (req, res) => {
