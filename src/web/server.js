@@ -850,100 +850,93 @@ app.post('/api/export-generation', async (req, res) => {
   }
 });
 
-// --- Influencer Preview & Try-On (demo-mode capable) ---
+// --- Influencer Preview & Try-On ---
 const INFLUENCER_API_BASE = process.env.INFLUENCER_API_BASE || '';
-// Default: if a real API base is provided, demo-mode is OFF unless explicitly forced
-const _demoEnv = (process.env.INFLUENCER_DEMO_MODE || '').toLowerCase();
-const INFLUENCER_DEMO_MODE = _demoEnv
-  ? _demoEnv === 'true'
-  : (INFLUENCER_API_BASE ? false : true);
-const influencerJobs = new Map();
+function requireInfluencerApi(res){
+  if (!INFLUENCER_API_BASE){
+    logger.error('Influencer API base not configured (INFLUENCER_API_BASE)');
+    res.status(503).json({ error: 'Influencer API unavailable. Set INFLUENCER_API_BASE in environment.' });
+    return false;
+  }
+  return true;
+}
 
 app.post('/api/influencer/preview-still', async (req, res) => {
   try {
+    if (!requireInfluencerApi(res)) return;
     const { username, persona, garmentUrl } = req.body || {};
     if (!username) return res.status(400).json({ error: 'username is required' });
-    if (!INFLUENCER_DEMO_MODE && INFLUENCER_API_BASE) {
-      const r = await fetch(`${INFLUENCER_API_BASE}/preview-still`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, persona, garmentUrl })
-      });
-      const j = await r.json();
-      return res.status(r.ok ? 200 : (j.status || 500)).json(j);
-    }
-    // Demo: return a realistic portrait placeholder
-    const imgUrl = `https://source.unsplash.com/random/720x1280?portrait,fashion,${encodeURIComponent(persona?.stylePreset || 'streetwear')}`;
-    return res.json({ success: true, imageUrl: imgUrl, demo: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    const t0 = Date.now();
+    const r = await fetch(`${INFLUENCER_API_BASE}/preview-still`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, persona, garmentUrl })
+    });
+    const j = await r.json().catch(()=>({ error: 'invalid json from influencer api' }));
+    const ms = Date.now() - t0;
+    if (!r.ok){ logger.error(`[influencer] preview-still failed`, { username, status: r.status, latencyMs: ms, error: j.error }); return res.status(r.status).json(j); }
+    logger.success(`[influencer] preview-still ok`, { username, latencyMs: ms });
+    return res.json(j);
+  } catch (e) { logger.error('[influencer] preview-still exception', e); res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/influencer/train', async (req, res) => {
   try {
+    if (!requireInfluencerApi(res)) return;
     const { username, persona } = req.body || {};
     if (!username) return res.status(400).json({ error: 'username is required' });
-    if (!INFLUENCER_DEMO_MODE && INFLUENCER_API_BASE) {
-      const r = await fetch(`${INFLUENCER_API_BASE}/train`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, persona }) });
-      const j = await r.json();
-      return res.status(r.ok ? 200 : (j.status || 500)).json(j);
-    }
-    // Demo: create in-memory job
-    const jobId = `job_${Date.now()}`;
-    influencerJobs.set(jobId, { status: 'queued', username, startedAt: Date.now() });
-    setTimeout(() => { const j = influencerJobs.get(jobId); if (j) influencerJobs.set(jobId, { ...j, status: 'running' }); }, 1500);
-    setTimeout(() => { const j = influencerJobs.get(jobId); if (j) influencerJobs.set(jobId, { ...j, status: 'completed' }); }, 8000);
-    return res.json({ success: true, jobId, demo: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    const t0 = Date.now();
+    const r = await fetch(`${INFLUENCER_API_BASE}/train`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, persona }) });
+    const j = await r.json().catch(()=>({ error: 'invalid json from influencer api' }));
+    const ms = Date.now() - t0;
+    if (!r.ok){ logger.error(`[influencer] train failed`, { username, status: r.status, latencyMs: ms, error: j.error }); return res.status(r.status).json(j); }
+    logger.success(`[influencer] train ok`, { username, latencyMs: ms, jobId: j.job_id || j.jobId });
+    return res.json(j);
+  } catch (e) { logger.error('[influencer] train exception', e); res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/influencer/status', async (req, res) => {
   try {
+    if (!requireInfluencerApi(res)) return;
     const { job_id } = req.query;
     if (!job_id) return res.status(400).json({ error: 'job_id required' });
-    if (!INFLUENCER_DEMO_MODE && INFLUENCER_API_BASE) {
-      const r = await fetch(`${INFLUENCER_API_BASE}/status?job_id=${encodeURIComponent(job_id)}`);
-      const j = await r.json();
-      return res.status(r.ok ? 200 : (j.status || 500)).json(j);
-    }
-    const j = influencerJobs.get(job_id) || null;
-    if (!j) return res.status(404).json({ error: 'job not found' });
-    return res.json({ success: true, status: j.status, startedAt: j.startedAt, username: j.username, demo: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    const t0 = Date.now();
+    const r = await fetch(`${INFLUENCER_API_BASE}/status?job_id=${encodeURIComponent(job_id)}`);
+    const j = await r.json().catch(()=>({ error: 'invalid json from influencer api' }));
+    const ms = Date.now() - t0;
+    if (!r.ok){ logger.error(`[influencer] status failed`, { job_id, status: r.status, latencyMs: ms, error: j.error }); return res.status(r.status).json(j); }
+    logger.info(`[influencer] status`, { job_id, latencyMs: ms, state: j.status || j.stage || j.state });
+    return res.json(j);
+  } catch (e) { logger.error('[influencer] status exception', e); res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/influencer/tryon-video', async (req, res) => {
   try {
+    if (!requireInfluencerApi(res)) return;
     const { username, garmentUrl } = req.body || {};
     if (!username) return res.status(400).json({ error: 'username is required' });
-    if (!INFLUENCER_DEMO_MODE && INFLUENCER_API_BASE) {
-      const r = await fetch(`${INFLUENCER_API_BASE}/video`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, garmentUrl }) });
-      const j = await r.json();
-      return res.status(r.ok ? 200 : (j.status || 500)).json(j);
-    }
-    // Demo: create generation and attach a sample video after a delay
-    const generationId = `gen_${Date.now()}`;
-    influencerJobs.set(generationId, { status: 'generating', username, garmentUrl, startedAt: Date.now() });
-    setTimeout(() => {
-      const sampleVideo = 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4';
-      const j = influencerJobs.get(generationId);
-      if (j) influencerJobs.set(generationId, { ...j, status: 'completed', videoUrl: sampleVideo });
-    }, 7000);
-    return res.json({ success: true, generationId, demo: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    const t0 = Date.now();
+    const r = await fetch(`${INFLUENCER_API_BASE}/video`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, garmentUrl }) });
+    const j = await r.json().catch(()=>({ error: 'invalid json from influencer api' }));
+    const ms = Date.now() - t0;
+    if (!r.ok){ logger.error(`[influencer] tryon-video failed`, { username, status: r.status, latencyMs: ms, error: j.error }); return res.status(r.status).json(j); }
+    logger.success(`[influencer] tryon-video queued`, { username, latencyMs: ms, generationId: j.generation_id || j.generationId });
+    return res.json(j);
+  } catch (e) { logger.error('[influencer] tryon-video exception', e); res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/influencer/video-status', async (req, res) => {
   try {
+    if (!requireInfluencerApi(res)) return;
     const { generation_id } = req.query;
     if (!generation_id) return res.status(400).json({ error: 'generation_id required' });
-    if (!INFLUENCER_DEMO_MODE && INFLUENCER_API_BASE) {
-      const r = await fetch(`${INFLUENCER_API_BASE}/video-status?generation_id=${encodeURIComponent(generation_id)}`);
-      const j = await r.json();
-      return res.status(r.ok ? 200 : (j.status || 500)).json(j);
-    }
-    const j = influencerJobs.get(generation_id) || null;
-    if (!j) return res.status(404).json({ error: 'generation not found' });
-    return res.json({ success: true, status: j.status, videoUrl: j.videoUrl || null, startedAt: j.startedAt, demo: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    const t0 = Date.now();
+    const r = await fetch(`${INFLUENCER_API_BASE}/video-status?generation_id=${encodeURIComponent(generation_id)}`);
+    const j = await r.json().catch(()=>({ error: 'invalid json from influencer api' }));
+    const ms = Date.now() - t0;
+    if (!r.ok){ logger.error(`[influencer] video-status failed`, { generation_id, status: r.status, latencyMs: ms, error: j.error }); return res.status(r.status).json(j); }
+    logger.info(`[influencer] video-status`, { generation_id, latencyMs: ms, state: j.status || j.stage || j.state });
+    return res.json(j);
+  } catch (e) { logger.error('[influencer] video-status exception', e); res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/test-images', async (req, res) => {
