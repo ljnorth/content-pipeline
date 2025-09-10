@@ -206,35 +206,16 @@ export class VideoGenerator {
       this.logger.info('✅ FFmpeg is available');
       return true;
     } catch (error) {
-      this.logger.warn('⚠️ FFmpeg not found - video generation will use fallback method');
-      return false;
+      this.logger.error('FFmpeg not found - install ffmpeg on the server.');
+      throw new Error('FFmpeg not found');
     }
   }
 
   /**
    * Fallback method for video generation (web-based)
    */
-  async createSlideshowVideoFallback(images, options = {}) {
-    this.logger.info('🔄 Using fallback video generation method...');
-    
-    // This is a simplified fallback that creates a basic video
-    // In a real implementation, you might use a web-based video generation service
-    // or a different approach
-    
-    const { duration = 3, width = 1080, height = 1920 } = options;
-    
-    // Create actual video using web-based video generation
-    // For production, integrate with real video generation service
-    const videoBuffer = await this.generateRealVideo(images, { duration, width, height });
-    
-    return {
-      buffer: videoBuffer,
-      size: videoBuffer.byteLength,
-      filename: `slideshow_fallback_${Date.now()}.mp4`,
-      duration: images.length * duration,
-      dimensions: { width, height },
-      fallback: true
-    };
+  async createSlideshowVideoFallback() {
+    throw new Error('Fallback video generation is disabled in production');
   }
 
   /**

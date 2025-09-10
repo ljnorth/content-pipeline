@@ -924,6 +924,21 @@ app.post('/api/influencer/tryon-video', async (req, res) => {
   } catch (e) { logger.error('[influencer] tryon-video exception', e); res.status(500).json({ error: e.message }); }
 });
 
+// Run full influencer pipeline and deliver to Slack (no TikTok)
+app.post('/api/influencer/run-full-to-slack', async (req, res) => {
+  try {
+    if (!requireInfluencerApi(res)) return;
+    const { username } = req.body || {};
+    if (!username) return res.status(400).json({ error: 'username is required' });
+    const t0 = Date.now();
+    const r = await fetch(`${INFLUENCER_API_BASE}/run-full-to-slack`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username }) });
+    const j = await r.json().catch(()=>({ error: 'invalid json from influencer api' }));
+    const ms = Date.now() - t0;
+    if (!r.ok){ logger.error(`[influencer] run-full-to-slack failed`, { username, status: r.status, latencyMs: ms, error: j.error }); return res.status(r.status).json(j); }
+    logger.success(`[influencer] run-full-to-slack queued`, { username, latencyMs: ms, jobId: j.job_id || j.jobId, slackThread: j.slack?.thread_ts });
+    return res.json({ success: true, ...j });
+  } catch (e) { logger.error('[influencer] run-full-to-slack exception', e); res.status(500).json({ error: e.message }); }
+});
 app.get('/api/influencer/video-status', async (req, res) => {
   try {
     if (!requireInfluencerApi(res)) return;

@@ -132,19 +132,7 @@ export class ThemeContentGenerator {
       }
 
       if (!hookSlides || hookSlides.length === 0) {
-        // Try without filters if nothing found
-        const { data: fallbackSlides } = await this.db.client
-          .from('hook_slides')
-          .select('*')
-          .gte('confidence', 0.7)
-          .order('confidence', { ascending: false })
-          .limit(10);
-
-        if (!fallbackSlides || fallbackSlides.length === 0) {
-          return null;
-        }
-        
-        hookSlides.push(...fallbackSlides);
+        throw new Error('No hook slides matched given filters');
       }
 
       // Score hook slides based on account compatibility

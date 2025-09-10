@@ -809,7 +809,7 @@ function createImageCard(image) {
              alt="Fashion image" 
              data-post-id="${image.post_id || ''}"
              data-username="${image.username || ''}"
-             onerror="this.src='https://via.placeholder.com/200x200?text=Image+Not+Found'">
+             onerror="this.style.display='none'">
         <div class="image-info">
             <div class="d-flex justify-content-between align-items-start">
                 <div>
@@ -2258,7 +2258,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Influencer actions
     document.getElementById('previewInfluencerBtn')?.addEventListener('click', previewInfluencerStill);
     document.getElementById('trainInfluencerBtn')?.addEventListener('click', trainInfluencerModel);
-    document.getElementById('tryOnVideoBtn')?.addEventListener('click', tryOnVideoDemo);
+    document.getElementById('tryOnVideoBtn')?.addEventListener('click', tryOnVideo);
+    document.getElementById('runInfluencerSlackBtn')?.addEventListener('click', runInfluencerPipelineToSlack);
 }); 
 
 // Aesthetic counts for live preview
@@ -2406,7 +2407,7 @@ async function trainInfluencerModel(){
     } catch(e){ showError(e.message); }
 }
 
-async function tryOnVideoDemo(){
+async function tryOnVideo(){
     try {
         const username = document.getElementById('targetAccount').value || document.getElementById('workflowAccount').value;
         if (!username) return showError('Select an account first');
@@ -2428,6 +2429,17 @@ async function tryOnVideoDemo(){
             else { showError('Video generation timed out'); }
         };
         setTimeout(poll, 1500);
+    } catch(e){ showError(e.message); }
+}
+
+async function runInfluencerPipelineToSlack(){
+    try {
+        const username = document.getElementById('targetAccount').value || document.getElementById('workflowAccount').value;
+        if (!username) return showError('Select an account first');
+        const res = await fetch('/api/influencer/run-full-to-slack', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username }) });
+        const j = await res.json();
+        if (!res.ok || j.success === false) throw new Error(j.error || 'Failed to start pipeline');
+        showSuccess(`Pipeline started for @${username}. Slack thread: ${j.slack?.thread_ts || '-'}`);
     } catch(e){ showError(e.message); }
 }
 
