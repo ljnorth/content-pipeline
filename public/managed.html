@@ -30,7 +30,7 @@
   <div class="row section">
     <input id="username" placeholder="@username"/>
     <input id="goal" placeholder="Goal (plain text)"/>
-    <input id="audience" placeholder="Audience (plain text)"/>
+    <input id="audience" placeholder="Influencer (display-only; set via Persona modal)"/>
     <input id="ownerSlackId" placeholder="Owner Slack ID (U...)"/>
     <input id="ownerDisplayName" placeholder="Owner display name"/>
     <select id="contentStyle">
@@ -62,7 +62,7 @@
   <table class="table-center">
     <thead>
       <tr>
-        <th>Username</th><th>Owner</th><th>Goal</th><th>Audience</th><th>Pref. Gender</th><th>Inspo Accounts</th><th>Auto-Gen</th><th>Actions</th>
+        <th>Username</th><th>Owner</th><th>Goal</th><th>Influencer</th><th>Pref. Gender</th><th>Inspo Accounts</th><th>Auto-Gen</th><th>Actions</th>
       </tr>
     </thead>
     <tbody id="rows"></tbody>
@@ -124,11 +124,14 @@
   </div>
 
   <section class="section" style="margin-top:12px">
-    <h3>Influencer Tools (Gemini/Higgsfield)</h3>
-    <div class="row">
-      <input id="infPrompt" placeholder="Influencer image prompt" style="flex:1"/>
-      <input id="infImageUrl" placeholder="Optional guidance image URL" style="flex:1"/>
-      <button id="infPreview" class="btn btn-outline">Generate Still (Preview)</button>
+    <h3>Influencer Pipeline (Embeddings → Gemini → Higgsfield → Slack)</h3>
+    <div class="row" style="align-items:center; gap:8px; flex-wrap:wrap">
+      <label class="muted">Outputs:</label>
+      <label><input type="checkbox" id="outMoodboards" checked/> Moodboards</label>
+      <label><input type="checkbox" id="outStills" checked/> Stills</label>
+      <label><input type="checkbox" id="outVideos" checked/> Videos</label>
+      <select id="pipeUser2" style="min-width:240px"></select>
+      <button id="runSlack2" class="btn btn-primary">Run Influencer Pipeline → Slack</button>
     </div>
     <div id="infOutput" style="margin-top:8px"></div>
   </section>
@@ -182,10 +185,11 @@
             '<button class="icon-btn persona-edit" title="Persona" data-u="'+a.username+'">🧬</button>'+
           '</td>';
         tbody.appendChild(tr);
-        // Add to preview dropdown
+        // Add to preview dropdowns
         const opt = document.createElement('option');
         opt.value = a.username; opt.textContent = '@'+a.username;
         previewSel.appendChild(opt);
+        const opt2 = document.createElement('option'); opt2.value = a.username; opt2.textContent = '@'+a.username; document.getElementById('pipeUser2').appendChild(opt2);
       });
 
       document.querySelectorAll('.toggle').forEach(el => {
@@ -356,20 +360,25 @@
     };
 
     // Influencer preview (Gemini image generation)
-    document.getElementById('infPreview').onclick = async () => {
-      const prompt = document.getElementById('infPrompt').value || 'High-quality influencer outfit still';
-      const imageUrl = document.getElementById('infImageUrl').value || '';
+    document.getElementById('runSlack2').onclick = async () => {
+      const u = (document.getElementById('pipeUser2').value||'').replace('@','');
+      if (!u) return setStatus('Pick an account first', 'err');
       const out = document.getElementById('infOutput');
-      out.innerHTML = 'Generating…';
+      out.textContent = 'Starting pipeline…';
       try{
-        const res = await fetch('/api/gemini-preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prompt, imageUrl }) });
-        const json = await res.json();
-        if (!json.success) throw new Error(json.error||'request failed');
-        const img = new Image();
-        img.src = `data:${json.mimeType};base64,${json.base64}`;
-        img.style.maxWidth = '240px'; img.style.borderRadius = '8px';
-        out.innerHTML = '';
-        out.appendChild(img);
+        const payload = {
+          username: u,
+          moodboardCount: 5,
+          outputs: {
+            moodboards: document.getElementById('outMoodboards').checked,
+            stills: document.getElementById('outStills').checked,
+            videos: document.getElementById('outVideos').checked
+          }
+        };
+        const res = await fetch('/api/influencer/run-full-to-slack', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const j = await res.json();
+        if (!res.ok || j.success === false) throw new Error(j.error||'failed');
+        out.textContent = 'Queued. Counts: '+JSON.stringify(j.counts)+' Persisted: '+(j.persisted? 'yes':'no');
       }catch(e){ out.textContent = 'Error: '+e.message; }
     };
 
