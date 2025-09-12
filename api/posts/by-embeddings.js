@@ -25,24 +25,14 @@ export default async function handler(req, res) {
     } catch (_) {}
 
     // 2) Fetch nearest images by embedding similarity using a DB function, else fallback to recent
-    let images = [];
-    try {
-      const { data, error } = await db.client
-        .rpc('get_nearest_images_for_account', {
-          p_username: username,
-          p_limit: Math.max(1, Number(limit))
-        });
-      if (error) throw error;
-      images = data || [];
-    } catch (_) {
-      const { data } = await db.client
-        .from('images')
-        .select('*')
-        .eq('username', username)
-        .order('created_at', { ascending: false })
-        .limit(Math.max(1, Number(limit)));
-      images = data || [];
-    }
+    const { data, error } = await db.client
+      .rpc('get_nearest_images_for_account', {
+        p_username: username,
+        p_limit: Math.max(1, Number(limit))
+      });
+    if (error) return res.status(500).json({ error: `RPC get_nearest_images_for_account failed: ${error.message}` });
+    const images = data || [];
+    if (images.length === 0) return res.status(404).json({ error: 'No moodboards found for account from embeddings' });
 
     // 3) Build moodboard URLs and minimal post metadata
     const moodboards = images.map(img => img.image_path).filter(Boolean);

@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Minimal API for content preview",
   "type": "module",
+  "scripts": {
+    "start:worker": "node index.js"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
     "@aws-sdk/client-sagemaker-runtime": "^3.640.0",
