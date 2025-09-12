@@ -33,6 +33,10 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../../public')));
+// Redirect managed.html to canonical static page to avoid duplicates
+app.get('/managed.html', (req, res) => {
+  res.sendFile(path.join(__dirname, '../../public/managed.html'));
+});
 
 // API routes
 app.get('/api/preview-data/:batchId', async (req, res) => {
