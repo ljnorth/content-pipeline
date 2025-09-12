@@ -2260,6 +2260,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('trainInfluencerBtn')?.addEventListener('click', trainInfluencerModel);
     document.getElementById('tryOnVideoBtn')?.addEventListener('click', tryOnVideo);
     document.getElementById('runInfluencerSlackBtn')?.addEventListener('click', runInfluencerPipelineToSlack);
+    document.getElementById('createCharacterBtn')?.addEventListener('click', uiCreateCharacter);
+    document.getElementById('genStillBtn')?.addEventListener('click', uiGenerateStill);
+    document.getElementById('genVideoBtn')?.addEventListener('click', uiGenerateVideo);
 }); 
 
 // Aesthetic counts for live preview
@@ -2436,11 +2439,105 @@ async function runInfluencerPipelineToSlack(){
     try {
         const username = document.getElementById('targetAccount').value || document.getElementById('workflowAccount').value;
         if (!username) return showError('Select an account first');
-        const res = await fetch('/api/influencer/run-full-to-slack', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username }) });
+        const outMood = document.getElementById('outMoodboards')?.checked ?? true;
+        const outStills = document.getElementById('outStills')?.checked ?? true;
+        const outVideos = document.getElementById('outVideos')?.checked ?? true;
+        const res = await fetch('/api/influencer/run-full-to-slack', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, moodboardCount: 5, outputs: { moodboards: outMood, stills: outStills, videos: outVideos } }) });
         const j = await res.json();
         if (!res.ok || j.success === false) throw new Error(j.error || 'Failed to start pipeline');
         showSuccess(`Pipeline started for @${username}. Slack thread: ${j.slack?.thread_ts || '-'}`);
     } catch(e){ showError(e.message); }
+}
+
+// ---- Character UI actions ----
+async function uiCreateCharacter(){
+    try {
+        const username = document.getElementById('targetAccount').value || document.getElementById('workflowAccount').value;
+        if (!username) return showError('Select an account first');
+        // 1) Prompt
+        const persona = await inferPersonaFor(username);
+        const pr = await fetch('/api/character/prompt', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ persona }) });
+        const pj = await pr.json(); if (!pr.ok || pj.success === false) throw new Error(pj.error||'prompt failed');
+        // 2) Build
+        const br = await fetch('/api/character/build', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, persona, count:25 }) });
+        const bj = await br.json(); if (!br.ok || bj.success === false) throw new Error(bj.error||'build failed');
+        const job = bj.job_id;
+        showInfo('Character building…');
+        // poll
+        const start = Date.now();
+        const poll = async ()=>{
+            const sr = await fetch('/api/character/build-status?job_id='+encodeURIComponent(job));
+            const sj = await sr.json();
+            if (sj.status === 'completed'){ showSuccess('Character ready'); renderCharacterPreview(sj.base, sj.variants||[]); }
+            else if (sj.status === 'failed'){ showError('Character build failed: '+(sj.error||'-')); }
+            else if (Date.now()-start < 600000){ setTimeout(poll, 1500); }
+            else { showError('Character build timed out'); }
+        };
+        setTimeout(poll, 1500);
+    } catch(e){ showError(e.message); }
+}
+
+async function uiGenerateStill(){
+    try{
+        const username = document.getElementById('targetAccount').value || document.getElementById('workflowAccount').value;
+        if (!username) return showError('Select an account first');
+        const { base, moodboard } = await getCharacterAndMoodboard(username);
+        const r = await fetch('/api/still', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, character_base: base, moodboard_url: moodboard }) });
+        const j = await r.json(); if (!r.ok || j.success === false) throw new Error(j.error||'still failed');
+        displayGeneratedContent([{ image_path: j.imageUrl, post_id: 'still', username }]);
+        document.getElementById('generationPreview').style.display = 'block';
+        showSuccess('Still generated');
+    }catch(e){ showError(e.message); }
+}
+
+async function uiGenerateVideo(){
+    try{
+        const username = document.getElementById('targetAccount').value || document.getElementById('workflowAccount').value;
+        if (!username) return showError('Select an account first');
+        // For MVP, reuse last generated image from preview grid
+        const imgEls = document.querySelectorAll('#generatedContent img');
+        if (imgEls.length === 0) return showError('Generate a still first');
+        const stills = Array.from(imgEls).slice(0,5).map(el=> el.src);
+        const r = await fetch('/api/video-from-stills', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, stills }) });
+        const j = await r.json(); if (!r.ok || j.success === false) throw new Error(j.error||'video failed');
+        const grid = document.getElementById('generatedContent');
+        grid.innerHTML = `<video controls style="width:100%;max-width:480px;border-radius:10px"><source src="${j.videoUrl}" type="video/mp4"/></video>`;
+        document.getElementById('generationPreview').style.display = 'block';
+        showSuccess('Video generated');
+    }catch(e){ showError(e.message); }
+}
+
+function renderCharacterPreview(baseUrl, variants){
+    const grid = document.getElementById('generatedContent');
+    document.getElementById('generationPreview').style.display = 'block';
+    grid.innerHTML = '';
+    const all = [baseUrl, ...(variants||[])];
+    all.forEach(src => {
+        const div = document.createElement('div');
+        div.className = 'image-card';
+        div.innerHTML = `<img src="${src}" alt="char" />`;
+        grid.appendChild(div);
+    });
+}
+
+async function inferPersonaFor(username){
+    // placeholder: fetch account profile if available; otherwise return minimal shape
+    try{
+        const r = await fetch('/api/account-profiles/'+encodeURIComponent(username));
+        const p = await r.json();
+        return p?.content_strategy?.influencerPersona || null;
+    }catch(_){ return null; }
+}
+
+async function getCharacterAndMoodboard(username){
+    const img = document.querySelector('#generatedContent img');
+    const base = img ? img.src : null;
+    // Fetch moodboards from embeddings-based content pipeline
+    const r = await fetch('/api/content/moodboards', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, count: 1 }) });
+    const j = await r.json();
+    if (!r.ok || j.success === false) throw new Error(j.error || 'No moodboards available');
+    const moodboard = (j.moodboards||[])[0];
+    return { base, moodboard };
 }
 
 // TikTok OAuth Functions

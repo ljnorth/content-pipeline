@@ -928,10 +928,45 @@ app.post('/api/influencer/tryon-video', async (req, res) => {
 app.post('/api/influencer/run-full-to-slack', async (req, res) => {
   try {
     if (!requireInfluencerApi(res)) return;
-    const { username } = req.body || {};
+    const { username, moodboardCount = 5, outputs } = req.body || {};
     if (!username) return res.status(400).json({ error: 'username is required' });
+
+    // Load persona from account profile (if set)
+    let persona = null;
+    try {
+      const { data: profile } = await db.client
+        .from('account_profiles')
+        .select('content_strategy')
+        .eq('username', username)
+        .eq('is_active', true)
+        .single();
+      persona = profile?.content_strategy?.influencerPersona || null;
+    } catch(_) {}
+
+    // Fetch moodboards from embeddings-based content pipeline (no fallbacks)
+    const CP = process.env.CONTENT_PIPELINE_API_BASE;
+    if (!CP) return res.status(500).json({ error: 'CONTENT_PIPELINE_API_BASE not set' });
+    const ep = `${CP.replace(/\/$/, '')}/api/posts/by-embeddings`;
+    const pr = await fetch(ep, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, limit: Math.max(1, Number(moodboardCount)) }) });
+    const pj = await pr.json().catch(()=>({}));
+    if (!pr.ok) return res.status(pr.status).json({ error: pj.error || 'content pipeline failed' });
+    let moodboards = [];
+    if (Array.isArray(pj.moodboards)) moodboards = pj.moodboards.map(m => (typeof m === 'string' ? m : (m.image_url||m.url))).filter(Boolean);
+    if (!moodboards.length && Array.isArray(pj.posts)) {
+      for (const post of pj.posts) {
+        const imgs = post.images || post.image_urls || [];
+        for (const u of imgs) { if (moodboards.length < moodboardCount) moodboards.push(u); }
+        if (moodboards.length >= moodboardCount) break;
+      }
+    }
+    if (!moodboards.length) return res.status(404).json({ error: 'No moodboards returned by content pipeline' });
+
     const t0 = Date.now();
-    const r = await fetch(`${INFLUENCER_API_BASE}/run-full-to-slack`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username }) });
+    const r = await fetch(`${INFLUENCER_API_BASE}/run-full-to-slack`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ username, persona, moodboards, outputs })
+    });
     const j = await r.json().catch(()=>({ error: 'invalid json from influencer api' }));
     const ms = Date.now() - t0;
     if (!r.ok){ logger.error(`[influencer] run-full-to-slack failed`, { username, status: r.status, latencyMs: ms, error: j.error }); return res.status(r.status).json(j); }
@@ -954,6 +989,89 @@ app.get('/api/influencer/video-status', async (req, res) => {
   } catch (e) { logger.error('[influencer] video-status exception', e); res.status(500).json({ error: e.message }); }
 });
 
+// Character builder proxies
+app.post('/api/character/prompt', async (req, res) => {
+  try {
+    if (!requireInfluencerApi(res)) return;
+    const t0 = Date.now();
+    const r = await fetch(`${INFLUENCER_API_BASE}/character/prompt`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(req.body||{}) });
+    const j = await r.json().catch(()=>({ error:'invalid json' }));
+    const ms = Date.now() - t0; logger.info(`[influencer] character/prompt ${r.status} ${ms}ms`);
+    res.status(r.status).json(j);
+  } catch (e) { logger.error('character/prompt failed', e); res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/character/build', async (req, res) => {
+  try {
+    if (!requireInfluencerApi(res)) return;
+    const t0 = Date.now();
+    const r = await fetch(`${INFLUENCER_API_BASE}/character/build`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(req.body||{}) });
+    const j = await r.json().catch(()=>({ error:'invalid json' }));
+    const ms = Date.now() - t0; logger.info(`[influencer] character/build ${r.status} ${ms}ms`);
+    res.status(r.status).json(j);
+  } catch (e) { logger.error('character/build failed', e); res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/character/build-status', async (req, res) => {
+  try {
+    if (!requireInfluencerApi(res)) return;
+    const t0 = Date.now();
+    const qs = new URLSearchParams({ job_id: String(req.query.job_id||'') }).toString();
+    const r = await fetch(`${INFLUENCER_API_BASE}/character/build-status?${qs}`);
+    const j = await r.json().catch(()=>({ error:'invalid json' }));
+    const ms = Date.now() - t0; logger.info(`[influencer] character/build-status ${r.status} ${ms}ms`);
+    res.status(r.status).json(j);
+  } catch (e) { logger.error('character/build-status failed', e); res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/still', async (req, res) => {
+  try {
+    if (!requireInfluencerApi(res)) return;
+    const t0 = Date.now();
+    const r = await fetch(`${INFLUENCER_API_BASE}/still`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(req.body||{}) });
+    const j = await r.json().catch(()=>({ error:'invalid json' }));
+    const ms = Date.now() - t0; logger.info(`[influencer] still ${r.status} ${ms}ms`);
+    res.status(r.status).json(j);
+  } catch (e) { logger.error('still failed', e); res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/video-from-stills', async (req, res) => {
+  try {
+    if (!requireInfluencerApi(res)) return;
+    const t0 = Date.now();
+    const r = await fetch(`${INFLUENCER_API_BASE}/video-from-stills`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(req.body||{}) });
+    const j = await r.json().catch(()=>({ error:'invalid json' }));
+    const ms = Date.now() - t0; logger.info(`[influencer] video-from-stills ${r.status} ${ms}ms`);
+    res.status(r.status).json(j);
+  } catch (e) { logger.error('video-from-stills failed', e); res.status(500).json({ error: e.message }); }
+});
+
+// Get moodboards for an account from embeddings-based content pipeline (no fallbacks)
+app.post('/api/content/moodboards', async (req, res) => {
+  try {
+    const { username, count = 5 } = req.body || {};
+    if (!username) return res.status(400).json({ error: 'username is required' });
+    const CP = process.env.CONTENT_PIPELINE_API_BASE;
+    if (!CP) return res.status(500).json({ error: 'CONTENT_PIPELINE_API_BASE not set' });
+    const ep = `${CP.replace(/\/$/, '')}/api/posts/by-embeddings`;
+    const r = await fetch(ep, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, limit: Math.max(1, Number(count)) }) });
+    const j = await r.json().catch(()=>({}));
+    if (!r.ok) return res.status(r.status).json({ error: j.error || 'content pipeline failed' });
+    let moodboards = [];
+    if (Array.isArray(j.moodboards)) moodboards = j.moodboards.map(m => (typeof m === 'string' ? m : (m.image_url||m.url))).filter(Boolean);
+    if (!moodboards.length && Array.isArray(j.posts)) {
+      for (const post of j.posts) {
+        const imgs = post.images || post.image_urls || [];
+        for (const u of imgs) { if (moodboards.length < count) moodboards.push(u); }
+        if (moodboards.length >= count) break;
+      }
+    }
+    if (!moodboards.length) return res.status(404).json({ error: 'No moodboards returned by content pipeline' });
+    res.json({ success: true, moodboards, count: moodboards.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.get('/api/test-images', async (req, res) => {
   try {
     // Get total count first

@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: influencer-api
+    env: python
+    plan: starter
+    buildCommand: pip install -r apps/influencer_api/requirements.txt || true
+    startCommand: uvicorn apps.influencer_api.main:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
+    envVars:
+      - key: REPLICATE_API_TOKEN
+        sync: false
+      - key: SLACK_BOT_TOKEN
+        sync: false
+      - key: SLACK_CHANNEL
+        value: "#content-bot"
+
