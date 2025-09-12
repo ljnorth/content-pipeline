@@ -10,15 +10,25 @@ async function fetchAsBase64(url){
   return toBase64(res.data);
 }
 
+function normalizeModel(model){
+  let m = (model || '').replace(/^models\//i, '');
+  if (!m || m.toLowerCase() === 'nanobanana') {
+    // Default to an image-capable Gemini model
+    m = 'gemini-2.5-flash-image-preview';
+  }
+  return m;
+}
+
 export class GeminiClient {
   constructor(options = {}){
     this.apiKey = options.apiKey || process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-    this.baseUrl = options.baseUrl || 'https://generativelanguage.googleapis.com';
-    this.model = options.model || 'models/gemini-2.0-flash-exp';
+    this.baseUrl = (options.baseUrl || process.env.GEMINI_API_BASE || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
+    this.model = normalizeModel(options.model || process.env.GEMINI_MODEL);
   }
 
   get endpoint(){
-    return `${this.baseUrl}/v1beta/${this.model}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
+    // v1beta/models/{model}:generateContent
+    return `${this.baseUrl}/v1beta/models/${this.model}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
   }
 
   async generateFromPrompt({ prompt, mimeType = 'image/png' }){
@@ -27,11 +37,16 @@ export class GeminiClient {
       tools: [ { image_generation: {} } ],
       generationConfig: { responseMimeType: mimeType }
     };
-    const { data } = await axios.post(this.endpoint, body, { headers: { 'Content-Type': 'application/json' } });
-    const part = data?.candidates?.[0]?.content?.parts?.[0];
-    const inline = part?.inline_data;
-    if (!inline?.data) throw new Error('Gemini image generation returned no data');
-    return { mimeType: inline.mime_type || mimeType, base64: inline.data };
+    try{
+      const { data } = await axios.post(this.endpoint, body, { headers: { 'Content-Type': 'application/json' } });
+      const part = data?.candidates?.[0]?.content?.parts?.[0];
+      const inline = part?.inline_data;
+      if (!inline?.data) throw new Error('Gemini image generation returned no data');
+      return { mimeType: inline.mime_type || mimeType, base64: inline.data };
+    }catch(e){
+      const st = e.response?.status; const resp = e.response?.data;
+      throw new Error(`Gemini POST ${st||''} @ ${this.endpoint} resp=${JSON.stringify(resp||{})}`);
+    }
   }
 
   async generateFromImagesAndPrompt({ images = [], prompt, mimeType = 'image/png' }){
@@ -49,11 +64,16 @@ export class GeminiClient {
       tools: [ { image_generation: {} } ],
       generationConfig: { responseMimeType: mimeType }
     };
-    const { data } = await axios.post(this.endpoint, body, { headers: { 'Content-Type': 'application/json' } });
-    const part = data?.candidates?.[0]?.content?.parts?.[0];
-    const inline = part?.inline_data;
-    if (!inline?.data) throw new Error('Gemini image generation returned no data');
-    return { mimeType: inline.mime_type || mimeType, base64: inline.data };
+    try{
+      const { data } = await axios.post(this.endpoint, body, { headers: { 'Content-Type': 'application/json' } });
+      const part = data?.candidates?.[0]?.content?.parts?.[0];
+      const inline = part?.inline_data;
+      if (!inline?.data) throw new Error('Gemini image generation returned no data');
+      return { mimeType: inline.mime_type || mimeType, base64: inline.data };
+    }catch(e){
+      const st = e.response?.status; const resp = e.response?.data;
+      throw new Error(`Gemini POST ${st||''} @ ${this.endpoint} resp=${JSON.stringify(resp||{})}`);
+    }
   }
 }
 
