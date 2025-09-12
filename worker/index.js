@@ -63,28 +63,51 @@ async function makeVideo(stillUrl) {
 
 async function processJob(job) {
   const job_id = job.id;
+  const outputs = (job.payload && job.payload.outputs) || { moodboards: true, stills: true, videos: true };
   try {
     await setJob(job_id, { status: 'running', started_at: new Date().toISOString(), step: 'moodboards' });
     const moodboards = await fetchMoodboards(job.username, 5);
     await log(job_id, 'info', 'moodboards', { count: moodboards.length });
+    if (outputs.moodboards) {
+      for (const url of moodboards) {
+        await addAsset(job_id, 'moodboard', url);
+      }
+    }
 
+    // If only moodboards requested, finish early
+    if (!outputs.stills && !outputs.videos) {
+      await setJob(job_id, { status: 'completed', step: 'done', finished_at: new Date().toISOString() });
+      await log(job_id, 'info', 'completed', { moodboards: (outputs.moodboards ? moodboards.length : 0), stills: 0, videos: 0 });
+      return;
+    }
+
+    // Character step only if stills or videos are requested
     await setJob(job_id, { step: 'character' });
-    const character = await buildCharacter(job.payload?.persona || null);
+    const character = (outputs.stills || outputs.videos) ? await buildCharacter(job.payload?.persona || null) : { baseUrl: null, variants: [] };
     if (character.baseUrl) await addAsset(job_id, 'character_base', character.baseUrl);
     for (const v of character.variants || []) await addAsset(job_id, 'character_variant', v);
 
-    await setJob(job_id, { step: 'stills' });
-    const stillLimit = pLimit(STILL_LIMIT);
-    const stills = (await Promise.all(moodboards.map(mb => stillLimit(() => composeStill(character.baseUrl, mb))))).filter(Boolean);
-    for (const s of stills) await addAsset(job_id, 'still', s);
+    // Stills step
+    let stills = [];
+    if (outputs.stills) {
+      await setJob(job_id, { step: 'stills' });
+      const stillLimit = pLimit(STILL_LIMIT);
+      stills = (await Promise.all(moodboards.map(mb => stillLimit(() => composeStill(character.baseUrl, mb))))).filter(Boolean);
+      for (const s of stills) await addAsset(job_id, 'still', s);
+    }
 
-    await setJob(job_id, { step: 'videos' });
-    const videoLimit = pLimit(VIDEO_LIMIT);
-    const videos = (await Promise.all(stills.map(s => videoLimit(() => makeVideo(s))))).filter(Boolean);
-    for (const v of videos) await addAsset(job_id, 'video', v);
-
-    await setJob(job_id, { status: 'completed', step: 'done', finished_at: new Date().toISOString() });
-    await log(job_id, 'info', 'completed', { stills: stills.length, videos: videos.length });
+    // Videos step
+    if (outputs.videos) {
+      await setJob(job_id, { step: 'videos' });
+      const videoLimit = pLimit(VIDEO_LIMIT);
+      const videos = (await Promise.all(stills.map(s => videoLimit(() => makeVideo(s))))).filter(Boolean);
+      for (const v of videos) await addAsset(job_id, 'video', v);
+      await setJob(job_id, { status: 'completed', step: 'done', finished_at: new Date().toISOString() });
+      await log(job_id, 'info', 'completed', { moodboards: (outputs.moodboards ? moodboards.length : 0), stills: stills.length, videos: videos.length });
+    } else {
+      await setJob(job_id, { status: 'completed', step: 'done', finished_at: new Date().toISOString() });
+      await log(job_id, 'info', 'completed', { moodboards: (outputs.moodboards ? moodboards.length : 0), stills: stills.length, videos: 0 });
+    }
   } catch (e) {
     const retries = (job.retries || 0) + 1;
     const retryable = retries < 3;
