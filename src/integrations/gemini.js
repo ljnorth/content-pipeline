@@ -19,10 +19,17 @@ function normalizeModel(model){
   return m;
 }
 
+function normalizeBase(base){
+  let b = (base || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
+  // Strip accidental version suffixes to avoid /v1beta/v1beta
+  b = b.replace(/\/v1(beta)?$/i, '');
+  return b;
+}
+
 export class GeminiClient {
   constructor(options = {}){
     this.apiKey = options.apiKey || process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-    this.baseUrl = (options.baseUrl || process.env.GEMINI_API_BASE || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
+    this.baseUrl = normalizeBase(options.baseUrl || process.env.GEMINI_API_BASE || 'https://generativelanguage.googleapis.com');
     this.model = normalizeModel(options.model || process.env.GEMINI_MODEL);
   }
 
