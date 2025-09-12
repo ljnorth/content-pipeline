@@ -10,7 +10,10 @@ export default async function handler(req, res) {
       previewBaseUrl: process.env.PREVIEW_BASE_URL || 'https://www.easypost.fun',
       nodeEnv: process.env.NODE_ENV || 'undefined',
       hasInfluencerApiBase: !!process.env.INFLUENCER_API_BASE,
-      hasContentPipelineApiBase: !!process.env.CONTENT_PIPELINE_API_BASE
+      hasContentPipelineApiBase: !!process.env.CONTENT_PIPELINE_API_BASE,
+      hasSupabaseUrl: !!process.env.SUPABASE_URL,
+      hasSupabaseAnonKey: !!process.env.SUPABASE_ANON_KEY,
+      hasSupabaseServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY
     };
     res.json(response);
   } catch (e) {

@@ -1,9 +1,22 @@
 import fetch from 'node-fetch';
 import pLimit from 'p-limit';
 import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  // Fail fast with actionable message for Render logs
+  const missing = [
+    !SUPABASE_URL && 'SUPABASE_URL',
+    !SUPABASE_SERVICE_ROLE_KEY && 'SUPABASE_SERVICE_ROLE_KEY'
+  ].filter(Boolean).join(', ');
+  throw new Error(`Supabase configuration missing: ${missing}. Set these env vars on Render for the worker.`);
+}
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const STILL_LIMIT = parseInt(process.env.STILL_CONCURRENCY || '3', 10);
