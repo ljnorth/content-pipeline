@@ -37,9 +37,9 @@ async function addAsset(job_id, kind, url) {
 
 async function fetchMoodboards(username, limit = 5) {
   const base = process.env.VERCEL_BASE || '';
-  const r = await fetch(base.replace(/\/$/, '') + '/api/posts/by-embeddings', {
+  const r = await fetch(base.replace(/\/$/, '') + '/api/content/moodboards-from-generator', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, limit })
+    body: JSON.stringify({ username, count: limit })
   });
   const j = await r.json();
   if (!r.ok) throw new Error(j.error || 'moodboards failed');
@@ -104,7 +104,7 @@ async function poll() {
 }
 
 async function main() {
-  if (!process.env.VERCEL_BASE) console.warn('VERCEL_BASE not set - /api/posts/by-embeddings will fail');
+  if (!process.env.VERCEL_BASE) console.warn('VERCEL_BASE not set - generator-based moodboards API call may fail');
   while (true) {
     await poll();
     await new Promise(r => setTimeout(r, 1500));

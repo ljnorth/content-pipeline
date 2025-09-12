@@ -13,12 +13,12 @@ export default async function handler(req, res) {
     if (!INFLUENCER_API_BASE) return res.status(500).json({ error: 'INFLUENCER_API_BASE not set' });
     if (!CONTENT_PIPELINE_API_BASE) return res.status(500).json({ error: 'CONTENT_PIPELINE_API_BASE not set' });
 
-    // 1) Get moodboards from embeddings-based content pipeline
-    const ep = `${CONTENT_PIPELINE_API_BASE.replace(/\/$/, '')}/api/posts/by-embeddings`;
+    // 1) Get moodboards from generator-based content pipeline (anchor-driven)
+    const ep = `${CONTENT_PIPELINE_API_BASE.replace(/\/$/, '')}/api/content/moodboards-from-generator`;
     const pr = await fetch(ep, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, limit: Math.max(1, Number(moodboardCount)) })
+      body: JSON.stringify({ username, count: Math.max(1, Number(moodboardCount)) })
     });
     const pj = await pr.json().catch(() => ({}));
     if (!pr.ok) return res.status(pr.status).json({ error: pj.error || 'content pipeline failed' });

@@ -1737,11 +1737,11 @@ app.post('/api/influencer/run-full-to-slack', async (req, res) => {
       persona = profile?.content_strategy?.influencerPersona || null;
     } catch(_) {}
 
-    // Fetch moodboards from embeddings-based content pipeline (no fallbacks)
+    // Fetch moodboards from generator-based content pipeline (anchor-driven, no fallbacks)
     const CP = process.env.CONTENT_PIPELINE_API_BASE;
     if (!CP) return res.status(500).json({ error: 'CONTENT_PIPELINE_API_BASE not set' });
-    const ep = `${CP.replace(/\/$/, '')}/api/posts/by-embeddings`;
-    const pr = await fetch(ep, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, limit: Math.max(1, Number(moodboardCount)) }) });
+    const ep = `${CP.replace(/\/$/, '')}/api/content/moodboards-from-generator`;
+    const pr = await fetch(ep, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, count: Math.max(1, Number(moodboardCount)) }) });
     const pj = await pr.json().catch(()=>({}));
     if (!pr.ok) return res.status(pr.status).json({ error: pj.error || 'content pipeline failed' });
     let moodboards = [];
@@ -1840,15 +1840,15 @@ app.post('/api/video-from-stills', async (req, res) => {
   } catch (e) { logger.error('video-from-stills failed', e); res.status(500).json({ error: e.message }); }
 });
 
-// Get moodboards for an account from embeddings-based content pipeline (no fallbacks)
+// Get moodboards for an account from generator-based content pipeline (anchor-driven, no fallbacks)
 app.post('/api/content/moodboards', async (req, res) => {
   try {
     const { username, count = 5 } = req.body || {};
     if (!username) return res.status(400).json({ error: 'username is required' });
     const CP = process.env.CONTENT_PIPELINE_API_BASE;
     if (!CP) return res.status(500).json({ error: 'CONTENT_PIPELINE_API_BASE not set' });
-    const ep = `${CP.replace(/\/$/, '')}/api/posts/by-embeddings`;
-    const r = await fetch(ep, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, limit: Math.max(1, Number(count)) }) });
+    const ep = `${CP.replace(/\/$/, '')}/api/content/moodboards-from-generator`;
+    const r = await fetch(ep, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, count: Math.max(1, Number(count)) }) });
     const j = await r.json().catch(()=>({}));
     if (!r.ok) return res.status(r.status).json({ error: j.error || 'content pipeline failed' });
     let moodboards = [];
