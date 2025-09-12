@@ -375,11 +375,17 @@
             videos: document.getElementById('outVideos').checked
           }
         };
-        const res = await fetch('/api/influencer/run-full-to-slack', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-        const j = await res.json();
-        if (!res.ok || j.success === false) throw new Error(j.error||'failed');
+        // Prefer alias path to avoid nested folder deployment quirks
+        let res = await fetch('/api/influencer-run-full-to-slack', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        if (res.status === 404) {
+          // Fallback to nested path if alias is missing
+          res = await fetch('/api/influencer/run-full-to-slack', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        }
+        const text = await res.text();
+        let j = null; try { j = JSON.parse(text); } catch(_){ j = { error: text.slice(0,200) } }
+        if (!res.ok || j.success === false) throw new Error(j.error||('HTTP '+res.status));
         out.textContent = 'Queued. Counts: '+JSON.stringify(j.counts)+' Persisted: '+(j.persisted? 'yes':'no');
-      }catch(e){ out.textContent = 'Error: '+e.message; }
+      }catch(e){ out.textContent = 'Error: '+e.message; console.error('run-full-to-slack failed', e); }
     };
 
     // Populate pipeline user select using existing preview dropdown data
