@@ -283,7 +283,7 @@
         // Call main generator in preview mode to get actual selected images with distances
         const runId = 'ui_' + Date.now();
         const res = await fetch('/api/generate-daily?username=' + encodeURIComponent(u) + '&preview=1&runId=' + encodeURIComponent(runId));
-        const json = await res.json();
+        const json = await res.json().catch(() => ({}));
         const info = document.getElementById('anchorInfo');
         const info2 = document.getElementById('anchorInfo2');
         const raw = document.getElementById('anchorDebugRaw');
@@ -359,46 +359,41 @@
       }
     };
 
-    // Influencer preview (Gemini image generation)
+    // Influencer pipeline via worker queue
     document.getElementById('runSlack2').onclick = async () => {
       const u = (document.getElementById('pipeUser2').value||'').replace('@','');
       if (!u) return setStatus('Pick an account first', 'err');
       const out = document.getElementById('infOutput');
-      out.textContent = 'Starting pipeline…';
+      out.textContent = 'Enqueuing job…';
       try{
-        const payload = {
-          username: u,
-          moodboardCount: 5,
-          outputs: {
-            moodboards: document.getElementById('outMoodboards').checked,
-            stills: document.getElementById('outStills').checked,
-            videos: document.getElementById('outVideos').checked
-          }
+        const outputs = {
+          moodboards: document.getElementById('outMoodboards').checked,
+          stills: document.getElementById('outStills').checked,
+          videos: document.getElementById('outVideos').checked
         };
-        const logs = [];
-        const stamp = () => new Date().toISOString();
-        const log = (k,v) => { const line = `${stamp()} :: ${k}: ${typeof v==='string'?v:JSON.stringify(v)}`; logs.push(line); console.log(line); };
-        log('username', u);
-        const cfg = await fetch('/api/debug-config').then(r=>r.json()).catch(e=>({ error:String(e) }));
-        log('debug-config', cfg);
-        const tryPost = async (url) => {
-          log('post.url', url);
-          const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-          const raw = await res.text();
-          log('post.status', res.status);
-          log('post.body.raw', raw.slice(0,400));
-          let j=null; try{ j=JSON.parse(raw);}catch(_){ j={ error: raw.slice(0,200) } }
-          return { res, j };
+        const enq = await fetch('/api/jobs/enqueue-run', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ username: u, outputs })
+        });
+        const ej = await enq.json();
+        if (!enq.ok) throw new Error(ej.error || 'enqueue failed');
+        const jobId = ej.job_id;
+        out.textContent = 'Queued job: '+jobId+' — polling…';
+
+        const grid = document.getElementById('pipeGrid'); grid.innerHTML='';
+        const logPre = document.getElementById('pipeLog'); logPre.textContent = '';
+        document.getElementById('pipeJobId').value = jobId;
+
+        const poll = async () => {
+          const r = await fetch('/api/jobs/status?id=' + encodeURIComponent(jobId));
+          const j = await r.json();
+          logPre.textContent = JSON.stringify(j, null, 2);
+          (j.assets||[]).forEach(a=>{ if (!grid.querySelector(`[data-url="${a.url}"]`)) { const d=document.createElement('div'); d.className='thumb-wrap'; d.dataset.url=a.url; d.innerHTML='<a href="'+a.url+'" target="_blank"><img class="thumb" src="'+a.url+'"/></a>'; grid.appendChild(d);} });
+          out.textContent = 'Status: '+(j.status||'-')+' Step: '+(j.step||'-');
+          if (j.status === 'queued' || j.status === 'running') setTimeout(poll, 2000);
         };
-        let { res, j } = await tryPost('/api/influencer-run-full-to-slack');
-        if (res.status===404) ({ res, j } = await tryPost('/api/influencer/run-full-to-slack'));
-        if (!res.ok || j.success===false){
-          const human = `We asked the site to start the pipeline, but it replied with a ${res.status} error. That means the server function crashed or isn\'t configured. Check that both INFLUENCER_API_BASE and CONTENT_PIPELINE_API_BASE are set in Vercel, and that the Render service is healthy.`;
-          out.textContent = `Error: ${j.error||('HTTP '+res.status)}\n\nDetails (copy to dev):\n`+logs.join('\n')+`\n\nIn simple terms: ${human}`;
-          return;
-        }
-        out.textContent = 'Queued. Counts: '+JSON.stringify(j.counts)+' Persisted: '+(j.persisted? 'yes':'no');
-      }catch(e){ out.textContent = 'Error: '+e.message; console.error('run-full-to-slack failed', e); }
+        setTimeout(poll, 1000);
+      }catch(e){ out.textContent = 'Error: '+e.message; console.error('enqueue-run failed', e); }
     };
 
     // Populate pipeline user select using existing preview dropdown data
