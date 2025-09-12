@@ -375,15 +375,28 @@
             videos: document.getElementById('outVideos').checked
           }
         };
-        // Prefer alias path to avoid nested folder deployment quirks
-        let res = await fetch('/api/influencer-run-full-to-slack', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-        if (res.status === 404) {
-          // Fallback to nested path if alias is missing
-          res = await fetch('/api/influencer/run-full-to-slack', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const logs = [];
+        const stamp = () => new Date().toISOString();
+        const log = (k,v) => { const line = `${stamp()} :: ${k}: ${typeof v==='string'?v:JSON.stringify(v)}`; logs.push(line); console.log(line); };
+        log('username', u);
+        const cfg = await fetch('/api/debug-config').then(r=>r.json()).catch(e=>({ error:String(e) }));
+        log('debug-config', cfg);
+        const tryPost = async (url) => {
+          log('post.url', url);
+          const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+          const raw = await res.text();
+          log('post.status', res.status);
+          log('post.body.raw', raw.slice(0,400));
+          let j=null; try{ j=JSON.parse(raw);}catch(_){ j={ error: raw.slice(0,200) } }
+          return { res, j };
+        };
+        let { res, j } = await tryPost('/api/influencer-run-full-to-slack');
+        if (res.status===404) ({ res, j } = await tryPost('/api/influencer/run-full-to-slack'));
+        if (!res.ok || j.success===false){
+          const human = `We asked the site to start the pipeline, but it replied with a ${res.status} error. That means the server function crashed or isn\'t configured. Check that both INFLUENCER_API_BASE and CONTENT_PIPELINE_API_BASE are set in Vercel, and that the Render service is healthy.`;
+          out.textContent = `Error: ${j.error||('HTTP '+res.status)}\n\nDetails (copy to dev):\n`+logs.join('\n')+`\n\nIn simple terms: ${human}`;
+          return;
         }
-        const text = await res.text();
-        let j = null; try { j = JSON.parse(text); } catch(_){ j = { error: text.slice(0,200) } }
-        if (!res.ok || j.success === false) throw new Error(j.error||('HTTP '+res.status));
         out.textContent = 'Queued. Counts: '+JSON.stringify(j.counts)+' Persisted: '+(j.persisted? 'yes':'no');
       }catch(e){ out.textContent = 'Error: '+e.message; console.error('run-full-to-slack failed', e); }
     };

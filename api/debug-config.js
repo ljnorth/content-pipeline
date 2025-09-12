@@ -8,7 +8,9 @@ export default async function handler(req, res) {
       hasWebhookEnv: !!process.env.SLACK_WEBHOOK_URL,
       slackChannel: slack.channel,
       previewBaseUrl: process.env.PREVIEW_BASE_URL || 'https://www.easypost.fun',
-      nodeEnv: process.env.NODE_ENV || 'undefined'
+      nodeEnv: process.env.NODE_ENV || 'undefined',
+      hasInfluencerApiBase: !!process.env.INFLUENCER_API_BASE,
+      hasContentPipelineApiBase: !!process.env.CONTENT_PIPELINE_API_BASE
     };
     res.json(response);
   } catch (e) {
