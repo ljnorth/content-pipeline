@@ -3,7 +3,7 @@ services:
     name: influencer-api
     env: python
     plan: starter
-    buildCommand: pip install -r apps/influencer_api/requirements.txt || true
+    buildCommand: pip install -r apps/influencer_api/requirements.txt
     startCommand: uvicorn apps.influencer_api.main:app --host 0.0.0.0 --port $PORT
     autoDeploy: true
     envVars:
@@ -13,4 +13,32 @@ services:
         sync: false
       - key: SLACK_CHANNEL
         value: "#content-bot"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: FLUX_API_BASE
+        sync: false
+      - key: FLUX_PRO_API_KEY
+        sync: false
+      - key: GEMINI_API_BASE
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: "nanobanana"
+      - key: HIGGSFIELD_API_KEY
+        sync: false
+      - key: HIGGSFIELD_API_SECRET
+        sync: false
+      - key: HIGGSFIELD_MODEL
+        value: "seedance pro"
+      - key: HIGGSFIELD_MOTION_ID
+        value: "cb27169d-aba4-43d9-8667-3292966b2de5"
+      - key: HIGGSFIELD_ENHANCE_PROMPT
+        value: "true"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: "influencer"
 

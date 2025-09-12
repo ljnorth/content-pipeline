@@ -4,5 +4,7 @@ orjson==3.10.7
 slack_sdk==3.36.0
 pillow==11.3.0
 moviepy==1.0.3
+imageio-ffmpeg==0.4.9
 requests==2.32.5
+openai>=1.33.0
 
