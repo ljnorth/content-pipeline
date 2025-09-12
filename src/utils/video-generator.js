@@ -206,7 +206,37 @@ export class VideoGenerator {
       this.logger.info('✅ FFmpeg is available');
       return true;
     } catch (error) {
-      throw new Error('FFmpeg is required for video generation but not found. Please install FFmpeg or use image carousel uploads instead.');
+      this.logger.error('FFmpeg not found - install ffmpeg on the server.');
+      throw new Error('FFmpeg not found');
+    }
+  }
+
+  /**
+   * Fallback method for video generation (web-based)
+   */
+  async createSlideshowVideoFallback() {
+    throw new Error('Fallback video generation is disabled in production');
+  }
+
+  /**
+   * Generate real video using actual video generation
+   */
+  async generateRealVideo(images, options) {
+    const { duration, width, height } = options;
+    
+    try {
+      // For production, integrate with real video generation service like:
+      // - Remotion (https://remotion.dev)
+      // - Bannerbear API
+      // - Canva API
+      // - Custom FFmpeg integration
+      
+      // For now, throw error to indicate real implementation needed
+      throw new Error('Real video generation service not yet integrated. Please use image carousel uploads instead.');
+      
+    } catch (error) {
+      this.logger.error('Video generation failed:', error.message);
+      throw new Error(`Video generation failed: ${error.message}`);
     }
   }
 } 
