@@ -6,7 +6,8 @@ export default async function handler(req, res) {
       res.setHeader('Allow', ['GET']);
       return res.status(405).json({ error: 'Method not allowed' });
     }
-    const { job_id } = req.query || {};
+    const q = req.query || {};
+    const job_id = q.job_id || q.id;
     if (!job_id) return res.status(400).json({ error: 'job_id is required' });
     const db = new SupabaseClient();
     const { data: job, error: je } = await db.client
