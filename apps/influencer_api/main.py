@@ -6,7 +6,6 @@ from pydantic import BaseModel
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from PIL import Image
-from moviepy.editor import ImageSequenceClip
 import requests
 from openai import OpenAI
 from openai import OpenAI
@@ -139,13 +138,7 @@ def pil_to_data_url(img: Image.Image, fmt="PNG") -> str:
     return f"data:image/{fmt.lower()};base64,{b64}"
 
 
-def make_video_from_images(images: List[Image.Image], fps: int = 24, seconds: int = 5) -> str:
-    frames = images * max(1, (fps * seconds) // max(1, len(images)))
-    clip = ImageSequenceClip([im for im in map(lambda x: x.convert("RGB"), frames[: fps * seconds])], fps=fps)
-    tmp = tempfile.mkdtemp(prefix="vid_")
-    out = os.path.join(tmp, "out.mp4")
-    clip.write_videofile(out, codec="libx264", audio=False, logger=None, preset="fast")
-    return out
+# Removed MoviePy fallback; videos must come from provider
 
 def video_to_data_url(path: str) -> str:
     with open(path, "rb") as f:
@@ -550,11 +543,7 @@ def video_from_stills(
 ):
     # Convert incoming stills to PIL, then pass to Higgsfield; return MP4 data url
     images = [_load_image_from_any(s) for s in stills]
-    try:
-        gen_id = higgsfield_start_video(images, prompt=prompt)
-        vid_path = higgsfield_wait_video(gen_id, timeout_s=600)
-    except Exception as e:
-        # Fallback to local assembly
-        vid_path = make_video_from_images(images, fps=24, seconds=6)
+    gen_id = higgsfield_start_video(images, prompt=prompt)
+    vid_path = higgsfield_wait_video(gen_id, timeout_s=600)
     return {"success": True, "videoUrl": video_to_data_url(vid_path)}
 
