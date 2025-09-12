@@ -8,6 +8,7 @@ export default async function handler(req, res) {
     }
     const q = req.query || {};
     const job_id = q.job_id || q.id;
+    const include_logs = String(q.include_logs || '').toLowerCase() === 'true';
     if (!job_id) return res.status(400).json({ error: 'job_id is required' });
     const db = new SupabaseClient();
     const { data: job, error: je } = await db.client
@@ -21,6 +22,15 @@ export default async function handler(req, res) {
       .select('*')
       .eq('job_id', job_id)
       .order('id', { ascending: true });
+    let logs = undefined;
+    if (include_logs) {
+      const { data: rows } = await db.client
+        .from('job_logs')
+        .select('*')
+        .eq('job_id', job_id)
+        .order('ts', { ascending: true });
+      logs = rows || [];
+    }
     return res.status(200).json({
       job_id,
       status: job.status,
@@ -29,7 +39,8 @@ export default async function handler(req, res) {
       error: job.error,
       started_at: job.started_at,
       finished_at: job.finished_at,
-      assets: assets || []
+      assets: assets || [],
+      logs
     });
   } catch (e) {
     return res.status(500).json({ error: e.message });

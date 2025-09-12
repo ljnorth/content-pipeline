@@ -385,9 +385,9 @@
         document.getElementById('pipeJobId').value = jobId;
 
         const poll = async () => {
-          const r = await fetch('/api/jobs/status?job_id=' + encodeURIComponent(jobId));
+          const r = await fetch('/api/jobs/status?job_id=' + encodeURIComponent(jobId) + '&include_logs=true');
           const j = await r.json();
-          logPre.textContent = JSON.stringify(j, null, 2);
+          logPre.textContent = JSON.stringify(j.logs || j, null, 2);
           (j.assets||[]).forEach(a=>{ if (!grid.querySelector(`[data-url="${a.url}"]`)) { const d=document.createElement('div'); d.className='thumb-wrap'; d.dataset.url=a.url; d.innerHTML='<a href="'+a.url+'" target="_blank"><img class="thumb" src="'+a.url+'"/></a>'; grid.appendChild(d);} });
           out.textContent = 'Status: '+(j.status||'-')+' Step: '+(j.step||'-');
           if (j.status === 'queued' || j.status === 'running') setTimeout(poll, 2000);
