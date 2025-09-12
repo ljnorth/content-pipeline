@@ -6,13 +6,14 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Accept both naming variants from Render dashboard
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   // Fail fast with actionable message for Render logs
   const missing = [
     !SUPABASE_URL && 'SUPABASE_URL',
-    !SUPABASE_SERVICE_ROLE_KEY && 'SUPABASE_SERVICE_ROLE_KEY'
+    !SUPABASE_SERVICE_ROLE_KEY && 'SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SERVICE_ROLE'
   ].filter(Boolean).join(', ');
   throw new Error(`Supabase configuration missing: ${missing}. Set these env vars on Render for the worker.`);
 }

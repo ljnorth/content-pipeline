@@ -12,8 +12,8 @@ export default async function handler(req, res) {
       hasInfluencerApiBase: !!process.env.INFLUENCER_API_BASE,
       hasContentPipelineApiBase: !!process.env.CONTENT_PIPELINE_API_BASE,
       hasSupabaseUrl: !!process.env.SUPABASE_URL,
-      hasSupabaseAnonKey: !!process.env.SUPABASE_ANON_KEY,
-      hasSupabaseServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY
+      hasSupabaseAnonKey: !!process.env.SUPABASE_ANON_KEY || !!process.env.SUPABAZE_ANON_PUBLIC,
+      hasSupabaseServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY || !!process.env.SUPABASE_SERVICE_ROLE
     };
     res.json(response);
   } catch (e) {
