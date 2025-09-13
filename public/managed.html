@@ -131,6 +131,8 @@
       <button id="btnMoodboards" class="btn btn-outline">Get Moodboards</button>
       <button id="btnStills" class="btn btn-outline">Generate Stills</button>
       <button id="btnUpscale" class="btn btn-outline">Upscale Variants</button>
+      <button id="btnSoul" class="btn btn-outline">Create Soul</button>
+      <button id="btnAnchors" class="btn btn-outline">Generate Anchors</button>
       <button id="btnVideos" class="btn btn-outline">Generate Videos</button>
     </div>
     <div id="infOutput" style="margin-top:8px"></div>
@@ -410,6 +412,19 @@
       const u = (document.getElementById('pipeUser2').value||'').replace('@','');
       if (!u) return setStatus('Pick an account first', 'err');
       await enqueueAndPoll({ username: u, action: 'upscale_variants' });
+    };
+
+    document.getElementById('btnSoul').onclick = async () => {
+      const u = (document.getElementById('pipeUser2').value||'').replace('@','');
+      if (!u) return setStatus('Pick an account first', 'err');
+      // create_soul will also generate anchors automatically
+      await enqueueAndPoll({ username: u, action: 'create_soul', locations: ['bedroom','street','kitchen'] });
+    };
+
+    document.getElementById('btnAnchors').onclick = async () => {
+      const u = (document.getElementById('pipeUser2').value||'').replace('@','');
+      if (!u) return setStatus('Pick an account first', 'err');
+      await enqueueAndPoll({ username: u, action: 'anchor_stills', locations: ['bedroom','street','kitchen'] });
     };
 
     // Populate pipeline user select using existing preview dropdown data
