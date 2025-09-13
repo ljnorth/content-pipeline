@@ -242,8 +242,8 @@ async function processJob(job) {
 
       const codeformerVer = process.env.REPLICATE_CODEFORMER_VERSION || 'cc4956dd26fa5a7185d5660cc9100fab1b8070a1d1654a8bb5eb6d443b020bb2';
       const realesrganVer = process.env.REPLICATE_REALESRGAN_VERSION || 'f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa';
-      let fidelity = Number(process.env.CODEFORMER_FIDELITY ?? 0.1);
-      if (!Number.isFinite(fidelity)) fidelity = 0.1;
+      let fidelity = Number(process.env.CODEFORMER_FIDELITY ?? 0.8);
+      if (!Number.isFinite(fidelity)) fidelity = 0.8;
       if (fidelity < 0) fidelity = 0; if (fidelity > 1) fidelity = 1;
       const scale = Number(process.env.REALESRGAN_SCALE ?? 1);
       await log(job_id, 'info', 'upscale settings', { fidelity, scale });
