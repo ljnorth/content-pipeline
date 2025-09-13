@@ -163,9 +163,9 @@ export class SupabaseStorage {
    * @param {string} storagePath - Path to file in storage
    * @returns {string} Public URL
    */
-  getPublicUrl(storagePath) {
+  getPublicUrl(storagePath, bucket = this.defaultBucket) {
     const { data } = this.publicClient.storage
-      .from(this.bucketName)
+      .from(bucket)
       .getPublicUrl(storagePath);
     return data.publicUrl;
   }
@@ -190,9 +190,9 @@ export class SupabaseStorage {
    * @param {string} directoryPath - Directory path in storage
    * @returns {Promise<Array>} List of files
    */
-  async listFiles(directoryPath = '') {
+  async listFiles(directoryPath = '', bucket = this.defaultBucket) {
     const { data, error } = await this.uploadClient.storage
-      .from(this.bucketName)
+      .from(bucket)
       .list(directoryPath);
     
     if (error) {
@@ -200,5 +200,11 @@ export class SupabaseStorage {
     }
     
     return data;
+  }
+
+  async listPublicUrls(prefix = '', bucket = this.defaultBucket) {
+    const entries = await this.listFiles(prefix, bucket);
+    const files = Array.isArray(entries) ? entries.filter(e => !e.id && !e.name?.endsWith('/')) : [];
+    return files.map(f => this.getPublicUrl(`${prefix}/${f.name}`.replace(/\/+/, '/'), bucket));
   }
 } 

@@ -220,8 +220,24 @@ async function processJob(job) {
     if (action === 'upscale_variants'){
       await setJob(job_id, { status:'running', step:'upscale_variants', started_at: new Date().toISOString() });
       const prof = await getProfile(job.username);
-      const base = prof?.flux_variants?.base || null;
-      const variants = Array.isArray(prof?.flux_variants?.variants) ? prof.flux_variants.variants : [];
+      let base = prof?.flux_variants?.base || null;
+      let variants = Array.isArray(prof?.flux_variants?.variants) ? prof.flux_variants.variants : [];
+      // Fallback: load from storage if DB missing
+      if ((!base || variants.length === 0)){
+        try{
+          const prefixBase = `${job.username}/character/base`;
+          const baseList = await storage.listFiles(prefixBase, storage.assetsBucket);
+          if (Array.isArray(baseList) && baseList.length){
+            const name = baseList.find(f=>f.name)?.name;
+            if (name) base = storage.getPublicUrl(`${prefixBase}/${name}`, storage.assetsBucket);
+          }
+          const prefixVar = `${job.username}/character/variants`;
+          const varList = await storage.listFiles(prefixVar, storage.assetsBucket);
+          if (Array.isArray(varList)){
+            variants = varList.map(v => storage.getPublicUrl(`${prefixVar}/${v.name}`, storage.assetsBucket)).filter(Boolean);
+          }
+        }catch(_){ /* ignore */ }
+      }
       if (!base || variants.length === 0) throw new Error('No flux_variants to upscale');
 
       const codeformerVer = process.env.REPLICATE_CODEFORMER_VERSION || 'cc4956dd26fa5a7185d5660cc9100fab1b8070a1d1654a8bb5eb6d443b020bb2';
