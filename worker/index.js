@@ -245,7 +245,7 @@ async function processJob(job) {
       let fidelity = Number(process.env.CODEFORMER_FIDELITY ?? 0.1);
       if (!Number.isFinite(fidelity)) fidelity = 0.1;
       if (fidelity < 0) fidelity = 0; if (fidelity > 1) fidelity = 1;
-      const scale = Number(process.env.REALESRGAN_SCALE ?? 2);
+      const scale = Number(process.env.REALESRGAN_SCALE ?? 1);
       await log(job_id, 'info', 'upscale settings', { fidelity, scale });
 
       const all = [base, ...variants];
