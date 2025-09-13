@@ -1,4 +1,5 @@
 import fetch from 'node-fetch';
+import sharp from 'sharp';
 import pLimit from 'p-limit';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
@@ -36,6 +37,7 @@ const replicate = new ReplicateClient({});
 
 const STILL_LIMIT = parseInt(process.env.STILL_CONCURRENCY || '3', 10);
 const VIDEO_LIMIT = parseInt(process.env.VIDEO_CONCURRENCY || '1', 10);
+const MAX_ESRGAN_INPUT_PIXELS = Number(process.env.MAX_ESRGAN_INPUT_PIXELS || 2096704);
 
 async function log(job_id, level, message, data) { await supabase.from('job_logs').insert({ job_id, level, message, data }); }
 async function setJob(job_id, patch) { await supabase.from('jobs').update(patch).eq('id', job_id); }
@@ -87,6 +89,26 @@ async function uploadBufferAsPng(buffer, username, folder, filename = 'image.png
   const up = await storage.uploadImage(filePath, username, folder, filename, bucket);
   try { fs.unlinkSync(filePath); } catch(_) {}
   return up.publicUrl;
+}
+
+// Ensure an image is under the ESRGAN input pixel cap. If too large, downscale proportionally.
+async function ensureUnderPixelCap(imageUrl, username, job_id){
+  try{
+    const buf = Buffer.from(await fetch(imageUrl).then(r=>r.arrayBuffer()));
+    const meta = await sharp(buf).metadata();
+    const w = meta.width || 0; const h = meta.height || 0;
+    const pixels = w * h;
+    if (pixels > MAX_ESRGAN_INPUT_PIXELS && w > 0 && h > 0){
+      const factor = Math.sqrt(MAX_ESRGAN_INPUT_PIXELS / pixels);
+      const newW = Math.max(1, Math.floor(w * factor));
+      const newH = Math.max(1, Math.floor(h * factor));
+      const resized = await sharp(buf).resize(newW, newH, { fit: 'inside' }).png().toBuffer();
+      const url = await uploadBufferAsPng(resized, username, 'character/tmp', `r_${Date.now()}.png`, storage.assetsBucket);
+      if (job_id) await log(job_id, 'info', 'esrgan_preresize', { original: { w, h, pixels }, resized: { w: newW, h: newH, pixels: newW*newH } });
+      return url;
+    }
+    return imageUrl;
+  }catch(e){ if (job_id) await log(job_id, 'error', 'esrgan_preresize_failed', { error: e.message }); return imageUrl; }
 }
 
 async function buildCharacter(persona, username) {
@@ -253,13 +275,14 @@ async function processJob(job) {
       for (const src of all){
         try{
           const cf = await replicate.runVersion(codeformerVer, { image: src, codeformer_fidelity: fidelity });
+          const safeInput = await ensureUnderPixelCap(cf, job.username, job_id);
           let es;
           try{
-            es = await replicate.runVersion(realesrganVer, { image: cf, scale });
+            es = await replicate.runVersion(realesrganVer, { image: safeInput, scale });
           }catch(e){
             if (/max size that fits in GPU memory/i.test(e.message)){
               await log(job_id, 'info', 'realesrgan retry with scale=1', { src });
-              es = await replicate.runVersion(realesrganVer, { image: cf, scale: 1 });
+              es = await replicate.runVersion(realesrganVer, { image: safeInput, scale: 1 });
             } else { throw e; }
           }
           // Save to storage and track as asset, validating content type
