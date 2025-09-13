@@ -22,9 +22,22 @@ export class HiggsfieldClient {
     }
   }
 
+  async createSoul({ name = 'influencer', images = [] }){
+    if (this.mode !== 'platform') throw new Error('createSoul requires Platform API credentials');
+    const body = { name, images: images.map(u => ({ url: u })) };
+    const { data } = await axios.post(`${this.baseUrl}/souls`, body, { headers: this.headers });
+    return data; // expect { soul_id }
+  }
+
+  async generateImageFromSoul({ soul_id, prompt, aspect_ratio = '3:4', resolution = '1080p' }){
+    if (this.mode !== 'platform') throw new Error('generateImageFromSoul requires Platform API');
+    const body = { soul_id, prompt, aspect_ratio, resolution };
+    const { data } = await axios.post(`${this.baseUrl}/images`, body, { headers: this.headers });
+    return data; // expect { image_url }
+  }
+
   async generateTextToVideo({ prompt, duration = 8, resolution = '1080p', aspect_ratio = '9:16', seed }){
     if (this.mode === 'platform') {
-      // Platform T2V not implemented in this client; prefer I2V with a still
       throw new Error('Higgsfield Platform T2V not implemented in client');
     }
     const body = { type: 'text-to-video', prompt, duration, resolution, aspect_ratio, seed };
