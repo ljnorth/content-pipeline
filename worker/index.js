@@ -39,6 +39,22 @@ async function log(job_id, level, message, data) { await supabase.from('job_logs
 async function setJob(job_id, patch) { await supabase.from('jobs').update(patch).eq('id', job_id); }
 async function addAsset(job_id, kind, url) { await supabase.from('job_assets').insert({ job_id, kind, url }); }
 
+async function getProfile(username){
+  const { data } = await supabase
+    .from('account_profiles')
+    .select('influencer_soul_id, flux_variants, anchor_stills, influencer_traits')
+    .eq('username', username)
+    .single();
+  return data || {};
+}
+
+async function updateProfile(username, patch){
+  await supabase
+    .from('account_profiles')
+    .update(patch)
+    .eq('username', username);
+}
+
 async function fetchMoodboards(username, limit = 5) {
   const base = process.env.VERCEL_BASE || '';
   const ep = base.replace(/\/$/, '') + '/api/content/moodboards-from-generator';
@@ -102,6 +118,8 @@ async function buildCharacter(persona, username) {
         variants.push(res.url);
       } catch(e){ console.warn('[worker] FLUX i2i failed', e.message); }
     }
+    // Persist variants on profile for later Soul creation
+    try { await updateProfile(username, { flux_variants: { base: baseUrl, variants } }); } catch(_){}
     return { baseUrl, variants };
   } catch (e) {
     console.error('[worker] buildCharacter error', e.message);
@@ -134,7 +152,63 @@ async function makeVideo(stillUrl) {
 async function processJob(job) {
   const job_id = job.id;
   const outputs = (job.payload && job.payload.outputs) || { moodboards: true, stills: true, videos: true };
+  const action = job.payload && job.payload.action;
   try {
+    // Action-specific lightweight jobs
+    if (action === 'create_soul'){
+      await setJob(job_id, { status:'running', step:'create_soul', started_at: new Date().toISOString() });
+      const prof = await getProfile(job.username);
+      const arr = Array.isArray(prof?.flux_variants?.variants) ? prof.flux_variants.variants : [];
+      if (arr.length === 0) throw new Error('No flux_variants found. Run character build first.');
+      const top = arr.slice(0, 10);
+      const res = await higgs.createSoul({ name: `soul-${job.username}`, images: top });
+      if (!res?.soul_id) throw new Error('Higgsfield createSoul returned no soul_id');
+      await updateProfile(job.username, { influencer_soul_id: res.soul_id });
+      await log(job_id, 'info', 'soul created', { soul_id: res.soul_id });
+      await setJob(job_id, { status:'completed', step:'done', finished_at: new Date().toISOString() });
+      return;
+    }
+
+    if (action === 'anchor_stills'){
+      await setJob(job_id, { status:'running', step:'anchor_stills', started_at: new Date().toISOString() });
+      const prof = await getProfile(job.username);
+      const soul = prof?.influencer_soul_id;
+      if (!soul) throw new Error('influencer_soul_id missing. Create Soul first.');
+      const locations = Array.isArray(job.payload?.locations) && job.payload.locations.length>0 ? job.payload.locations : ['bedroom','street','kitchen'];
+      const saved = [];
+      for (const loc of locations){
+        const prompt = `portrait of the subject in the ${loc}`;
+        const img = await higgs.generateImageFromSoul({ soul_id: soul, prompt, aspect_ratio:'3:4', resolution:'1080p' });
+        const url = img?.image_url;
+        if (url){
+          const b = await fetch(url).then(r=>r.arrayBuffer());
+          const fileUrl = await uploadBufferAsPng(Buffer.from(b), job.username, `anchor-stills/${Date.now()}`);
+          saved.push({ location: loc, url: fileUrl });
+          await addAsset(job_id, 'still', fileUrl);
+        }
+      }
+      if (saved.length === 0) throw new Error('No anchor stills generated');
+      await updateProfile(job.username, { anchor_stills: saved });
+      await log(job_id, 'info', 'anchor_stills', { count: saved.length });
+      await setJob(job_id, { status:'completed', step:'done', finished_at: new Date().toISOString() });
+      return;
+    }
+
+    if (action === 'try_on'){
+      await setJob(job_id, { status:'running', step:'try_on', started_at: new Date().toISOString() });
+      const prof = await getProfile(job.username);
+      const anchor = Array.isArray(prof?.anchor_stills) && prof.anchor_stills[0]?.url ? prof.anchor_stills[0].url : null;
+      if (!anchor) throw new Error('No anchor_stills available. Generate anchors first.');
+      const count = Math.max(1, Number(job.payload?.count || 5));
+      const moodboards = await fetchMoodboards(job.username, count);
+      const stillLimit = pLimit(STILL_LIMIT);
+      const stills = (await Promise.all(moodboards.map(mb => stillLimit(() => composeStill(anchor, mb, job.username))))).filter(Boolean);
+      for (const s of stills) await addAsset(job_id, 'still', s);
+      await log(job_id, 'info', 'try_on', { moodboards: moodboards.length, stills: stills.length });
+      await setJob(job_id, { status:'completed', step:'done', finished_at: new Date().toISOString() });
+      return;
+    }
+
     await setJob(job_id, { status: 'running', started_at: new Date().toISOString(), step: 'moodboards' });
     const moodboards = await fetchMoodboards(job.username, 5);
     await log(job_id, 'info', 'moodboards', { count: moodboards.length });
