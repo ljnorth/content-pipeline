@@ -28,7 +28,9 @@ const supabaseAdmin = supabaseServiceRoleKey ? createClient(supabaseUrl, supabas
 
 export class SupabaseStorage {
   constructor() {
-    this.bucketName = 'fashion-images';
+    this.defaultBucket = 'fashion-images';
+    this.assetsBucket = process.env.SB_BUCKET_ASSETS || 'character-assets';
+    this.outputsBucket = process.env.SB_BUCKET_OUTPUTS || 'character-outputs';
     // Use admin client for uploads if available, otherwise fall back to anon
     this.uploadClient = supabaseAdmin || supabase;
     this.publicClient = supabase;
@@ -42,7 +44,7 @@ export class SupabaseStorage {
    * @param {string} filename - Original filename
    * @returns {Promise<{publicUrl: string, storagePath: string}>}
    */
-  async uploadImage(localFilePath, username, postId, filename) {
+  async uploadImage(localFilePath, username, postId, filename, bucket = this.defaultBucket) {
     try {
       // Check if file exists
       if (!fs.existsSync(localFilePath)) {
@@ -68,7 +70,7 @@ export class SupabaseStorage {
 
       // Upload to Supabase Storage using admin client (bypasses RLS)
       const { data, error } = await this.uploadClient.storage
-        .from(this.bucketName)
+        .from(bucket)
         .upload(storagePath, fileBuffer, {
           contentType,
           upsert: true // Replace if exists
@@ -80,7 +82,7 @@ export class SupabaseStorage {
 
       // Get public URL using public client
       const { data: urlData } = this.publicClient.storage
-        .from(this.bucketName)
+        .from(bucket)
         .getPublicUrl(storagePath);
 
       return {
@@ -92,6 +94,25 @@ export class SupabaseStorage {
       console.error(`Error uploading image ${filename}:`, error.message);
       throw error;
     }
+  }
+
+  async uploadBuffer(buffer, username, folder, filename, bucket = this.defaultBucket, contentType = 'image/png'){
+    const storagePath = `${username}/${folder}/${filename}`;
+    const { error } = await this.uploadClient.storage
+      .from(bucket)
+      .upload(storagePath, buffer, { contentType, upsert: true });
+    if (error) throw error;
+    const { data: urlData } = this.publicClient.storage
+      .from(bucket)
+      .getPublicUrl(storagePath);
+    return { publicUrl: urlData.publicUrl, storagePath };
+  }
+
+  async uploadRemoteUrl(remoteUrl, username, folder, filename, bucket = this.defaultBucket, contentType = 'image/png'){
+    const res = await fetch(remoteUrl);
+    if (!res.ok) throw new Error(`download failed ${res.status}`);
+    const buf = Buffer.from(await res.arrayBuffer());
+    return await this.uploadBuffer(buf, username, folder, filename, bucket, contentType);
   }
 
   /**

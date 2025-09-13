@@ -79,12 +79,12 @@ function personaToPrompt(persona){
   return `Portrait of the same person (${gender}), ${age} ${height} ${weight}, consistent identity, do not change face/hair/skin tone. Hair: ${hair} ${hairColor}. Eyes: ${eye}. Ethnicity: ${ethnicity}. Skin tone: ${skinTone}. Outfit: ${style}. 85mm portrait quality.`;
 }
 
-async function uploadBufferAsPng(buffer, username, folder){
+async function uploadBufferAsPng(buffer, username, folder, filename = 'image.png', bucket = storage.assetsBucket){
   const tmpDir = path.join('/tmp', `worker-${Date.now()}`);
   try { fs.mkdirSync(tmpDir, { recursive: true }); } catch(_) {}
-  const filePath = path.join(tmpDir, 'image.png');
+  const filePath = path.join(tmpDir, filename);
   fs.writeFileSync(filePath, buffer);
-  const up = await storage.uploadImage(filePath, username, folder, 'image.png');
+  const up = await storage.uploadImage(filePath, username, folder, filename, bucket);
   try { fs.unlinkSync(filePath); } catch(_) {}
   return up.publicUrl;
 }
@@ -95,12 +95,24 @@ async function buildCharacter(persona, username) {
       console.warn('[worker] FLUX env missing; skipping character');
       return { baseUrl: null, variants: [] };
     }
+    // Reuse existing character unless forced via env FORCE_BUILD
+    try {
+      const profExisting = await getProfile(username);
+      const force = String(process.env.FORCE_BUILD || '').toLowerCase() === 'true';
+      if (!force && profExisting?.flux_variants && (profExisting.flux_variants.base || (profExisting.flux_variants.variants||[]).length)){
+        return { baseUrl: profExisting.flux_variants.base || null, variants: profExisting.flux_variants.variants || [] };
+      }
+    } catch(_){}
+
     const idPrompt = personaToPrompt(persona || {});
     const neg = process.env.IDENTITY_LOCK_NEGATIVE || 'different person, face swap, identity drift, age change, beard, mustache, different ethnicity, different hair color, wig, hat, eye color change, skin tone shift, artifacts, extra fingers, duplicate face, low-res';
     const seed = process.env.FLUX_SEED ? Number(process.env.FLUX_SEED) : undefined;
 
+    // Generate base (remote URL), then store into Supabase (assets bucket)
     const t2i = await flux.textToImage({ prompt: idPrompt, negative: neg, seed });
-    const baseUrl = t2i.url;
+    const baseRemote = t2i.url;
+    const baseBuf = Buffer.from(await fetch(baseRemote).then(r=>r.arrayBuffer()));
+    const baseUrl = await uploadBufferAsPng(baseBuf, username, 'character/base', 'base.png', storage.assetsBucket);
 
     const poses = ['front', '3/4 left', '3/4 right', 'profile left', 'profile right'];
     const zooms = ['headshot', 'torso', 'full body'];
@@ -116,12 +128,14 @@ async function buildCharacter(persona, username) {
       const outfit = outfits[i % outfits.length];
       const vPrompt = `${idPrompt}; identity lock; pose: ${p}; framing: ${z}; background: ${bg}; outfit: ${outfit}`;
       try {
-        const res = await flux.imageToImage({ image_url: baseUrl, prompt: vPrompt, negative: neg, strength: 0.35, seed });
-        variants.push(res.url);
+        const res = await flux.imageToImage({ image_url: baseRemote, prompt: vPrompt, negative: neg, strength: 0.35, seed });
+        const vRemote = res.url;
+        const vBuf = Buffer.from(await fetch(vRemote).then(r=>r.arrayBuffer()));
+        const vUrl = await uploadBufferAsPng(vBuf, username, 'character/variants', `v_${i+1}.png`, storage.assetsBucket);
+        variants.push(vUrl);
       } catch(e){ console.warn('[worker] FLUX i2i failed', e.message); }
     }
-    // Persist variants on profile for later Soul creation
-    try { await updateProfile(username, { flux_variants: { base: baseUrl, variants } }); } catch(_){}
+    try { await updateProfile(username, { flux_variants: { base: baseUrl, variants } }); } catch(_){ }
     return { baseUrl, variants };
   } catch (e) {
     console.error('[worker] buildCharacter error', e.message);
@@ -136,7 +150,7 @@ async function composeStill(characterUrl, moodboardUrl, username) {
     const prompt = 'show this subject wearing the clothes while making outfit/get ready with me content in their bedroom';
     const res = await gemini.generateFromImagesAndPrompt({ images: [ { url: characterUrl }, { url: moodboardUrl } ], prompt, mimeType: 'image/png' });
     const buf = Buffer.from(res.base64, 'base64');
-    const url = await uploadBufferAsPng(buf, username, `influencer-stills/${Date.now()}`);
+    const url = await uploadBufferAsPng(buf, username, `try-on`, `t_${Date.now()}.png`, storage.outputsBucket);
     return url;
   } catch (e) { console.error('[worker] composeStill error', e.message); return null; }
 }
@@ -149,7 +163,7 @@ async function generateAnchorStillsForSoul(soul_id, username, locations, job_id)
     const url = img?.image_url;
     if (url){
       const b = await fetch(url).then(r=>r.arrayBuffer());
-      const fileUrl = await uploadBufferAsPng(Buffer.from(b), username, `anchor-stills/${Date.now()}`);
+      const fileUrl = await uploadBufferAsPng(Buffer.from(b), username, `character/anchors`, `${loc}.png`, storage.assetsBucket);
       saved.push({ location: loc, url: fileUrl });
       await addAsset(job_id, 'still', fileUrl);
     }
@@ -158,13 +172,19 @@ async function generateAnchorStillsForSoul(soul_id, username, locations, job_id)
   return saved;
 }
 
-async function makeVideo(stillUrl) {
+async function makeVideo(stillUrl, username) {
   try {
     if (!process.env.HIGGSFIELD_API_KEY_ID || !process.env.HIGGSFIELD_API_SECRET) { console.warn('[worker] HIGGSFIELD env missing; skipping video'); return null; }
     const prompt = 'show this subject wearing the clothes while making outfit/get ready with me content in their bedroom';
     const gen = await higgs.generateImageToVideo({ prompt, image_url: stillUrl, duration: 8, aspect_ratio: '9:16', resolution: '1080p' });
     // Best-effort: if API returns final url inline, prefer it; else return generation id URL
-    return gen?.url || gen?.video_url || null;
+    const remote = gen?.url || gen?.video_url || null;
+    if (!remote) return null;
+    try{
+      const b = await fetch(remote).then(r=>r.arrayBuffer());
+      const url = await uploadBufferAsPng(Buffer.from(b), username, 'videos', `v_${Date.now()}.mp4`, storage.outputsBucket);
+      return url;
+    }catch(_){ return remote; }
   } catch (e) { console.error('[worker] makeVideo error', e.message); return null; }
 }
 
@@ -190,7 +210,7 @@ async function processJob(job) {
       const { data: assets } = await supabase.from('job_assets').select('*').eq('job_id', job_id).order('id', { ascending: false });
       const still = (assets||[]).find(a=>a.kind==='still')?.url || (assets||[]).find(a=>a.kind==='character_base')?.url || null;
       if (!still) throw new Error('No still or character_base found in job assets');
-      const v = await makeVideo(still);
+      const v = await makeVideo(still, job.username);
       if (v) await addAsset(job_id, 'video', v);
       await setJob(job_id, { status:'completed', step:'done', finished_at: new Date().toISOString() });
       await log(job_id, 'info', 'video', { url: v||null });
@@ -220,7 +240,7 @@ async function processJob(job) {
           const es = await replicate.runVersion(realesrganVer, { image: cf, scale });
           // Save to storage and track as asset
           const b = await fetch(es).then(r=>r.arrayBuffer());
-          const url = await uploadBufferAsPng(Buffer.from(b), job.username, `upscaled/${Date.now()}`);
+          const url = await uploadBufferAsPng(Buffer.from(b), job.username, `character/upscaled`, `u_${Date.now()}.png`, storage.assetsBucket);
           upscaled.push(url);
           await addAsset(job_id, 'character_variant_upscaled', url);
         }catch(e){ await log(job_id, 'error', 'upscale failed', { src, error: e.message }); }
