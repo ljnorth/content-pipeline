@@ -7,7 +7,7 @@ function truncate(obj, len = 300){
 
 export class FluxClient {
   constructor(options = {}){
-    this.baseUrl = options.baseUrl || process.env.FLUX_API_BASE || 'https://api.bfl.ai';
+    this.baseUrl = (options.baseUrl || process.env.FLUX_API_BASE || 'https://api.bfl.ai').replace(/\/$/, '');
     this.apiKey = options.apiKey || process.env.FLUX_PRO_API_KEY || '';
     // BFL uses x-key header
     this.headers = {
@@ -21,8 +21,13 @@ export class FluxClient {
     this.pollIntervalMs = options.pollIntervalMs || 1000;
   }
 
+  buildUrl(path){
+    const p = (path || '').startsWith('/') ? path : `/${path||''}`;
+    return `${this.baseUrl}${p}`.replace(/([^:])\/\/+/, '$1/');
+  }
+
   async postAndPoll(path, body){
-    const url = `${this.baseUrl}${path}`;
+    const url = this.buildUrl(path);
     let req;
     try{
       req = await axios.post(url, body, { headers: this.headers });

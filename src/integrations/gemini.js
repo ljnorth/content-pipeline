@@ -40,9 +40,7 @@ export class GeminiClient {
 
   async generateFromPrompt({ prompt, mimeType = 'image/png' }){
     const body = {
-      contents: [ { role: 'user', parts: [ { text: prompt } ] } ],
-      tools: [ { image_generation: {} } ],
-      generationConfig: { responseMimeType: mimeType }
+      contents: [ { role: 'user', parts: [ { text: prompt } ] } ]
     };
     try{
       const { data } = await axios.post(this.endpoint, body, { headers: { 'Content-Type': 'application/json' } });
@@ -67,9 +65,7 @@ export class GeminiClient {
     }
     parts.push({ text: prompt });
     const body = {
-      contents: [ { role: 'user', parts } ],
-      tools: [ { image_generation: {} } ],
-      generationConfig: { responseMimeType: mimeType }
+      contents: [ { role: 'user', parts } ]
     };
     try{
       const { data } = await axios.post(this.endpoint, body, { headers: { 'Content-Type': 'application/json' } });

@@ -124,14 +124,13 @@
   </div>
 
   <section class="section" style="margin-top:12px">
-    <h3>Influencer Pipeline (Embeddings → Gemini → Higgsfield → Slack)</h3>
+    <h3>Influencer Pipeline (Step-by-step)</h3>
     <div class="row" style="align-items:center; gap:8px; flex-wrap:wrap">
-      <label class="muted">Outputs:</label>
-      <label><input type="checkbox" id="outMoodboards" checked/> Moodboards</label>
-      <label><input type="checkbox" id="outStills" checked/> Stills</label>
-      <label><input type="checkbox" id="outVideos" checked/> Videos</label>
       <select id="pipeUser2" style="min-width:240px"></select>
-      <button id="runSlack2" class="btn btn-primary">Run Influencer Pipeline → Enqueue</button>
+      <button id="btnCharacter" class="btn btn-outline">Create Character</button>
+      <button id="btnMoodboards" class="btn btn-outline">Get Moodboards</button>
+      <button id="btnStills" class="btn btn-outline">Generate Stills</button>
+      <button id="btnVideos" class="btn btn-outline">Generate Videos</button>
     </div>
     <div id="infOutput" style="margin-top:8px"></div>
   </section>
@@ -359,41 +358,51 @@
       }
     };
 
-    // Influencer pipeline via worker queue
-    document.getElementById('runSlack2').onclick = async () => {
+    // Step runners
+    async function enqueueAndPoll(payload){
+      const out = document.getElementById('infOutput');
+      out.textContent = 'Enqueuing…';
+      const enq = await fetch('/api/jobs/enqueue-run', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const ej = await enq.json();
+      if (!enq.ok) throw new Error(ej.error || 'enqueue failed');
+      const jobId = ej.job_id;
+      out.textContent = 'Queued job: '+jobId+' — polling…';
+      const grid = document.getElementById('pipeGrid'); grid.innerHTML='';
+      const logPre = document.getElementById('pipeLog'); logPre.textContent = '';
+      document.getElementById('pipeJobId').value = jobId;
+      const poll = async () => {
+        const r = await fetch('/api/jobs/status?job_id=' + encodeURIComponent(jobId) + '&include_logs=true');
+        const j = await r.json();
+        logPre.textContent = JSON.stringify(j.logs || j, null, 2);
+        (j.assets||[]).forEach(a=>{ if (!grid.querySelector(`[data-url="${a.url}"]`)) { const d=document.createElement('div'); d.className='thumb-wrap'; d.dataset.url=a.url; d.innerHTML='<a href="'+a.url+'" target="_blank"><img class="thumb" src="'+a.url+'"/></a>'; grid.appendChild(d);} });
+        out.textContent = 'Status: '+(j.status||'-')+' Step: '+(j.step||'-');
+        if (j.status === 'queued' || j.status === 'running') setTimeout(poll, 2000);
+      };
+      setTimeout(poll, 1000);
+    }
+
+    document.getElementById('btnCharacter').onclick = async () => {
       const u = (document.getElementById('pipeUser2').value||'').replace('@','');
       if (!u) return setStatus('Pick an account first', 'err');
-      const out = document.getElementById('infOutput');
-      out.textContent = 'Enqueuing job…';
-      try{
-        const outputs = {
-          moodboards: document.getElementById('outMoodboards').checked,
-          stills: document.getElementById('outStills').checked,
-          videos: document.getElementById('outVideos').checked
-        };
-        const enq = await fetch('/api/jobs/enqueue-run', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ username: u, outputs })
-        });
-        const ej = await enq.json();
-        if (!enq.ok) throw new Error(ej.error || 'enqueue failed');
-        const jobId = ej.job_id;
-        out.textContent = 'Queued job: '+jobId+' — polling…';
-
-        const grid = document.getElementById('pipeGrid'); grid.innerHTML='';
-        const logPre = document.getElementById('pipeLog'); logPre.textContent = '';
-        document.getElementById('pipeJobId').value = jobId;
-
-        const poll = async () => {
-          const r = await fetch('/api/jobs/status?job_id=' + encodeURIComponent(jobId) + '&include_logs=true');
-          const j = await r.json();
-          logPre.textContent = JSON.stringify(j.logs || j, null, 2);
-          (j.assets||[]).forEach(a=>{ if (!grid.querySelector(`[data-url="${a.url}"]`)) { const d=document.createElement('div'); d.className='thumb-wrap'; d.dataset.url=a.url; d.innerHTML='<a href="'+a.url+'" target="_blank"><img class="thumb" src="'+a.url+'"/></a>'; grid.appendChild(d);} });
-          out.textContent = 'Status: '+(j.status||'-')+' Step: '+(j.step||'-');
-          if (j.status === 'queued' || j.status === 'running') setTimeout(poll, 2000);
-        };
-        setTimeout(poll, 1000);
-      }catch(e){ out.textContent = 'Error: '+e.message; console.error('enqueue-run failed', e); }
+      // Include persona if present on profile
+      let persona = null;
+      try{ const r = await fetch('/api/accounts'); const arr = await r.json(); const p = (arr||[]).find(x=>x.username===u); persona = p?.influencer_traits || null; }catch(_){ }
+      await enqueueAndPoll({ username: u, action: 'build_character', persona });
+    };
+    document.getElementById('btnMoodboards').onclick = async () => {
+      const u = (document.getElementById('pipeUser2').value||'').replace('@','');
+      if (!u) return setStatus('Pick an account first', 'err');
+      await enqueueAndPoll({ username: u, outputs: { moodboards: true, stills: false, videos: false } });
+    };
+    document.getElementById('btnStills').onclick = async () => {
+      const u = (document.getElementById('pipeUser2').value||'').replace('@','');
+      if (!u) return setStatus('Pick an account first', 'err');
+      await enqueueAndPoll({ username: u, action: 'try_on', count: 5 });
+    };
+    document.getElementById('btnVideos').onclick = async () => {
+      const u = (document.getElementById('pipeUser2').value||'').replace('@','');
+      if (!u) return setStatus('Pick an account first', 'err');
+      await enqueueAndPoll({ username: u, action: 'video' });
     };
 
     // Populate pipeline user select using existing preview dropdown data

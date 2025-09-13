@@ -141,7 +141,7 @@ async function composeStill(characterUrl, moodboardUrl, username) {
 
 async function makeVideo(stillUrl) {
   try {
-    if (!process.env.HIGGSFIELD_API_KEY) { console.warn('[worker] HIGGSFIELD env missing; skipping video'); return null; }
+    if (!process.env.HIGGSFIELD_API_KEY_ID || !process.env.HIGGSFIELD_API_SECRET) { console.warn('[worker] HIGGSFIELD env missing; skipping video'); return null; }
     const prompt = 'show this subject wearing the clothes while making outfit/get ready with me content in their bedroom';
     const gen = await higgs.generateImageToVideo({ prompt, image_url: stillUrl, duration: 8, aspect_ratio: '9:16', resolution: '1080p' });
     // Best-effort: if API returns final url inline, prefer it; else return generation id URL
@@ -155,6 +155,28 @@ async function processJob(job) {
   const action = job.payload && job.payload.action;
   try {
     // Action-specific lightweight jobs
+    if (action === 'build_character'){
+      await setJob(job_id, { status:'running', step:'character', started_at: new Date().toISOString() });
+      const character = await buildCharacter(job.payload?.persona || null, job.username);
+      if (character.baseUrl) await addAsset(job_id, 'character_base', character.baseUrl);
+      for (const v of character.variants || []) await addAsset(job_id, 'character_variant', v);
+      await setJob(job_id, { status:'completed', step:'done', finished_at: new Date().toISOString() });
+      await log(job_id, 'info', 'build_character', { base: !!character.baseUrl, variants: (character.variants||[]).length });
+      return;
+    }
+
+    if (action === 'video'){
+      await setJob(job_id, { status:'running', step:'videos', started_at: new Date().toISOString() });
+      // Use last still from assets or fallback to character base
+      const { data: assets } = await supabase.from('job_assets').select('*').eq('job_id', job_id).order('id', { ascending: false });
+      const still = (assets||[]).find(a=>a.kind==='still')?.url || (assets||[]).find(a=>a.kind==='character_base')?.url || null;
+      if (!still) throw new Error('No still or character_base found in job assets');
+      const v = await makeVideo(still);
+      if (v) await addAsset(job_id, 'video', v);
+      await setJob(job_id, { status:'completed', step:'done', finished_at: new Date().toISOString() });
+      await log(job_id, 'info', 'video', { url: v||null });
+      return;
+    }
     if (action === 'create_soul'){
       await setJob(job_id, { status:'running', step:'create_soul', started_at: new Date().toISOString() });
       const prof = await getProfile(job.username);
