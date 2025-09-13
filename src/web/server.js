@@ -1725,16 +1725,16 @@ app.post('/api/influencer/run-full-to-slack', async (req, res) => {
     const { username, moodboardCount = 5, outputs } = req.body || {};
     if (!username) return res.status(400).json({ error: 'username is required' });
 
-    // Load persona from account profile (if set)
+    // Load persona from account profile (prefer influencer_traits)
     let persona = null;
     try {
       const { data: profile } = await db.client
         .from('account_profiles')
-        .select('content_strategy')
+        .select('influencer_traits, content_strategy')
         .eq('username', username)
         .eq('is_active', true)
         .single();
-      persona = profile?.content_strategy?.influencerPersona || null;
+      persona = profile?.influencer_traits || profile?.content_strategy?.influencerPersona || null;
     } catch(_) {}
 
     // Fetch moodboards from generator-based content pipeline (anchor-driven, no fallbacks)

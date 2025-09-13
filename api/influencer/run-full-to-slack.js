@@ -13,6 +13,20 @@ export default async function handler(req, res) {
     if (!INFLUENCER_API_BASE) return res.status(500).json({ error: 'INFLUENCER_API_BASE not set' });
     if (!CONTENT_PIPELINE_API_BASE) return res.status(500).json({ error: 'CONTENT_PIPELINE_API_BASE not set' });
 
+    // Load persona (prefer influencer_traits)
+    let persona = null;
+    try{
+      const { SupabaseClient } = await import('../../src/database/supabase-client.js');
+      const db = new SupabaseClient();
+      const { data: profile } = await db.client
+        .from('account_profiles')
+        .select('influencer_traits, content_strategy')
+        .eq('username', username)
+        .eq('is_active', true)
+        .single();
+      persona = profile?.influencer_traits || profile?.content_strategy?.influencerPersona || null;
+    }catch(_){ }
+
     // 1) Get moodboards from generator-based content pipeline (anchor-driven)
     const ep = `${CONTENT_PIPELINE_API_BASE.replace(/\/$/, '')}/api/content/moodboards-from-generator`;
     const pr = await fetch(ep, {
@@ -39,7 +53,7 @@ export default async function handler(req, res) {
     const ir = await fetch(`${INFLUENCER_API_BASE.replace(/\/$/, '')}/run-full-to-slack`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, moodboards, outputs })
+      body: JSON.stringify({ username, persona, moodboards, outputs })
     });
     const ij = await ir.json().catch(() => ({ error: 'invalid json from influencer api' }));
     if (!ir.ok) return res.status(ir.status).json(ij);
