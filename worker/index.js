@@ -44,7 +44,7 @@ async function addAsset(job_id, kind, url) { await supabase.from('job_assets').i
 async function getProfile(username){
   const { data } = await supabase
     .from('account_profiles')
-    .select('influencer_soul_id, flux_variants, anchor_stills, influencer_traits')
+    .select('influencer_soul_id, flux_variants, flux_variants_upscaled, anchor_stills, influencer_traits')
     .eq('username', username)
     .single();
   return data || {};
@@ -141,6 +141,23 @@ async function composeStill(characterUrl, moodboardUrl, username) {
   } catch (e) { console.error('[worker] composeStill error', e.message); return null; }
 }
 
+async function generateAnchorStillsForSoul(soul_id, username, locations, job_id){
+  const saved = [];
+  for (const loc of locations){
+    const prompt = `portrait of the subject in the ${loc}`;
+    const img = await higgs.generateImageFromSoul({ soul_id, prompt, aspect_ratio:'3:4', resolution:'1080p' });
+    const url = img?.image_url;
+    if (url){
+      const b = await fetch(url).then(r=>r.arrayBuffer());
+      const fileUrl = await uploadBufferAsPng(Buffer.from(b), username, `anchor-stills/${Date.now()}`);
+      saved.push({ location: loc, url: fileUrl });
+      await addAsset(job_id, 'still', fileUrl);
+    }
+  }
+  if (saved.length === 0) throw new Error('No anchor stills generated');
+  return saved;
+}
+
 async function makeVideo(stillUrl) {
   try {
     if (!process.env.HIGGSFIELD_API_KEY_ID || !process.env.HIGGSFIELD_API_SECRET) { console.warn('[worker] HIGGSFIELD env missing; skipping video'); return null; }
@@ -218,13 +235,22 @@ async function processJob(job) {
     if (action === 'create_soul'){
       await setJob(job_id, { status:'running', step:'create_soul', started_at: new Date().toISOString() });
       const prof = await getProfile(job.username);
-      const arr = Array.isArray(prof?.flux_variants?.variants) ? prof.flux_variants.variants : [];
-      if (arr.length === 0) throw new Error('No flux_variants found. Run character build first.');
-      const top = arr.slice(0, 10);
-      const res = await higgs.createSoul({ name: `soul-${job.username}`, images: top });
+      const up = prof?.flux_variants_upscaled;
+      const arr = [up?.base, ...(Array.isArray(up?.variants) ? up.variants : [])].filter(Boolean);
+      if (arr.length === 0) throw new Error('No flux_variants_upscaled found. Run upscale_variants first.');
+      const res = await higgs.createSoul({ name: `soul-${job.username}`, images: arr });
       if (!res?.soul_id) throw new Error('Higgsfield createSoul returned no soul_id');
       await updateProfile(job.username, { influencer_soul_id: res.soul_id });
       await log(job_id, 'info', 'soul created', { soul_id: res.soul_id });
+
+      // Immediately generate anchor stills
+      await setJob(job_id, { step:'anchor_stills' });
+      const locations = Array.isArray(job.payload?.locations) && job.payload.locations.length>0
+        ? job.payload.locations
+        : ['bedroom','street','kitchen'];
+      const saved = await generateAnchorStillsForSoul(res.soul_id, job.username, locations, job_id);
+      await updateProfile(job.username, { anchor_stills: saved });
+      await log(job_id, 'info', 'anchor_stills', { count: saved.length });
       await setJob(job_id, { status:'completed', step:'done', finished_at: new Date().toISOString() });
       return;
     }
