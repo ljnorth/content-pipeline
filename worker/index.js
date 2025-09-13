@@ -253,10 +253,21 @@ async function processJob(job) {
       for (const src of all){
         try{
           const cf = await replicate.runVersion(codeformerVer, { image: src, codeformer_fidelity: fidelity });
-          const es = await replicate.runVersion(realesrganVer, { image: cf, scale });
-          // Save to storage and track as asset
-          const b = await fetch(es).then(r=>r.arrayBuffer());
-          const url = await uploadBufferAsPng(Buffer.from(b), job.username, `character/upscaled`, `u_${Date.now()}.png`, storage.assetsBucket);
+          let es;
+          try{
+            es = await replicate.runVersion(realesrganVer, { image: cf, scale });
+          }catch(e){
+            if (/max size that fits in GPU memory/i.test(e.message)){
+              await log(job_id, 'info', 'realesrgan retry with scale=1', { src });
+              es = await replicate.runVersion(realesrganVer, { image: cf, scale: 1 });
+            } else { throw e; }
+          }
+          // Save to storage and track as asset, validating content type
+          const res = await fetch(es);
+          const ct = res.headers.get('content-type') || '';
+          const buf = Buffer.from(await res.arrayBuffer());
+          if (!/^image\//i.test(ct) || buf.length < 1024) throw new Error(`invalid upscaled output ct=${ct} bytes=${buf.length}`);
+          const url = await uploadBufferAsPng(buf, job.username, `character/upscaled`, `u_${Date.now()}.png`, storage.assetsBucket);
           upscaled.push(url);
           await addAsset(job_id, 'character_variant_upscaled', url);
         }catch(e){ await log(job_id, 'error', 'upscale failed', { src, error: e.message }); }

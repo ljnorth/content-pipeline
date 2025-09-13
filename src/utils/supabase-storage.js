@@ -64,7 +64,9 @@ export class SupabaseStorage {
         '.jpeg': 'image/jpeg',
         '.png': 'image/png',
         '.webp': 'image/webp',
-        '.gif': 'image/gif'
+        '.gif': 'image/gif',
+        '.mp4': 'video/mp4',
+        '.mov': 'video/quicktime'
       };
       const contentType = contentTypeMap[ext] || 'image/jpeg';
 
