@@ -130,6 +130,7 @@
       <button id="btnCharacter" class="btn btn-outline">Create Character</button>
       <button id="btnMoodboards" class="btn btn-outline">Get Moodboards</button>
       <button id="btnStills" class="btn btn-outline">Generate Stills</button>
+      <button id="btnUpscale" class="btn btn-outline">Upscale Variants</button>
       <button id="btnVideos" class="btn btn-outline">Generate Videos</button>
     </div>
     <div id="infOutput" style="margin-top:8px"></div>
@@ -403,6 +404,12 @@
       const u = (document.getElementById('pipeUser2').value||'').replace('@','');
       if (!u) return setStatus('Pick an account first', 'err');
       await enqueueAndPoll({ username: u, action: 'video' });
+    };
+
+    document.getElementById('btnUpscale').onclick = async () => {
+      const u = (document.getElementById('pipeUser2').value||'').replace('@','');
+      if (!u) return setStatus('Pick an account first', 'err');
+      await enqueueAndPoll({ username: u, action: 'upscale_variants' });
     };
 
     // Populate pipeline user select using existing preview dropdown data

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { FluxClient } from '../src/integrations/flux.js';
 import { GeminiClient } from '../src/integrations/gemini.js';
 import { HiggsfieldClient } from '../src/integrations/higgsfield.js';
+import { ReplicateClient } from '../src/integrations/replicate.js';
 import { SupabaseStorage } from '../src/utils/supabase-storage.js';
 
 dotenv.config();
@@ -31,6 +32,7 @@ const storage = new SupabaseStorage();
 const flux = new FluxClient();
 const gemini = new GeminiClient({ baseUrl: process.env.GEMINI_API_BASE, apiKey: process.env.GEMINI_API_KEY, model: process.env.GEMINI_MODEL || 'nanobanana' });
 const higgs = new HiggsfieldClient({});
+const replicate = new ReplicateClient({});
 
 const STILL_LIMIT = parseInt(process.env.STILL_CONCURRENCY || '3', 10);
 const VIDEO_LIMIT = parseInt(process.env.VIDEO_CONCURRENCY || '1', 10);
@@ -175,6 +177,39 @@ async function processJob(job) {
       if (v) await addAsset(job_id, 'video', v);
       await setJob(job_id, { status:'completed', step:'done', finished_at: new Date().toISOString() });
       await log(job_id, 'info', 'video', { url: v||null });
+      return;
+    }
+
+    if (action === 'upscale_variants'){
+      await setJob(job_id, { status:'running', step:'upscale_variants', started_at: new Date().toISOString() });
+      const prof = await getProfile(job.username);
+      const base = prof?.flux_variants?.base || null;
+      const variants = Array.isArray(prof?.flux_variants?.variants) ? prof.flux_variants.variants : [];
+      if (!base || variants.length === 0) throw new Error('No flux_variants to upscale');
+
+      const codeformerVer = process.env.REPLICATE_CODEFORMER_VERSION || 'cc4956dd26fa5a7185d5660cc9100fab1b8070a1d1654a8bb5eb6d443b020bb2';
+      const realesrganVer = process.env.REPLICATE_REALESRGAN_VERSION || 'f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa';
+      const fidelity = process.env.CODEFORMER_FIDELITY || '0.1';
+      const scale = Number(process.env.REALESRGAN_SCALE || '2');
+
+      const all = [base, ...variants];
+      const upscaled = [];
+      for (const src of all){
+        try{
+          const cf = await replicate.runVersion(codeformerVer, { image: src, codeformer_fidelity: fidelity });
+          const es = await replicate.runVersion(realesrganVer, { image: cf, scale });
+          // Save to storage and track as asset
+          const b = await fetch(es).then(r=>r.arrayBuffer());
+          const url = await uploadBufferAsPng(Buffer.from(b), job.username, `upscaled/${Date.now()}`);
+          upscaled.push(url);
+          await addAsset(job_id, 'character_variant_upscaled', url);
+        }catch(e){ await log(job_id, 'error', 'upscale failed', { src, error: e.message }); }
+      }
+      // Persist to profile separately
+      const up = { base: upscaled[0] || null, variants: upscaled.slice(1) };
+      await updateProfile(job.username, { flux_variants_upscaled: up });
+      await log(job_id, 'info', 'upscale_variants', { count: upscaled.length });
+      await setJob(job_id, { status:'completed', step:'done', finished_at: new Date().toISOString() });
       return;
     }
     if (action === 'create_soul'){
