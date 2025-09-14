@@ -3,8 +3,8 @@ import fetch from 'node-fetch';
 export class HiggsfieldClient {
   constructor(options = {}){
     // Platform API only (hf-api-key + hf-secret headers)
-    this.keyId = options.keyId || process.env['hf-api-key'] || process.env.HIGGSFIELD_API_KEY_ID || process.env.HIGGSFIELD_API_KEY;
-    this.secret = options.secret || process.env['hf-secret'] || process.env.HIGGSFIELD_API_SECRET;
+    this.keyId = options.keyId || process.env.HF_API_KEY || process.env['hf-api-key'] || process.env.HIGGSFIELD_API_KEY_ID || process.env.HIGGSFIELD_API_KEY;
+    this.secret = options.secret || process.env.HF_SECRET || process.env['hf-secret'] || process.env.HIGGSFIELD_API_SECRET;
     const rawBase = process.env.HIGGSFIELD_PLATFORM_API_BASE;
     if (!this.keyId || !this.secret || !rawBase){
       throw new Error('hf-api-key, hf-secret, and HIGGSFIELD_PLATFORM_API_BASE are required');
