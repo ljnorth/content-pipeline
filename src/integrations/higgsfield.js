@@ -24,7 +24,7 @@ export class HiggsfieldClient {
   async createSoul({ name = 'influencer', images = [] }){
     if (this.mode !== 'platform') throw new Error('createSoul requires Platform API credentials');
     // Platform: POST /custom-references with input_images [{ type, image_url }]
-    const body = JSON.stringify({ name, input_images: images.map(u => ({ type: 'url', image_url: u })) });
+    const body = JSON.stringify({ name, input_images: images.map(u => ({ type: 'image_url', image_url: u })) });
     const res = await fetch(`${this.baseUrl}/custom-references`, { method: 'POST', headers: this.headersPost, body });
     if (!res.ok) {
       const text = await res.text().catch(()=> '');
