@@ -13,6 +13,7 @@ export class HiggsfieldClient {
     let base = rawBase.replace(/\/+$/, '');
     base = base.replace(/\/api\/v(\d+)$/, '/v$1');
     this.baseUrl = base;
+    this.mode = 'platform';
     this.headersPost = { 'hf-api-key': this.keyId, 'hf-secret': this.secret, 'Content-Type': 'application/json' };
     this.headersGet = { 'hf-api-key': this.keyId, 'hf-secret': this.secret };
     this.model = options.model || process.env.HIGGSFIELD_MODEL || 'seedance pro';
