@@ -39,24 +39,30 @@ const STILL_LIMIT = parseInt(process.env.STILL_CONCURRENCY || '3', 10);
 const VIDEO_LIMIT = parseInt(process.env.VIDEO_CONCURRENCY || '1', 10);
 const MAX_ESRGAN_INPUT_PIXELS = Number(process.env.MAX_ESRGAN_INPUT_PIXELS || 2096704);
 
+function normalizeUsername(input){
+  return String(input || '').replace(/^@/, '').trim().toLowerCase();
+}
+
 async function log(job_id, level, message, data) { await supabase.from('job_logs').insert({ job_id, level, message, data }); }
 async function setJob(job_id, patch) { await supabase.from('jobs').update(patch).eq('id', job_id); }
 async function addAsset(job_id, kind, url) { await supabase.from('job_assets').insert({ job_id, kind, url }); }
 
 async function getProfile(username){
+  const u = normalizeUsername(username);
   const { data } = await supabase
     .from('account_profiles')
     .select('influencer_soul_id, flux_variants, flux_variants_upscaled, anchor_stills, influencer_traits')
-    .eq('username', username)
+    .eq('username', u)
     .single();
   return data || {};
 }
 
 async function updateProfile(username, patch){
+  const u = normalizeUsername(username);
   await supabase
     .from('account_profiles')
     .update(patch)
-    .eq('username', username);
+    .eq('username', u);
 }
 
 async function fetchMoodboards(username, limit = 5) {
@@ -297,6 +303,12 @@ async function processJob(job) {
       if (!ready) throw new Error('Higgsfield soul training did not complete in time');
       const soul_id = refId;
       await updateProfile(job.username, { influencer_soul_id: soul_id });
+      // Assert write landed
+      const verify = await getProfile(job.username);
+      if (!verify?.influencer_soul_id) {
+        await log(job_id, 'error', 'soul id not persisted', { username: normalizeUsername(job.username), supabaseUrl: SUPABASE_URL });
+        throw new Error('influencer_soul_id not persisted');
+      }
       await log(job_id, 'info', 'soul created', { soul_id, source, images: arr.length, endpoint: 'custom-references' });
 
       // Immediately generate anchor stills
@@ -314,6 +326,9 @@ async function processJob(job) {
     if (action === 'anchor_stills'){
       await setJob(job_id, { status:'running', step:'anchor_stills', started_at: new Date().toISOString() });
       const prof = await getProfile(job.username);
+      if (!prof?.influencer_soul_id) {
+        await log(job_id, 'error', 'soul missing at anchor time', { username: normalizeUsername(job.username), supabaseUrl: SUPABASE_URL });
+      }
       const soul = prof?.influencer_soul_id;
       if (!soul) throw new Error('influencer_soul_id missing. Create Soul first.');
       const locations = Array.isArray(job.payload?.locations) && job.payload.locations.length>0 ? job.payload.locations : ['bedroom','street','kitchen'];
