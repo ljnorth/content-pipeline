@@ -240,86 +240,22 @@ async function processJob(job) {
     }
 
     if (action === 'upscale_variants'){
-      await setJob(job_id, { status:'running', step:'upscale_variants', started_at: new Date().toISOString() });
-      const prof = await getProfile(job.username);
-      let base = prof?.flux_variants?.base || null;
-      let variants = Array.isArray(prof?.flux_variants?.variants) ? prof.flux_variants.variants : [];
-      // Fallback: load from storage if DB missing
-      if ((!base || variants.length === 0)){
-        try{
-          const prefixBase = `${job.username}/character/base`;
-          const baseList = await storage.listFiles(prefixBase, storage.assetsBucket);
-          if (Array.isArray(baseList) && baseList.length){
-            const name = baseList.find(f=>f.name)?.name;
-            if (name) base = storage.getPublicUrl(`${prefixBase}/${name}`, storage.assetsBucket);
-          }
-          const prefixVar = `${job.username}/character/variants`;
-          const varList = await storage.listFiles(prefixVar, storage.assetsBucket);
-          if (Array.isArray(varList)){
-            variants = varList.map(v => storage.getPublicUrl(`${prefixVar}/${v.name}`, storage.assetsBucket)).filter(Boolean);
-          }
-        }catch(_){ /* ignore */ }
-      }
-      if (!base || variants.length === 0) throw new Error('No flux_variants to upscale');
-
-      const codeformerVer = process.env.REPLICATE_CODEFORMER_VERSION || 'cc4956dd26fa5a7185d5660cc9100fab1b8070a1d1654a8bb5eb6d443b020bb2';
-      const realesrganVer = process.env.REPLICATE_REALESRGAN_VERSION || 'f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa';
-      let fidelity = Number(process.env.CODEFORMER_FIDELITY ?? 0.8);
-      if (!Number.isFinite(fidelity)) fidelity = 0.8;
-      if (fidelity < 0) fidelity = 0; if (fidelity > 1) fidelity = 1;
-      const scale = Number(process.env.REALESRGAN_SCALE ?? 1);
-      await log(job_id, 'info', 'upscale settings', { fidelity, scale });
-
-      const all = [base, ...variants];
-      const upscaled = [];
-      for (const src of all){
-        try{
-          const cf = await replicate.runVersion(codeformerVer, { image: src, codeformer_fidelity: fidelity });
-          const safeInput = await ensureUnderPixelCap(cf, job.username, job_id);
-          let es;
-          try{
-            es = await replicate.runVersion(realesrganVer, { image: safeInput, scale });
-          }catch(e){
-            if (/max size that fits in GPU memory/i.test(e.message)){
-              await log(job_id, 'info', 'realesrgan retry with scale=1', { src });
-              es = await replicate.runVersion(realesrganVer, { image: safeInput, scale: 1 });
-            } else { throw e; }
-          }
-          // Save to storage and track as asset, validating content type
-          const res = await fetch(es);
-          const ct = res.headers.get('content-type') || '';
-          const buf = Buffer.from(await res.arrayBuffer());
-          if (!/^image\//i.test(ct) || buf.length < 1024) throw new Error(`invalid upscaled output ct=${ct} bytes=${buf.length}`);
-          const url = await uploadBufferAsPng(buf, job.username, `character/upscaled`, `u_${Date.now()}.png`, storage.assetsBucket);
-          upscaled.push(url);
-          await addAsset(job_id, 'character_variant_upscaled', url);
-        }catch(e){ await log(job_id, 'error', 'upscale failed', { src, error: e.message }); }
-      }
-      // Persist to profile separately
-      const up = { base: upscaled[0] || null, variants: upscaled.slice(1) };
-      await updateProfile(job.username, { flux_variants_upscaled: up });
-      await log(job_id, 'info', 'upscale_variants', { count: upscaled.length });
-      await setJob(job_id, { status:'completed', step:'done', finished_at: new Date().toISOString() });
+      await setJob(job_id, { status:'completed', step:'skipped', finished_at: new Date().toISOString() });
+      await log(job_id, 'info', 'upscale disabled', { reason: 'step removed' });
       return;
     }
     if (action === 'create_soul'){
       await setJob(job_id, { status:'running', step:'create_soul', started_at: new Date().toISOString() });
       const prof = await getProfile(job.username);
-      // Prefer upscaled if available; otherwise use original variants
-      const up = prof?.flux_variants_upscaled;
-      let arr = [up?.base, ...(Array.isArray(up?.variants) ? up.variants : [])].filter(Boolean);
-      let source = 'upscaled';
-      if (arr.length === 0) {
-        const base = prof?.flux_variants?.base || null;
-        const vars = Array.isArray(prof?.flux_variants?.variants) ? prof.flux_variants.variants : [];
-        arr = [base, ...vars].filter(Boolean);
-        source = 'original';
-      }
+      // Only use original flux_variants (upscaled is no longer part of the flow)
+      const base = prof?.flux_variants?.base || null;
+      const vars = Array.isArray(prof?.flux_variants?.variants) ? prof.flux_variants.variants : [];
+      const arr = [base, ...vars].filter(Boolean);
       if (arr.length === 0) throw new Error('No flux_variants found. Run character build first.');
       const res = await higgs.createSoul({ name: `soul-${job.username}`, images: arr });
       if (!res?.soul_id) throw new Error('Higgsfield createSoul returned no soul_id');
       await updateProfile(job.username, { influencer_soul_id: res.soul_id });
-      await log(job_id, 'info', 'soul created', { soul_id: res.soul_id, source });
+      await log(job_id, 'info', 'soul created', { soul_id: res.soul_id, source: 'original' });
 
       // Immediately generate anchor stills
       await setJob(job_id, { step:'anchor_stills' });

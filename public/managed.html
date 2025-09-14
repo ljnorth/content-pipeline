@@ -130,7 +130,7 @@
       <button id="btnCharacter" class="btn btn-outline">Create Character</button>
       <button id="btnMoodboards" class="btn btn-outline">Get Moodboards</button>
       <button id="btnStills" class="btn btn-outline">Generate Stills</button>
-      <button id="btnUpscale" class="btn btn-outline">Upscale Variants</button>
+      
       <button id="btnSoul" class="btn btn-outline">Create Soul</button>
       <button id="btnAnchors" class="btn btn-outline">Generate Anchors</button>
       <button id="btnVideos" class="btn btn-outline">Generate Videos</button>
@@ -408,11 +408,7 @@
       await enqueueAndPoll({ username: u, action: 'video' });
     };
 
-    document.getElementById('btnUpscale').onclick = async () => {
-      const u = (document.getElementById('pipeUser2').value||'').replace('@','');
-      if (!u) return setStatus('Pick an account first', 'err');
-      await enqueueAndPoll({ username: u, action: 'upscale_variants' });
-    };
+    // Upscale removed from flow
 
     document.getElementById('btnSoul').onclick = async () => {
       const u = (document.getElementById('pipeUser2').value||'').replace('@','');
