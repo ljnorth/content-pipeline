@@ -259,9 +259,9 @@ async function processJob(job) {
         method: 'POST',
         url: `${higgs.baseUrl}/custom-references`,
         mode: higgs.mode,
-        headerKeys: Object.keys(higgs.headers || {}),
-        hasApiKey: Boolean((higgs.headers||{})['hf-api-key'] || (higgs.headers||{}).Authorization),
-        hasSecret: Boolean((higgs.headers||{})['hf-secret']),
+        headerKeys: Object.keys(higgs.headersPost || {}),
+        hasApiKey: Boolean((higgs.headersPost||{})['hf-api-key']),
+        hasSecret: Boolean((higgs.headersPost||{})['hf-secret']),
         body: reqBody
       });
       const res = await higgs.createSoul({ name: `soul-${job.username}`, images: arr });
