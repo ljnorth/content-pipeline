@@ -1,4 +1,5 @@
 import axios from 'axios';
+import fetch from 'node-fetch';
 
 export class HiggsfieldClient {
   constructor(options = {}){
@@ -28,9 +29,13 @@ export class HiggsfieldClient {
   async createSoul({ name = 'influencer', images = [] }){
     if (this.mode !== 'platform') throw new Error('createSoul requires Platform API credentials');
     // Platform: POST /custom-references with input_images [{ type, image_url }]
-    const body = { name, input_images: images.map(u => ({ type: 'url', image_url: u })) };
-    const { data } = await axios.post(`${this.baseUrl}/custom-references`, body, { headers: this.headers });
-    return data; // expect id/reference; caller handles fields
+    const body = JSON.stringify({ name, input_images: images.map(u => ({ type: 'url', image_url: u })) });
+    const res = await fetch(`${this.baseUrl}/custom-references`, { method: 'POST', headers: this.headers, body });
+    if (!res.ok) {
+      const text = await res.text().catch(()=> '');
+      throw new Error(`Higgsfield ${res.status} ${res.statusText}: ${text || 'no body'}`);
+    }
+    return await res.json();
   }
 
   async generateImageFromSoul({ soul_id, prompt, aspect_ratio = '3:4', resolution = '1080p' }){
