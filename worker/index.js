@@ -246,30 +246,13 @@ async function processJob(job) {
     }
     if (action === 'create_soul'){
       await setJob(job_id, { status:'running', step:'create_soul', started_at: new Date().toISOString() });
-      const prof = await getProfile(job.username);
-      // Only use original flux_variants (upscaled is no longer part of the flow)
-      const base = prof?.flux_variants?.base || null;
-      const vars = Array.isArray(prof?.flux_variants?.variants) ? prof.flux_variants.variants : [];
-      let arr = [base, ...vars].filter(Boolean);
-      let source = 'original';
-      // Fallback to storage if DB field is empty
-      if (arr.length === 0){
-        try{
-          const prefixBase = `${job.username}/character/base`;
-          const baseList = await storage.listFiles(prefixBase, storage.assetsBucket);
-          if (Array.isArray(baseList) && baseList.length){
-            const name = baseList.find(f=>f.name)?.name;
-            if (name) arr.push(storage.getPublicUrl(`${prefixBase}/${name}`, storage.assetsBucket));
-          }
-          const prefixVar = `${job.username}/character/variants`;
-          const varList = await storage.listFiles(prefixVar, storage.assetsBucket);
-          if (Array.isArray(varList)){
-            const urls = varList.map(v => storage.getPublicUrl(`${prefixVar}/${v.name}`, storage.assetsBucket)).filter(Boolean);
-            arr.push(...urls);
-          }
-          if (arr.length) source = 'storage';
-        }catch(_){ /* ignore and continue */ }
-      }
+      // Pull exclusively from storage variants (no DB, no base)
+      const prefixVar = `${job.username}/character/variants`;
+      const varList = await storage.listFiles(prefixVar, storage.assetsBucket);
+      const arr = Array.isArray(varList)
+        ? varList.map(v => storage.getPublicUrl(`${prefixVar}/${v.name}`, storage.assetsBucket)).filter(Boolean)
+        : [];
+      const source = 'storage-variants-only';
       if (arr.length === 0) throw new Error('No flux_variants found. Run character build first.');
       const res = await higgs.createSoul({ name: `soul-${job.username}`, images: arr });
       if (!res?.soul_id) throw new Error('Higgsfield createSoul returned no soul_id');
