@@ -91,6 +91,18 @@ async function uploadBufferAsPng(buffer, username, folder, filename = 'image.png
   return up.publicUrl;
 }
 
+// Build high-quality anchor prompts for try-on suitability
+function buildAnchorPrompt(location){
+  const base = 'full-length portrait of the same fashion influencer, standing relaxed, arms slightly away from torso, neutral expression, fitted plain base outfit (solid tee or tank and plain slim bottoms), unobstructed view of torso and legs, editorial soft lighting, 85mm portrait style, f/2.8, sharp focus, natural skin tone, clean edges';
+  const negatives = 'without crossed arms, without handbag, without jacket, without scarf, without hat, no accessories, no busy patterns, no text, no logos, no mirror blocking the body, no motion blur';
+  let env = '';
+  if (location === 'bedroom') env = 'clean bedroom background with neutral bedding, soft daylight from window, mirror out of frame, floor visible';
+  else if (location === 'street') env = 'quiet street background with soft overcast light, shallow depth-of-field bokeh, no pedestrians, no cars, minimal signage';
+  else if (location === 'kitchen') env = 'modern kitchen background with neutral cabinets, counters clear, soft indoor fill light';
+  else env = `clean ${location} background`;
+  return `${base}, ${env}. ${negatives}.`;
+}
+
 // Ensure an image is under the ESRGAN input pixel cap. If too large, downscale proportionally.
 async function ensureUnderPixelCap(imageUrl, username, job_id){
   try{
@@ -307,7 +319,7 @@ async function processJob(job) {
       const locations = Array.isArray(job.payload?.locations) && job.payload.locations.length>0 ? job.payload.locations : ['bedroom','street','kitchen'];
       const saved = [];
       for (const loc of locations){
-        const prompt = `portrait of the subject in the ${loc}`;
+        const prompt = buildAnchorPrompt(loc);
         const resp = await higgs.generateTextToImageSoul({ prompt, custom_reference_id: soul, width_and_height: '1152x2048', enhance_prompt: false, batch_size: 1, quality: '1080p' });
         const url = resp?.image_url || resp?.url || resp?.images?.[0]?.url || null;
         if (url){
