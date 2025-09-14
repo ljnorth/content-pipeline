@@ -308,11 +308,11 @@ async function processJob(job) {
       const saved = [];
       for (const loc of locations){
         const prompt = `portrait of the subject in the ${loc}`;
-        const img = await higgs.generateImageFromSoul({ soul_id: soul, prompt, aspect_ratio:'3:4', resolution:'1080p' });
-        const url = img?.image_url;
+        const resp = await higgs.generateTextToImageSoul({ prompt, custom_reference_id: soul, width_and_height: '1152x2048', enhance_prompt: false, batch_size: 1, quality: '1080p' });
+        const url = resp?.image_url || resp?.url || resp?.images?.[0]?.url || null;
         if (url){
           const b = await fetch(url).then(r=>r.arrayBuffer());
-          const fileUrl = await uploadBufferAsPng(Buffer.from(b), job.username, `anchor-stills/${Date.now()}`);
+          const fileUrl = await uploadBufferAsPng(Buffer.from(b), job.username, `character/anchors`, `${loc}.png`, storage.assetsBucket);
           saved.push({ location: loc, url: fileUrl });
           await addAsset(job_id, 'still', fileUrl);
         }

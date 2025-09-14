@@ -73,6 +73,29 @@ export class HiggsfieldClient {
     if (!res.ok) { const text = await res.text().catch(()=> ''); throw new Error(`Higgsfield GET ${res.status} ${res.statusText}: ${text||'no body'}`); }
     return await res.json();
   }
+
+  async generateTextToImageSoul({
+    prompt,
+    custom_reference_id,
+    width_and_height = '1152x2048',
+    enhance_prompt = false,
+    style_id = process.env.HIGGSFIELD_STYLE_ID,
+    style_strength = 1,
+    quality = '1080p',
+    seed = undefined,
+    batch_size = 1,
+    image_reference = undefined
+  }){
+    const params = { prompt, width_and_height, enhance_prompt, quality, custom_reference_id, custom_reference_strength: 1, batch_size };
+    if (style_id) params.style_id = style_id;
+    if (typeof style_strength === 'number') params.style_strength = style_strength;
+    if (typeof seed === 'number') params.seed = seed;
+    if (image_reference?.image_url) params.image_reference = { type: 'image_url', image_url: image_reference.image_url };
+    const body = JSON.stringify({ params });
+    const res = await fetch(`${this.baseUrl}/text2image/soul`, { method: 'POST', headers: this.headersPost, body });
+    if (!res.ok) { const text = await res.text().catch(()=> ''); throw new Error(`Higgsfield ${res.status} ${res.statusText}: ${text||'no body'}`); }
+    return await res.json();
+  }
 }
 
 
