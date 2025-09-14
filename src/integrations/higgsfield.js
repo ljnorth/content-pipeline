@@ -24,7 +24,8 @@ export class HiggsfieldClient {
       this.enhancePrompt = (String(options.enhance_prompt ?? process.env.HIGGSFIELD_ENHANCE_PROMPT ?? 'true').toLowerCase() === 'true');
     } else {
       this.mode = 'legacy';
-      this.baseUrl = (options.baseUrl || process.env.HIGGSFIELD_BASE || 'https://higgsfieldapi.com/api/v1').replace(/\/$/, '');
+      // Even in legacy mode, align to platform host unless explicitly overridden
+      this.baseUrl = (options.baseUrl || process.env.HIGGSFIELD_BASE || 'https://platform.higgsfield.ai/v1').replace(/\/$/, '');
       this.headers = { 'Authorization': `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' };
     }
   }
