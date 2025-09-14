@@ -3,13 +3,17 @@ import axios from 'axios';
 export class HiggsfieldClient {
   constructor(options = {}){
     // Prefer Platform API (hf-api-key + hf-secret headers)
-    this.keyId = options.keyId || process.env.HIGGSFIELD_API_KEY_ID || process.env.HIGGSFIELD_API_KEY;
-    this.secret = options.secret || process.env.HIGGSFIELD_API_SECRET;
+    this.keyId = options.keyId || process.env.HIGGSFIELD_API_KEY_ID || process.env.HIGGSFIELD_API_KEY || process.env['hf-api-key'];
+    this.secret = options.secret || process.env.HIGGSFIELD_API_SECRET || process.env['hf-secret'];
     this.apiKey = options.apiKey || process.env.HIGGSFIELD_API_KEY; // legacy bearer
 
     if (this.keyId && this.secret) {
       this.mode = 'platform';
-      this.baseUrl = (options.baseUrl || process.env.HIGGSFIELD_PLATFORM_API_BASE || 'https://platform.higgsfield.ai/v1').replace(/\/$/, '');
+      const rawBase = options.baseUrl || process.env.HIGGSFIELD_PLATFORM_API_BASE || 'https://platform.higgsfield.ai/v1';
+      // Normalize: drop trailing slash; convert '/api/v1' -> '/v1'
+      let base = rawBase.replace(/\/+$/, '');
+      base = base.replace(/\/api\/v(\d+)$/, '/v$1');
+      this.baseUrl = base;
       this.headers = { 'Content-Type': 'application/json', 'hf-api-key': this.keyId, 'hf-secret': this.secret };
       this.model = options.model || process.env.HIGGSFIELD_MODEL || 'seedance pro';
       this.motionId = options.motionId || process.env.HIGGSFIELD_MOTION_ID || undefined;
