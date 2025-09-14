@@ -4,13 +4,16 @@ import fetch from 'node-fetch';
 export class HiggsfieldClient {
   constructor(options = {}){
     // Prefer Platform API (hf-api-key + hf-secret headers)
-    this.keyId = options.keyId || process.env.HIGGSFIELD_API_KEY_ID || process.env.HIGGSFIELD_API_KEY || process.env['hf-api-key'];
-    this.secret = options.secret || process.env.HIGGSFIELD_API_SECRET || process.env['hf-secret'];
+    this.keyId = options.keyId || process.env['hf-api-key'] || process.env.HIGGSFIELD_API_KEY_ID || process.env.HIGGSFIELD_API_KEY;
+    this.secret = options.secret || process.env['hf-secret'] || process.env.HIGGSFIELD_API_SECRET;
     this.apiKey = options.apiKey || process.env.HIGGSFIELD_API_KEY; // legacy bearer
 
     if (this.keyId && this.secret) {
       this.mode = 'platform';
-      const rawBase = options.baseUrl || process.env.HIGGSFIELD_PLATFORM_API_BASE || 'https://platform.higgsfield.ai/v1';
+      const rawBase = process.env.HIGGSFIELD_PLATFORM_API_BASE;
+      if (!rawBase) {
+        throw new Error('HIGGSFIELD_PLATFORM_API_BASE not set for platform mode');
+      }
       // Normalize: drop trailing slash; convert '/api/v1' -> '/v1'
       let base = rawBase.replace(/\/+$/, '');
       base = base.replace(/\/api\/v(\d+)$/, '/v$1');
