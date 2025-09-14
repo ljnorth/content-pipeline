@@ -305,13 +305,21 @@ async function processJob(job) {
     if (action === 'create_soul'){
       await setJob(job_id, { status:'running', step:'create_soul', started_at: new Date().toISOString() });
       const prof = await getProfile(job.username);
+      // Prefer upscaled if available; otherwise use original variants
       const up = prof?.flux_variants_upscaled;
-      const arr = [up?.base, ...(Array.isArray(up?.variants) ? up.variants : [])].filter(Boolean);
-      if (arr.length === 0) throw new Error('No flux_variants_upscaled found. Run upscale_variants first.');
+      let arr = [up?.base, ...(Array.isArray(up?.variants) ? up.variants : [])].filter(Boolean);
+      let source = 'upscaled';
+      if (arr.length === 0) {
+        const base = prof?.flux_variants?.base || null;
+        const vars = Array.isArray(prof?.flux_variants?.variants) ? prof.flux_variants.variants : [];
+        arr = [base, ...vars].filter(Boolean);
+        source = 'original';
+      }
+      if (arr.length === 0) throw new Error('No flux_variants found. Run character build first.');
       const res = await higgs.createSoul({ name: `soul-${job.username}`, images: arr });
       if (!res?.soul_id) throw new Error('Higgsfield createSoul returned no soul_id');
       await updateProfile(job.username, { influencer_soul_id: res.soul_id });
-      await log(job_id, 'info', 'soul created', { soul_id: res.soul_id });
+      await log(job_id, 'info', 'soul created', { soul_id: res.soul_id, source });
 
       // Immediately generate anchor stills
       await setJob(job_id, { step:'anchor_stills' });
