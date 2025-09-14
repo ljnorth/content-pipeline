@@ -265,8 +265,25 @@ async function processJob(job) {
         body: reqBody
       });
       const res = await higgs.createSoul({ name: `soul-${job.username}`, images: arr });
-      const soul_id = res?.soul_id || res?.id || res?.reference_id || null;
-      if (!soul_id) throw new Error('Higgsfield createSoul returned no soul_id');
+      const refId = res?.soul_id || res?.id || res?.reference_id || res?.referenceId || null;
+      if (!refId) throw new Error('Higgsfield createSoul returned no reference id');
+      // Poll status until ready
+      const start = Date.now();
+      const deadlineMs = 30 * 60 * 1000; // 30 minutes max
+      let ready = false; let lastStatus = null;
+      while (!ready && Date.now() - start < deadlineMs){
+        try{
+          const st = await higgs.getCustomReference(refId);
+          lastStatus = st?.status || st?.state || st?.training_status || JSON.stringify(st||{});
+          await log(job_id, 'info', 'soul status', { id: refId, status: lastStatus });
+          if (String(lastStatus).toLowerCase() === 'ready' || String(lastStatus).toLowerCase() === 'completed'){
+            ready = true; break;
+          }
+        }catch(e){ await log(job_id, 'error', 'soul status poll failed', { id: refId, error: e.message }); }
+        await new Promise(r => setTimeout(r, 10000));
+      }
+      if (!ready) throw new Error('Higgsfield soul training did not complete in time');
+      const soul_id = refId;
       await updateProfile(job.username, { influencer_soul_id: soul_id });
       await log(job_id, 'info', 'soul created', { soul_id, source, images: arr.length, endpoint: 'custom-references' });
 

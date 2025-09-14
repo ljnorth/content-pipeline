@@ -41,6 +41,16 @@ export class HiggsfieldClient {
     return await res.json();
   }
 
+  async getCustomReference(id){
+    if (this.mode !== 'platform') throw new Error('getCustomReference requires Platform API credentials');
+    const res = await fetch(`${this.baseUrl}/custom-references/${encodeURIComponent(id)}`, { headers: this.headers });
+    if (!res.ok) {
+      const text = await res.text().catch(()=> '');
+      throw new Error(`Higgsfield GET ${res.status} ${res.statusText}: ${text || 'no body'}`);
+    }
+    return await res.json();
+  }
+
   async generateImageFromSoul({ soul_id, prompt, aspect_ratio = '3:4', resolution = '1080p' }){
     if (this.mode !== 'platform') throw new Error('generateImageFromSoul requires Platform API');
     const body = { soul_id, prompt, aspect_ratio, resolution };
