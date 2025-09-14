@@ -2,16 +2,15 @@ import axios from 'axios';
 
 export class HiggsfieldClient {
   constructor(options = {}){
-    // Prefer Platform API (key_id + secret)
-    this.keyId = options.keyId || process.env.HIGGSFIELD_API_KEY_ID;
+    // Prefer Platform API (hf-api-key + hf-secret headers)
+    this.keyId = options.keyId || process.env.HIGGSFIELD_API_KEY_ID || process.env.HIGGSFIELD_API_KEY;
     this.secret = options.secret || process.env.HIGGSFIELD_API_SECRET;
-    this.apiKey = options.apiKey || process.env.HIGGSFIELD_API_KEY; // legacy
+    this.apiKey = options.apiKey || process.env.HIGGSFIELD_API_KEY; // legacy bearer
 
     if (this.keyId && this.secret) {
       this.mode = 'platform';
       this.baseUrl = (options.baseUrl || process.env.HIGGSFIELD_PLATFORM_API_BASE || 'https://platform.higgsfield.ai/v1').replace(/\/$/, '');
-      const creds = Buffer.from(`${this.keyId}:${this.secret}`).toString('base64');
-      this.headers = { 'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json' };
+      this.headers = { 'Content-Type': 'application/json', 'hf-api-key': this.keyId, 'hf-secret': this.secret };
       this.model = options.model || process.env.HIGGSFIELD_MODEL || 'seedance pro';
       this.motionId = options.motionId || process.env.HIGGSFIELD_MOTION_ID || undefined;
       this.enhancePrompt = (String(options.enhance_prompt ?? process.env.HIGGSFIELD_ENHANCE_PROMPT ?? 'true').toLowerCase() === 'true');
@@ -24,9 +23,10 @@ export class HiggsfieldClient {
 
   async createSoul({ name = 'influencer', images = [] }){
     if (this.mode !== 'platform') throw new Error('createSoul requires Platform API credentials');
-    const body = { name, images: images.map(u => ({ url: u })) };
-    const { data } = await axios.post(`${this.baseUrl}/souls`, body, { headers: this.headers });
-    return data; // expect { soul_id }
+    // Platform: POST /custom-references with input_images [{ type, image_url }]
+    const body = { name, input_images: images.map(u => ({ type: 'url', image_url: u })) };
+    const { data } = await axios.post(`${this.baseUrl}/custom-references`, body, { headers: this.headers });
+    return data; // expect id/reference; caller handles fields
   }
 
   async generateImageFromSoul({ soul_id, prompt, aspect_ratio = '3:4', resolution = '1080p' }){

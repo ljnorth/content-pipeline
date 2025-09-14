@@ -255,9 +255,10 @@ async function processJob(job) {
       const source = 'storage-variants-only';
       if (arr.length === 0) throw new Error('No flux_variants found. Run character build first.');
       const res = await higgs.createSoul({ name: `soul-${job.username}`, images: arr });
-      if (!res?.soul_id) throw new Error('Higgsfield createSoul returned no soul_id');
-      await updateProfile(job.username, { influencer_soul_id: res.soul_id });
-      await log(job_id, 'info', 'soul created', { soul_id: res.soul_id, source });
+      const soul_id = res?.soul_id || res?.id || res?.reference_id || null;
+      if (!soul_id) throw new Error('Higgsfield createSoul returned no soul_id');
+      await updateProfile(job.username, { influencer_soul_id: soul_id });
+      await log(job_id, 'info', 'soul created', { soul_id, source, images: arr.length, endpoint: 'custom-references' });
 
       // Immediately generate anchor stills
       await setJob(job_id, { step:'anchor_stills' });
