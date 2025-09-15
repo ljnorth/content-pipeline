@@ -119,6 +119,34 @@ async function uploadBufferAsPng(buffer, username, folder, filename = 'image.png
   return up.publicUrl;
 }
 
+// Poll a Higgsfield job set until it completes and return the best image URL
+async function pollJobSetForImage(jobSetId, job_id){
+  const start = Date.now();
+  const deadlineMs = 20 * 60 * 1000; // 20 minutes
+  let lastStatus = null;
+  while (Date.now() - start < deadlineMs){
+    const js = await higgs.getJobSet(jobSetId);
+    const jobs = Array.isArray(js?.jobs) ? js.jobs : [];
+    const first = jobs[0] || null;
+    const status = first?.status || js?.status || null;
+    if (status !== lastStatus) {
+      lastStatus = status;
+      if (job_id) await log(job_id, 'info', 'higgs_t2i_soul_poll', { job_set_id: jobSetId, status });
+    }
+    if (status === 'completed'){
+      const results = first?.results || {};
+      const url = results?.raw?.url || results?.min?.url || null;
+      if (!url) throw new Error('Higgsfield job completed but no results url');
+      return url;
+    }
+    if (status === 'failed' || status === 'nsfw'){
+      throw new Error(`Higgsfield job ${status}`);
+    }
+    await new Promise(r => setTimeout(r, 4000));
+  }
+  throw new Error('Higgsfield t2i soul job timed out');
+}
+
 // Build high-quality anchor prompts for try-on suitability
 function buildAnchorPrompt(location){
   const base = 'full-length portrait of the same fashion influencer, standing relaxed, arms slightly away from torso, neutral expression, fitted plain base outfit (solid tee or tank and plain slim bottoms), unobstructed view of torso and legs, editorial soft lighting, 85mm portrait style, f/2.8, sharp focus, natural skin tone, clean edges';
@@ -221,14 +249,15 @@ async function generateAnchorStillsForSoul(soul_id, username, locations, job_id)
   const saved = [];
   for (const loc of locations){
     const prompt = `portrait of the subject in the ${loc}`;
-    const img = await higgs.generateImageFromSoul({ soul_id, prompt, aspect_ratio:'3:4', resolution:'1080p' });
-    const url = img?.image_url;
-    if (url){
-      const b = await fetch(url).then(r=>r.arrayBuffer());
-      const fileUrl = await uploadBufferAsPng(Buffer.from(b), username, `character/anchors`, `${loc}.png`, storage.assetsBucket);
-      saved.push({ location: loc, url: fileUrl });
-      await addAsset(job_id, 'still', fileUrl);
-    }
+    const created = await higgs.generateTextToImageSoul({ prompt, custom_reference_id: soul_id, width_and_height: '1152x2048', enhance_prompt: false, batch_size: 1, quality: '1080p' });
+    const jobSetId = created?.id;
+    if (!jobSetId) throw new Error('Higgsfield text2image_soul returned no job_set id');
+    if (job_id) await log(job_id, 'info', 'higgs_t2i_soul_created', { job_set_id: jobSetId, location: loc });
+    const url = await pollJobSetForImage(jobSetId, job_id);
+    const b = await fetch(url).then(r=>r.arrayBuffer());
+    const fileUrl = await uploadBufferAsPng(Buffer.from(b), username, `character/anchors`, `${loc}.png`, storage.assetsBucket);
+    saved.push({ location: loc, url: fileUrl });
+    await addAsset(job_id, 'still', fileUrl);
   }
   if (saved.length === 0) throw new Error('No anchor stills generated');
   return saved;
@@ -347,39 +376,29 @@ async function processJob(job) {
         await log(job_id, 'info', 'enqueued anchor_stills', { anchor_job_id: enq?.id || null });
       } catch(e){ await log(job_id, 'error', 'enqueue anchor_stills failed', { error: e.message }); }
 
-      // Immediately generate anchor stills
-      await setJob(job_id, { step:'anchor_stills' });
-      const locations = Array.isArray(job.payload?.locations) && job.payload.locations.length>0
-        ? job.payload.locations
-        : ['bedroom','street','kitchen'];
-      const saved = await generateAnchorStillsForSoul(res.soul_id, job.username, locations, job_id);
-      await updateProfile(job.username, { anchor_stills: saved });
-      await log(job_id, 'info', 'anchor_stills', { count: saved.length });
+      // Skip immediate anchor generation to enforce strict flow
       await setJob(job_id, { status:'completed', step:'done', finished_at: new Date().toISOString() });
       return;
     }
 
     if (action === 'anchor_stills'){
       await setJob(job_id, { status:'running', step:'anchor_stills', started_at: new Date().toISOString() });
-      // Strict: only read from account_profiles.influencer_soul_id (no fallbacks from payload)
-      const prof = await getProfile(job.username, job_id);
-      const soul = prof?.influencer_soul_id || null;
-      if (!soul) {
-        await log(job_id, 'error', 'soul missing at anchor time', { username: normalizeUsername(job.username), supabaseUrl: SUPABASE_URL });
-      }
-      if (!soul) throw new Error('influencer_soul_id missing. Create Soul first.');
+      // Forced soul id mode
+      const soul = '36eb249b-eca8-420d-87aa-82ce7bbc5f2a';
+      await log(job_id, 'info', 'forced_soul_id_mode', { soul_id: soul });
       const locations = Array.isArray(job.payload?.locations) && job.payload.locations.length>0 ? job.payload.locations : ['bedroom','street','kitchen'];
       const saved = [];
       for (const loc of locations){
         const prompt = buildAnchorPrompt(loc);
-        const resp = await higgs.generateTextToImageSoul({ prompt, custom_reference_id: soul, width_and_height: '1152x2048', enhance_prompt: false, batch_size: 1, quality: '1080p' });
-        const url = resp?.image_url || resp?.url || resp?.images?.[0]?.url || null;
-        if (url){
-          const b = await fetch(url).then(r=>r.arrayBuffer());
-          const fileUrl = await uploadBufferAsPng(Buffer.from(b), job.username, `character/anchors`, `${loc}.png`, storage.assetsBucket);
-          saved.push({ location: loc, url: fileUrl });
-          await addAsset(job_id, 'still', fileUrl);
-        }
+        const created = await higgs.generateTextToImageSoul({ prompt, custom_reference_id: soul, width_and_height: '1152x2048', enhance_prompt: false, batch_size: 1, quality: '1080p' });
+        const jobSetId = created?.id;
+        if (!jobSetId) throw new Error('Higgsfield text2image_soul returned no job_set id');
+        await log(job_id, 'info', 'higgs_t2i_soul_created', { job_set_id: jobSetId, location: loc });
+        const url = await pollJobSetForImage(jobSetId, job_id);
+        const b = await fetch(url).then(r=>r.arrayBuffer());
+        const fileUrl = await uploadBufferAsPng(Buffer.from(b), job.username, `character/anchors`, `${loc}.png`, storage.assetsBucket);
+        saved.push({ location: loc, url: fileUrl });
+        await addAsset(job_id, 'still', fileUrl);
       }
       if (saved.length === 0) throw new Error('No anchor stills generated');
       await updateProfile(job.username, { anchor_stills: saved });

@@ -9,9 +9,10 @@ export class HiggsfieldClient {
     if (!this.keyId || !this.secret || !rawBase){
       throw new Error('hf-api-key, hf-secret, and HIGGSFIELD_PLATFORM_API_BASE are required');
     }
-    // Normalize: drop trailing slash; convert '/api/v1' -> '/v1'
+    // Normalize: drop trailing slash; convert '/api/v1' -> '/v1'; ensure it ends with '/v1'
     let base = rawBase.replace(/\/+$/, '');
     base = base.replace(/\/api\/v(\d+)$/, '/v$1');
+    if (!/\/v\d+$/.test(base)) base = base + '/v1';
     this.baseUrl = base;
     this.mode = 'platform';
     this.headersPost = { 'hf-api-key': this.keyId, 'hf-secret': this.secret, 'Content-Type': 'application/json' };
