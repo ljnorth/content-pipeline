@@ -403,6 +403,14 @@ async function processJob(job) {
       }
       if (saved.length === 0) throw new Error('No anchor stills generated');
       await updateProfile(job.username, { anchor_stills: saved });
+      const vp = await getProfile(job.username, job_id);
+      await log(job_id, 'info', 'anchor_stills_persist_check', {
+        username_db: vp?.username || null,
+        count: Array.isArray(vp?.anchor_stills) ? vp.anchor_stills.length : null
+      });
+      if (!Array.isArray(vp?.anchor_stills) || vp.anchor_stills.length === 0) {
+        throw new Error('anchor_stills not persisted');
+      }
       await log(job_id, 'info', 'anchor_stills', { count: saved.length });
       await setJob(job_id, { status:'completed', step:'done', finished_at: new Date().toISOString() });
       return;
