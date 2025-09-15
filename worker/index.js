@@ -335,6 +335,12 @@ async function processJob(job) {
         throw new Error('influencer_soul_id not persisted');
       }
       await log(job_id, 'info', 'soul created', { soul_id, source, images: arr.length, endpoint: 'custom-references' });
+      // Enqueue anchors job with soul_id so downstream doesn't depend on DB read
+      try {
+        const payload = { action: 'anchor_stills', soul_id, locations: job.payload?.locations };
+        const { data: enq } = await supabase.from('jobs').insert([{ username: normalizeUsername(job.username), payload, status: 'queued' }]).select('id').single();
+        await log(job_id, 'info', 'enqueued anchor_stills', { anchor_job_id: enq?.id || null });
+      } catch(e){ await log(job_id, 'error', 'enqueue anchor_stills failed', { error: e.message }); }
 
       // Immediately generate anchor stills
       await setJob(job_id, { step:'anchor_stills' });
@@ -350,11 +356,15 @@ async function processJob(job) {
 
     if (action === 'anchor_stills'){
       await setJob(job_id, { status:'running', step:'anchor_stills', started_at: new Date().toISOString() });
-      const prof = await getProfile(job.username, job_id);
-      if (!prof?.influencer_soul_id) {
-        await log(job_id, 'error', 'soul missing at anchor time', { username: normalizeUsername(job.username), supabaseUrl: SUPABASE_URL });
+      const providedSoul = job.payload?.soul_id || null;
+      let soul = providedSoul;
+      if (!soul){
+        const prof = await getProfile(job.username, job_id);
+        if (!prof?.influencer_soul_id) {
+          await log(job_id, 'error', 'soul missing at anchor time', { username: normalizeUsername(job.username), supabaseUrl: SUPABASE_URL });
+        }
+        soul = prof?.influencer_soul_id || null;
       }
-      const soul = prof?.influencer_soul_id;
       if (!soul) throw new Error('influencer_soul_id missing. Create Soul first.');
       const locations = Array.isArray(job.payload?.locations) && job.payload.locations.length>0 ? job.payload.locations : ['bedroom','street','kitchen'];
       const saved = [];
