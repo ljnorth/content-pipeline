@@ -55,9 +55,13 @@ async function getProfile(username, job_id){
     .from('account_profiles')
     .select(baseSel)
     .in('username', [u, '@'+u]);
-  if (Array.isArray(rows) && rows.length === 1) return rows[0] || {};
+  if (Array.isArray(rows) && rows.length === 1){
+    if (job_id) await log(job_id, 'info', 'profile found', rows[0] || {});
+    return rows[0] || {};
+  }
   if (Array.isArray(rows) && rows.length > 1){
     if (job_id) await log(job_id, 'error', 'duplicate usernames', { tried: [u, '@'+u], matches: rows.map(r=>r.username) });
+    if (job_id) await log(job_id, 'info', 'profile found', rows[0] || {});
     return rows[0] || {};
   }
   // Fallback: case-insensitive ilike
@@ -68,6 +72,7 @@ async function getProfile(username, job_id){
     .limit(5);
   if (Array.isArray(likeRows) && likeRows.length){
     if (job_id) await log(job_id, 'info', 'profile ilike fallback', { tried: u, picked: likeRows[0]?.username });
+    if (job_id) await log(job_id, 'info', 'profile found', likeRows[0] || {});
     return likeRows[0] || {};
   }
   if (job_id) await log(job_id, 'error', 'profile not found', { username: u });
