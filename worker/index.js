@@ -250,6 +250,14 @@ async function processJob(job) {
   const outputs = (job.payload && job.payload.outputs) || { moodboards: true, stills: true, videos: true };
   const action = job.payload && job.payload.action;
   try {
+    // Early visibility: confirm the worker picked this job
+    await log(job_id, 'info', 'job picked', {
+      job_id,
+      username: normalizeUsername(job.username),
+      action: action || null,
+      initial_status: job.status,
+      supabaseUrl: SUPABASE_URL
+    });
     // Action-specific lightweight jobs
     if (action === 'build_character'){
       await setJob(job_id, { status:'running', step:'character', started_at: new Date().toISOString() });
@@ -384,6 +392,7 @@ async function processJob(job) {
     }
 
     await setJob(job_id, { status: 'running', started_at: new Date().toISOString(), step: 'moodboards' });
+    await log(job_id, 'info', 'job started', { step: 'moodboards' });
     const moodboards = await fetchMoodboards(job.username, 5);
     await log(job_id, 'info', 'moodboards', { count: moodboards.length });
     if (outputs.moodboards) for (const url of moodboards) await addAsset(job_id, 'moodboard', url);
