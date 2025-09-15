@@ -60,9 +60,10 @@ async function getProfile(username, job_id){
     return rows[0] || {};
   }
   if (Array.isArray(rows) && rows.length > 1){
-    if (job_id) await log(job_id, 'error', 'duplicate usernames', { tried: [u, '@'+u], matches: rows.map(r=>r.username) });
-    if (job_id) await log(job_id, 'info', 'profile found', rows[0] || {});
-    return rows[0] || {};
+    const preferred = rows.find(r => r.username === u) || rows.find(r => r.username === '@'+u) || rows[0] || {};
+    if (job_id) await log(job_id, 'error', 'duplicate usernames', { tried: [u, '@'+u], matches: rows.map(r=>r.username), picked: preferred?.username || null });
+    if (job_id) await log(job_id, 'info', 'profile found', preferred || {});
+    return preferred || {};
   }
   // Fallback: case-insensitive ilike
   const { data: likeRows } = await supabase
@@ -409,8 +410,11 @@ async function processJob(job) {
 
     if (action === 'try_on'){
       await setJob(job_id, { status:'running', step:'try_on', started_at: new Date().toISOString() });
-      const prof = await getProfile(job.username);
-      const anchor = Array.isArray(prof?.anchor_stills) && prof.anchor_stills[0]?.url ? prof.anchor_stills[0].url : null;
+      const prof = await getProfile(job.username, job_id);
+      const anchors = Array.isArray(prof?.anchor_stills) ? prof.anchor_stills : [];
+      await log(job_id, 'info', 'try_on_anchors_read', { username_db: prof?.username || null, count: anchors.length, sample: anchors.slice(0,2) });
+      const pref = anchors.find(a => a.location === 'bedroom') || anchors[0] || null;
+      const anchor = pref?.url || null;
       if (!anchor) throw new Error('No anchor_stills available. Generate anchors first.');
       const count = Math.max(1, Number(job.payload?.count || 5));
       const moodboards = await fetchMoodboards(job.username, count);
