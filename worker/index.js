@@ -356,14 +356,11 @@ async function processJob(job) {
 
     if (action === 'anchor_stills'){
       await setJob(job_id, { status:'running', step:'anchor_stills', started_at: new Date().toISOString() });
-      const providedSoul = job.payload?.soul_id || null;
-      let soul = providedSoul;
-      if (!soul){
-        const prof = await getProfile(job.username, job_id);
-        if (!prof?.influencer_soul_id) {
-          await log(job_id, 'error', 'soul missing at anchor time', { username: normalizeUsername(job.username), supabaseUrl: SUPABASE_URL });
-        }
-        soul = prof?.influencer_soul_id || null;
+      // Strict: only read from account_profiles.influencer_soul_id (no fallbacks from payload)
+      const prof = await getProfile(job.username, job_id);
+      const soul = prof?.influencer_soul_id || null;
+      if (!soul) {
+        await log(job_id, 'error', 'soul missing at anchor time', { username: normalizeUsername(job.username), supabaseUrl: SUPABASE_URL });
       }
       if (!soul) throw new Error('influencer_soul_id missing. Create Soul first.');
       const locations = Array.isArray(job.payload?.locations) && job.payload.locations.length>0 ? job.payload.locations : ['bedroom','street','kitchen'];
