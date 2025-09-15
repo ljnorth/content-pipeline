@@ -47,14 +47,31 @@ async function log(job_id, level, message, data) { await supabase.from('job_logs
 async function setJob(job_id, patch) { await supabase.from('jobs').update(patch).eq('id', job_id); }
 async function addAsset(job_id, kind, url) { await supabase.from('job_assets').insert({ job_id, kind, url }); }
 
-async function getProfile(username){
+async function getProfile(username, job_id){
   const u = normalizeUsername(username);
-  const { data } = await supabase
+  const baseSel = 'username, influencer_soul_id, flux_variants, flux_variants_upscaled, anchor_stills, influencer_traits';
+  // Try exact normalized and @-prefixed usernames
+  let { data: rows, error } = await supabase
     .from('account_profiles')
-    .select('influencer_soul_id, flux_variants, flux_variants_upscaled, anchor_stills, influencer_traits')
-    .eq('username', u)
-    .single();
-  return data || {};
+    .select(baseSel)
+    .in('username', [u, '@'+u]);
+  if (Array.isArray(rows) && rows.length === 1) return rows[0] || {};
+  if (Array.isArray(rows) && rows.length > 1){
+    if (job_id) await log(job_id, 'error', 'duplicate usernames', { tried: [u, '@'+u], matches: rows.map(r=>r.username) });
+    return rows[0] || {};
+  }
+  // Fallback: case-insensitive ilike
+  const { data: likeRows } = await supabase
+    .from('account_profiles')
+    .select(baseSel)
+    .ilike('username', u)
+    .limit(5);
+  if (Array.isArray(likeRows) && likeRows.length){
+    if (job_id) await log(job_id, 'info', 'profile ilike fallback', { tried: u, picked: likeRows[0]?.username });
+    return likeRows[0] || {};
+  }
+  if (job_id) await log(job_id, 'error', 'profile not found', { username: u });
+  return {};
 }
 
 async function updateProfile(username, patch){
@@ -304,7 +321,7 @@ async function processJob(job) {
       const soul_id = refId;
       await updateProfile(job.username, { influencer_soul_id: soul_id });
       // Assert write landed
-      const verify = await getProfile(job.username);
+      const verify = await getProfile(job.username, job_id);
       if (!verify?.influencer_soul_id) {
         await log(job_id, 'error', 'soul id not persisted', { username: normalizeUsername(job.username), supabaseUrl: SUPABASE_URL });
         throw new Error('influencer_soul_id not persisted');
@@ -325,7 +342,7 @@ async function processJob(job) {
 
     if (action === 'anchor_stills'){
       await setJob(job_id, { status:'running', step:'anchor_stills', started_at: new Date().toISOString() });
-      const prof = await getProfile(job.username);
+      const prof = await getProfile(job.username, job_id);
       if (!prof?.influencer_soul_id) {
         await log(job_id, 'error', 'soul missing at anchor time', { username: normalizeUsername(job.username), supabaseUrl: SUPABASE_URL });
       }
