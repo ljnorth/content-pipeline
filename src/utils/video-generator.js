@@ -174,6 +174,43 @@ export class VideoGenerator {
     return command;
   }
 
+  async createMemeClipSingleImage({ imageUrl, caption, audioUrl, width=1080, height=1920, fps=30, duration=8, fadeSec=2, fontFile='public/assets/Inter-Bold.ttf', watermark='' }){
+    this.logger.info('🎬 Creating meme clip');
+    const tempDir = path.join(this.tempDir, 'meme', Date.now().toString());
+    await fs.ensureDir(tempDir);
+    const imgPath = path.join(tempDir, 'img.jpg');
+    const audPath = path.join(tempDir, 'aud.mp3');
+    const outPath = path.join(tempDir, 'meme.mp4');
+    const imgBuf = await this.downloadImage(imageUrl);
+    await fs.writeFile(imgPath, Buffer.from(imgBuf));
+    try {
+      const r = await fetch(audioUrl); if (!r.ok) throw new Error('audio fetch failed');
+      const ab = await r.arrayBuffer(); await fs.writeFile(audPath, Buffer.from(ab));
+    } catch(e){ throw new Error('Audio download failed: '+e.message); }
+
+    const textEsc = String(caption||'').replace(/:/g,'\\:').replace(/"/g,'\"');
+    const wmEsc = String(watermark||'').replace(/:/g,'\\:').replace(/"/g,'\"');
+    const fadeIn = fadeSec; const fadeOutStart = duration - fadeSec;
+    const vf = [
+      `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`,
+      `fade=t=in:st=0:d=${fadeIn}`,
+      `fade=t=out:st=${fadeOutStart}:d=${fadeSec}`,
+      `drawbox=x=0:y=0:w=iw:h=220:color=white@1:t=fill`,
+      `drawtext=fontfile='${path.resolve(fontFile)}':text='${textEsc}':x=(w-text_w)/2:y=60:fontsize=56:fontcolor=black:line_spacing=8:box=0`,
+      wmEsc?`drawtext=fontfile='${path.resolve(fontFile)}':text='${wmEsc}':x=w-text_w-40:y=h-text_h-40:fontsize=30:fontcolor=white:shadowx=2:shadowy=2`:null
+    ].filter(Boolean).join(',');
+
+    const af = `afade=t=in:st=0:d=${fadeIn},afade=t=out:st=${fadeOutStart}:d=${fadeSec},atrim=0:${duration},asetpts=N/SR/TB`;
+
+    const cmd = `ffmpeg -y -loop 1 -t ${duration} -i "${imgPath}" -i "${audPath}" -vf "${vf}" -af "${af}" -r ${fps} -c:v libx264 -preset fast -crf 22 -pix_fmt yuv420p -t ${duration} "${outPath}"`;
+    this.logger.info('FFmpeg:', cmd);
+    const { stderr } = await execAsync(cmd);
+    if (stderr && !stderr.includes('frame=')) this.logger.warn(stderr);
+    if (!await fs.pathExists(outPath)) throw new Error('ffmpeg failed to create output');
+    const buf = await fs.readFile(outPath);
+    return { buffer: buf, size: buf.length, filename: `meme_${Date.now()}.mp4`, duration, dimensions: { width, height }, videoUrl: null };
+  }
+
   /**
    * Clean up temporary files
    */
