@@ -410,14 +410,14 @@ Please run the content pipeline to scrape more content or adjust the account's c
     let cached = null;
     try { cached = await ab.loadCachedAnchor(username); } catch(_){}
     let anchor = Array.isArray(cached?.anchor) ? cached.anchor : null;
-    let candidates = [];
+    let anchorBuildCandidates = [];
     if (!anchor) {
       const built = await ab.buildAnchorsFromInspo(inspo, windowDays);
-      anchor = built.anchor; candidates = built.candidates;
+      anchor = built.anchor; anchorBuildCandidates = built.candidates;
       const filterStats = built.filterStats || null;
-      try { await ab.saveCachedAnchor(username, anchor, { windowDays, inspo, candidateCount: (candidates||[]).length, filterStats }); } catch(_){ }
+      try { await ab.saveCachedAnchor(username, anchor, { windowDays, inspo, candidateCount: (anchorBuildCandidates||[]).length, filterStats }); } catch(_){ }
     }
-    const candidateCount = (candidates||[]).length;
+    const candidateCount = (anchorBuildCandidates||[]).length;
     this.logger.info(`${runTag}🧱 Anchor build: inspo=${inspo.length}, windowDays=${windowDays}, candidates=${candidateCount}, anchor=${anchor? 'yes':'no'}`);
     if (!anchor) {
       const msg = `Anchor could not be built (no candidates). Ensure inspo winners exist in the last ${windowDays} days.`;
@@ -466,10 +466,30 @@ Please run the content pipeline to scrape more content or adjust the account's c
         usernamesFilter = Array.from(set);
       } catch(_) {}
     }
-    const nn = await ab.nearestBySql(anchor, 120, usernamesFilter);
-    this.logger.info(`${runTag}🔎 Nearest search: k=120, usernamesFilter=${Array.isArray(usernamesFilter)?usernamesFilter.length:'—'}, returned=${Array.isArray(nn)?nn.length:0}`);
+    // Iterative nearest-neighbor retrieval with compute/time budget
+    const sel = strategy?.content_strategy?.selection || {};
+    const kStep = Math.max(50, Number(sel.kStep ?? 500));
+    const maxBatches = Math.max(1, Number(sel.maxBatches ?? 4));
+    const timeBudgetMs = Math.max(50, Number(sel.timeBudgetMs ?? 400));
+    const mmrLambda = Math.max(0, Math.min(1, Number(sel.mmrLambda ?? 0.8)));
+    const minPairwiseDistance = Math.max(0, Number(sel.minPairwiseDistance ?? 0.16));
+    const globalReuseCooldownDays = Math.max(0, Number(sel.globalReuseCooldownDays ?? 14));
+    const startedAt = Date.now();
+
+    let pool = [];
+    for (let b = 0; b < maxBatches; b++){
+      if (Date.now() - startedAt > timeBudgetMs) break;
+      const k = kStep * (b + 1);
+      const chunk = await ab.nearestBySql(anchor, k, usernamesFilter);
+      this.logger.info(`${runTag}🔎 Nearest search batch=${b+1}/${maxBatches}: k=${k}, returned=${Array.isArray(chunk)?chunk.length:0}`);
+      pool = chunk; // since RPC returns top-k already, keep the latest (superset)
+      if ((pool?.length || 0) >= Math.max(count*10, kStep)) {
+        // have enough for re-ranking
+        if (Date.now() - startedAt > timeBudgetMs) break;
+      }
+    }
     // Fetch embeddings for spacing if not present
-    const ids = (nn||[]).map(r => r.id);
+    const ids = (pool||[]).map(r => r.id);
     let embMap = new Map();
     function parseVec(e){
       if (Array.isArray(e)) return e;
@@ -478,57 +498,121 @@ Please run the content pipeline to scrape more content or adjust the account's c
       }
       return null;
     }
+    let metaMap = new Map();
     if (ids.length) {
       const { data: embRows } = await this.db.client
         .from('images')
-        .select('id, embedding, username')
+        .select('id, embedding, username, aesthetic, colors, season, additional, image_path')
         .in('id', ids);
       for (const row of (embRows||[])) {
         const v = parseVec(row.embedding);
         if (Array.isArray(v)) embMap.set(row.id, v);
+        metaMap.set(row.id, row);
       }
     }
-    // Enforce spacing + exact-duplicate suppression via embedding fingerprint
+    // Distance helpers for re-ranking
     function cosine(a,b){ let s=0; for (let i=0;i<a.length;i++) s+= a[i]*b[i]; return s; }
-    const used = [];
-    const seenEmbeddings = new Set();
-    function fpVec(v){
-      // Round to make the fingerprint stable across minor float noise; tight for "exactness"
-      // Using 1e6 keeps equal embeddings equal; near-identical will differ.
-      return v.map(x => Math.round(x * 1e6)).join(',');
-    }
     function distOf(a,b){ return 1 - cosine(a,b); }
-    for (const r of (nn||[])){
-      if (used.length >= count) break;
+    // Global recent usage across all accounts (cooldown window)
+    let globalRecent = new Set();
+    if (globalReuseCooldownDays > 0){
+      try {
+        const since = new Date(Date.now() - globalReuseCooldownDays*24*3600*1000).toISOString();
+        const { data: recent } = await this.db.client
+          .from('generated_posts')
+          .select('images, created_at')
+          .gte('created_at', since)
+          .limit(500);
+        for (const row of (recent||[])){
+          const imgs = Array.isArray(row.images) ? row.images : [];
+          for (const im of imgs){ if (im?.id != null) globalRecent.add(im.id); }
+        }
+      } catch(_){ }
+    }
+
+    // Content filters: require clothing-only, exclude nails/hair/scenes
+    const selFilters = strategy?.content_strategy?.selection || {};
+    const bannedKeywords = Array.isArray(selFilters.bannedKeywords) && selFilters.bannedKeywords.length
+      ? selFilters.bannedKeywords.map(s=>String(s).toLowerCase())
+      : [
+          'nails','manicure','nail','cuticle','acrylic','gel','polish','nail art','nail design',
+          'hair','hairstyle','haircut','ponytail','fringe','bangs','updo','curling iron','blowout',
+          'makeup','lipstick','lip gloss','eyeshadow','eyeliner','mascara','contour','blush',
+          'scenery','landscape','nature','sunset','sunrise','sky','mountain','forest','river','waterfall',
+          'beach','ocean','sea','coast','sand','shore','lake','pool','lagoon'
+        ];
+    function textHasAny(s, arr){ const t = (s||'').toLowerCase(); return arr.some(k=> t.includes(k)); }
+    function listHasAny(list, arr){ const joined = Array.isArray(list)? list.join(' ').toLowerCase(): String(list||'').toLowerCase(); return arr.some(k=> joined.includes(k)); }
+
+    // Build candidate objects with embeddings and anchor distance
+    const candidates = [];
+    for (const r of (pool||[])){
       const rEmb = embMap.get(r.id);
       if (!Array.isArray(rEmb)) continue;
-      const isDuplicateId = used.some(u => u.id === r.id);
+      if (globalRecent.has(r.id)) continue;
+      // Apply clothing/content filters using image metadata
+      const meta = metaMap.get(r.id) || {};
+      const aestheticTxt = String(meta.aesthetic||'');
+      const addl = Array.isArray(meta.additional) ? meta.additional : [];
+      if (bannedKeywords.length && (textHasAny(aestheticTxt, bannedKeywords) || listHasAny(addl, bannedKeywords))) continue;
       const d = distOf(anchor, rEmb);
       if (typeof maxAnchorDistance === 'number' && isFinite(maxAnchorDistance) && d > maxAnchorDistance) continue;
-      const key = fpVec(rEmb);
-      if (isDuplicateId) continue;
-      if (seenEmbeddings.has(key)) continue; // same exact image (identical embedding)
-      seenEmbeddings.add(key);
-      used.push({ ...r, _embedding: rEmb, dist: d });
+      candidates.push({ ...r, _embedding: rEmb, dist: d, anchorSim: 1 - d });
     }
-    // No fallback fill — strict mode; include nnCount in debug already
+    // MMR re-ranking with min pairwise distance
+    const selected = [];
+    while (selected.length < count && candidates.length){
+      let bestIdx = -1;
+      let bestScore = -Infinity;
+      for (let i=0;i<candidates.length;i++){
+        const c = candidates[i];
+        let maxSimToSel = 0;
+        for (const s of selected){
+          const sim = cosine(c._embedding, s._embedding);
+          if (sim > maxSimToSel) maxSimToSel = sim;
+        }
+        const mmrScore = mmrLambda * c.anchorSim - (1 - mmrLambda) * maxSimToSel;
+        if (mmrScore > bestScore){ bestScore = mmrScore; bestIdx = i; }
+      }
+      if (bestIdx < 0) break;
+      const pick = candidates[bestIdx];
+      candidates.splice(bestIdx, 1);
+      let ok = true;
+      for (const s of selected){
+        const d = distOf(pick._embedding, s._embedding);
+        if (d < minPairwiseDistance){ ok = false; break; }
+      }
+      if (ok) selected.push(pick);
+    }
+    const used = selected; // preserve downstream naming
+    // No fallback fill — strict mode
     // Build top-weighted examples that formed the anchor
-    const examples = (candidates||[])
+    const examples = (anchorBuildCandidates||[])
       .map(r => ({ id: r.id, image_path: r.image_path, username: r.username, dist: distOf(anchor, r.embedding), weight: ab.weightFor(r._post.created_at, r._post.engagement_rate) }))
       .sort((a,b) => b.weight - a.weight)
       .slice(0, 12);
     // Debug stats for UI
     const dists = used.map(u => u.dist).filter(x => typeof x === 'number' && isFinite(x));
+    let minPair = null;
+    for (let i=0;i<used.length;i++){
+      for (let j=i+1;j<used.length;j++){
+        const d = 1 - (used[i]._embedding.reduce((s,v,idx)=> s + v*used[j]._embedding[idx], 0));
+        if (minPair == null || d < minPair) minPair = d;
+      }
+    }
     const dbg = {
       runId: options?.runId || null,
       windowDays,
       preferredGender,
       inspo: inspo,
       usernamesFilterCount: Array.isArray(usernamesFilter)?usernamesFilter.length:0,
-      candidateCount: (candidates||[]).length,
-      nnCount: (nn||[]).length,
+      candidateCount: (anchorBuildCandidates||[]).length,
+      nnCount: (pool||[]).length,
       selectedCount: used.length,
       maxAnchorDistance,
+      minPairwiseDistance,
+      mmrLambda,
+      minPairwise: minPair,
       minDist: dists.length? Math.min(...dists): null,
       maxDist: dists.length? Math.max(...dists): null,
       avgDist: dists.length? dists.reduce((s,v)=>s+v,0)/dists.length: null
@@ -540,7 +624,7 @@ Please run the content pipeline to scrape more content or adjust the account's c
         if (cache?.stats?.filterStats) dbg.filterStats = cache.stats.filterStats;
       }
     } catch(_){}
-    this.logger.info(`${runTag}✅ Selected ${used.length}/${count} images (minDist=${dbg.minDist?.toFixed?.(3) ?? '-'}, avg=${dbg.avgDist?.toFixed?.(3) ?? '-'}, max=${dbg.maxDist?.toFixed?.(3) ?? '-'})`);
+    this.logger.info(`${runTag}✅ Selected ${used.length}/${count} (minPair=${minPair?.toFixed?.(3) ?? '-'}, min=${dbg.minDist?.toFixed?.(3) ?? '-'}, avg=${dbg.avgDist?.toFixed?.(3) ?? '-'}, max=${dbg.maxDist?.toFixed?.(3) ?? '-'})`);
     return { selected: used.slice(0, count).map(({ _embedding, ...rest }) => rest), anchor, anchorExamples: examples, debug: dbg };
   }
 

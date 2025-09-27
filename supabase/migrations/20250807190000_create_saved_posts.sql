@@ -1,4 +1,4 @@
-create table if not exists public.saved_posts (
+ create table if not exists public.saved_posts (
   id uuid primary key default gen_random_uuid(),
   owner_email text not null,
   name text not null,

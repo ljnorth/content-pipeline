@@ -63,8 +63,23 @@ async function generateImagesForPreview(accountUsername, count, accountAesthetic
 
     log(`✅ Selected ${selectedImages.length} unique images`);
 
-    // Format the images
-    return selectedImages.map((img, index) => ({
+    // Compute anchor deviation (cosine distance) if anchor exists
+    let anchorVec = null;
+    try{
+      const { data: anchorRow } = await supabase
+        .from('account_anchors')
+        .select('anchor')
+        .eq('username', accountUsername)
+        .single();
+      if (anchorRow && anchorRow.anchor){
+        anchorVec = Array.isArray(anchorRow.anchor) ? anchorRow.anchor : null;
+        if (!anchorVec && typeof anchorRow.anchor === 'string'){
+          try { anchorVec = JSON.parse(anchorRow.anchor); } catch(_){ anchorVec = null; }
+        }
+      }
+    }catch(_){ anchorVec = null; }
+
+    const out = selectedImages.map((img, index) => ({
       id: img.id,
       imagePath: img.image_path,
       image_path: img.image_path,
@@ -73,8 +88,36 @@ async function generateImagesForPreview(accountUsername, count, accountAesthetic
       season: img.season || 'any',
       occasion: img.occasion || 'casual',
       selection_score: 100 + Math.random() * 50,
-      is_cover_slide: index === 0 // First image is cover
+      is_cover_slide: index === 0
     }));
+
+    if (anchorVec && out.length){
+      const ids = out.map(r => r.id);
+      const { data: embRows } = await supabase
+        .from('images')
+        .select('id, embedding')
+        .in('id', ids);
+      const embMap = new Map();
+      function parseEmb(e){
+        if (Array.isArray(e)) return e;
+        if (!e) return null;
+        if (typeof e === 'string'){
+          try {
+            let s = e.trim();
+            if (s.startsWith('(') && s.endsWith(')')) s = '['+s.slice(1,-1)+']';
+            const arr = JSON.parse(s);
+            if (Array.isArray(arr)) return arr.map(Number);
+          } catch { return null; }
+        }
+        return null;
+      }
+      (embRows||[]).forEach(r => { const v = parseEmb(r.embedding); if (Array.isArray(v)) embMap.set(r.id, v); });
+      function cosine(a,b){ let s=0; for (let i=0;i<a.length;i++) s+= a[i]*b[i]; return s; }
+      function dist(a,b){ return 1 - cosine(a,b); }
+      out.forEach(o => { const v = embMap.get(o.id); if (Array.isArray(v)) o.dist = dist(anchorVec, v); });
+    }
+
+    return out;
 
   } catch (error) {
     log('❌ Error generating preview images: ' + error.message);

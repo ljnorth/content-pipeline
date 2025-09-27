@@ -309,18 +309,18 @@ export default async function handler(req, res) {
             currentPost.images.forEach(image => {
                 const imageCard = document.createElement('div');
                 imageCard.className = 'image-card';
-                imageCard.innerHTML = \`
-                    <img src="\${image.imagePath || image.image_path}" alt="Fashion image" loading="lazy" />
+                imageCard.innerHTML = `
+                    <img src="${image.imagePath || image.image_path}" alt="Fashion image" loading="lazy" />
                     <div class="image-info">
                         <div class="image-meta">
                             <label>
-                                <input type="checkbox" class="image-checkbox" value="\${image.id}" onchange="updateSelectedCount()">
-                                ID: \${image.id}
+                                <input type="checkbox" class="image-checkbox" value="${image.id}" onchange="updateSelectedCount()">
+                                ID: ${image.id}
                             </label>
-                            <span>Aesthetic: \${image.aesthetic || 'N/A'}</span>
+                            <span>${(typeof image.dist === 'number') ? ('Δ '+image.dist.toFixed(3)) : 'Δ -'}</span>
                         </div>
                     </div>
-                \`;
+                `;
                 imagesGrid.appendChild(imageCard);
             });
 
@@ -469,7 +469,7 @@ export default async function handler(req, res) {
         function showMessage(message, type) {
             const container = document.getElementById('message-container');
             const messageDiv = document.createElement('div');
-            messageDiv.className = \`message \${type}-message\`;
+            messageDiv.className = `message ${type}-message`;
             messageDiv.textContent = message;
             container.innerHTML = '';
             container.appendChild(messageDiv);

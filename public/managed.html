@@ -27,7 +27,7 @@
   <div id="authStatus" class="muted" style="margin-bottom:8px">Checking session…</div>
   <div id="actionStatus" class="muted" style="margin:-4px 0 12px 0"></div>
 
-  <div class="row section">
+      <div class="row section">
     <input id="username" placeholder="@username"/>
     <input id="goal" placeholder="Goal (plain text)"/>
     <input id="audience" placeholder="Influencer (display-only; set via Persona modal)"/>
@@ -81,6 +81,21 @@
     <div id="anchorExamples" class="grid" style="margin-top:8px; display:grid; grid-template-columns: repeat(auto-fill, minmax(80px,1fr)); grid-auto-rows:80px; gap:6px"></div>
     <div id="previewGrid" class="grid" style="margin-top:12px; display:grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); grid-auto-rows:120px; gap:8px"></div>
   </section>
+
+      <!-- Preview & Post modal -->
+      <div id="postModal" class="modal-overlay">
+        <div class="modal">
+          <header><h3>Preview & Post to Instagram</h3><button id="postClose" class="btn btn-outline">Close</button></header>
+          <div class="body">
+            <div id="postPreviewGrid" class="grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); grid-auto-rows:120px; gap:8px"></div>
+            <textarea id="postCaption" placeholder="Caption" style="width:100%;height:80px;margin-top:8px"></textarea>
+          </div>
+          <div class="footer">
+            <button id="btnReroll" class="btn btn-outline">Reroll</button>
+            <button id="btnPostNow" class="btn btn-primary">Post to Instagram</button>
+          </div>
+        </div>
+      </div>
   <div id="inspoModal" class="modal-overlay">
     <div class="modal">
       <header><h3>Select Inspo Accounts</h3><button id="inspoClose" class="btn btn-outline">Close</button></header>
@@ -201,7 +216,10 @@
       });
 
       document.querySelectorAll('button.preview-btn').forEach(btn => {
-        btn.onclick = () => window.open('/preview/' + btn.dataset.prev, '_blank');
+        btn.onclick = async () => {
+          const u = btn.dataset.prev;
+          await openPostModal(u);
+        };
       });
       document.querySelectorAll('button.gen').forEach(btn => {
         btn.onclick = async () => {
@@ -332,6 +350,54 @@
         setStatus(`Loaded ${imgs.length} images for preview.` + (anchor ? ' (anchor attached)' : ''), 'ok');
       }catch(e){ setStatus('Preview failed: '+e.message, 'err'); }
     };
+
+    // --- Preview & Post modal logic ---
+    const postModal = document.getElementById('postModal');
+    const postClose = document.getElementById('postClose');
+    const postGrid = document.getElementById('postPreviewGrid');
+    const postCaption = document.getElementById('postCaption');
+    const btnReroll = document.getElementById('btnReroll');
+    const btnPostNow = document.getElementById('btnPostNow');
+    let currentUserForPost = null;
+    let currentImages = [];
+    async function openPostModal(username){
+      currentUserForPost = (username||'').replace('@','');
+      postGrid.innerHTML = '';
+      postCaption.value = '';
+      await rerollOnce();
+      postModal.classList.add('open');
+    }
+    async function rerollOnce(){
+      if (!currentUserForPost) return;
+      const runId = 'ui_' + Date.now();
+      const r = await fetch('/api/generate-daily?username='+encodeURIComponent(currentUserForPost)+'&preview=1&runId='+encodeURIComponent(runId));
+      const j = await r.json().catch(()=>({}));
+      const res0 = Array.isArray(j.results) ? j.results[0] : null;
+      const post0 = (res0?.postsData?.[0]) || null;
+      if (!post0) throw new Error(res0?.error || j.error || 'No preview data');
+      currentImages = (post0.images||[]).map(im => (im.imagePath || im.image_path)).filter(Boolean);
+      postGrid.innerHTML = '';
+      currentImages.forEach(src => {
+        const wrap = document.createElement('div'); wrap.className = 'thumb-wrap';
+        const a = document.createElement('a'); a.href = src; a.target = '_blank';
+        a.innerHTML = '<img class="thumb" src="'+src+'"/>';
+        wrap.appendChild(a); postGrid.appendChild(wrap);
+      });
+      postCaption.value = String(post0.caption||'');
+    }
+    btnReroll.onclick = async () => { try{ await rerollOnce(); setStatus('Rerolled preview.', 'ok'); }catch(e){ setStatus('Reroll failed: '+e.message, 'err'); } };
+    btnPostNow.onclick = async () => {
+      try{
+        if (!currentUserForPost) return;
+        if (!currentImages.length) throw new Error('No images to post');
+        const res = await fetch('/api/instagram/post-now', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: currentUserForPost, images: currentImages, caption: postCaption.value }) });
+        const out = await res.json();
+        if (!res.ok || out.success !== true) throw new Error(out.error || 'Post failed');
+        setStatus('Posted to Instagram (via Post for Me).', 'ok');
+        postModal.classList.remove('open');
+      }catch(e){ setStatus('Post failed: '+e.message, 'err'); }
+    };
+    postClose.onclick = () => postModal.classList.remove('open');
 
     document.getElementById('genAll').onclick = async () => {
     // Suggest inspo accounts by most-used sources

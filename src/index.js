@@ -64,10 +64,12 @@ export class ContentPipeline {
       // Run content generation
       const result = await pipeline.run();
       
-      // Send to Slack if enabled
-      if (this.options.enableSlack && this.slack.enabled) {
-        this.logger.info('📤 Sending results to Slack...');
-        await this.slack.sendPostsToSlack(result);
+      // Route delivery per account (Slack vs Post for Me / Instagram)
+      {
+        const { DeliveryRouter } = await import('./automation/delivery.js');
+        const router = new DeliveryRouter();
+        this.logger.info('📤 Routing delivery per account...');
+        await router.dispatch(result);
       }
       
       // Run analytics if enabled
