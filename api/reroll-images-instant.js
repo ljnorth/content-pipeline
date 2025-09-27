@@ -87,10 +87,10 @@ async function rerollWithAnchorMMR(accountUsername, count, existingImageIds){
   // Optional: Vision gate to ensure clothing
   let finalSel = selected;
   try {
-    const { isClothingImage } = await import('../src/utils/vision.js');
+    const { isFashionNoTextImage } = await import('../src/utils/vision.js');
     const filtered = [];
     for (const s of selected){
-      const ok = await isClothingImage(s.image_path);
+      const ok = await isFashionNoTextImage(s.image_path);
       if (ok) filtered.push(s);
       if (filtered.length >= count) break;
     }
