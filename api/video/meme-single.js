@@ -6,13 +6,15 @@ import { isFashionNoTextImage } from '../../src/utils/vision.js';
 export default async function handler(req,res){
   try{
     if (req.method !== 'POST') { res.setHeader('Allow',['POST']); return res.status(405).json({ error:'Method not allowed' }); }
-    const { username, image_url=null, caption_override=null, audio_id=null, allow_silent=false } = req.body||{};
+    const { username, image_url=null, caption_override=null, audio_id=null, allow_silent=false, debug=false } = req.body||{};
+    const logs = [];
+    const log = (step, data) => { try{ logs.push({ step, data }); }catch(_){} };
     if (!username) return res.status(400).json({ error:'username required' });
     const db = new SupabaseClient();
 
     // Load profile
     const { data: profile } = await db.client.from('account_profiles').select('*').eq('username', username).single();
-    if (!profile) return res.status(404).json({ error:'account profile not found' });
+    if (!profile) return res.status(404).json({ error:'account profile not found', logs });
 
     // 1) Pick or validate image (anchor-driven selection)
     let imgUrl = image_url;
@@ -22,26 +24,27 @@ export default async function handler(req,res){
       const gen = new ContentGenerator();
       const post = await gen.generateSinglePost({ username }, profile, 1, { preview: true, runId: 'meme_'+Date.now() });
       const imgs = Array.isArray(post?.images) ? post.images : [];
-      if (!imgs.length) return res.status(400).json({ error:'no images available for meme' });
+      if (!imgs.length) return res.status(400).json({ error:'no images available for meme', logs });
       // random order then pick the first that passes vision gate
       for (const i of imgs.sort(()=> Math.random()-0.5)){
         const url = i.imagePath || i.image_path; if (!url) continue;
         const pass = await isFashionNoTextImage(url);
         if (pass){ imgUrl = url; aesthetic = i.aesthetic || null; break; }
       }
-      if (!imgUrl) return res.status(400).json({ error:'no suitable image passed vision gate' });
+      if (!imgUrl) return res.status(400).json({ error:'no suitable image passed vision gate', logs });
     }
-    if (!imgUrl) return res.status(400).json({ error:'image_url required' });
+    if (!imgUrl) return res.status(400).json({ error:'image_url required', logs });
     // If user supplied an image_url, still gate it
     if (image_url){
       const ok = await isFashionNoTextImage(imgUrl);
-      if (!ok) return res.status(400).json({ error:'image rejected by vision gate (not clothing or has text)' });
+      if (!ok) return res.status(400).json({ error:'image rejected by vision gate (not clothing or has text)', logs });
     }
+    log('image_selected', { imgUrl, aesthetic });
 
     // 2) Generate meme copy
-    let copy;
-    try { copy = caption_override || (await generateMemeCopy({ username, profile, aesthetic })).text; }
+    let copy; try { copy = caption_override || (await generateMemeCopy({ username, profile, aesthetic })).text; }
     catch(_) { copy = caption_override || 'fall outfit inspo'; }
+    log('copy', { copy });
 
     // 3) Pick audio
     let audio = null;
@@ -55,6 +58,7 @@ export default async function handler(req,res){
       const pool = (data||[]).filter(x => (x.duration_sec||8) >= 8);
       if (pool.length) audio = pool[Math.floor(Math.random()*pool.length)];
     }
+    log('audio', { id: audio?.id || null, url: audio?.url || null, allow_silent });
 
     // 4) Compose video
     const vg = new VideoGenerator();
@@ -68,6 +72,7 @@ export default async function handler(req,res){
       fontFile: process.env.MEME_FONT_FILE || 'public/assets/Inter-Bold.ttf',
       watermark: username.startsWith('@') ? username : '@'+username
     });
+    log('render', { size: out?.size || null, filename: out?.filename });
 
     // Upload buffer to Storage if needed for a public URL
     let videoUrl = out.videoUrl || out.url || null;
@@ -79,6 +84,7 @@ export default async function handler(req,res){
         videoUrl = up.publicUrl;
       }
     } catch(_) {}
+    log('upload', { videoUrl: videoUrl || null });
 
     // 5) Save record
     await db.client.from('generated_videos').insert({
@@ -86,7 +92,7 @@ export default async function handler(req,res){
       video_url: videoUrl, duration_sec: 8, copy_text: copy
     });
 
-    return res.status(200).json({ success: true, video: { ...out, videoUrl }, caption: copy });
+    return res.status(200).json({ success: true, video: { ...out, videoUrl }, caption: copy, ...(debug? { logs } : {}) });
   }catch(e){ return res.status(500).json({ error: e.message }); }
 }
 
