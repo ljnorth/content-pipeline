@@ -72,7 +72,7 @@ export default async function handler(req,res){
       fontFile: process.env.MEME_FONT_FILE || 'public/assets/Inter-Bold.ttf',
       watermark: username.startsWith('@') ? username : '@'+username
     });
-    log('render', { size: out?.size || null, filename: out?.filename });
+    log('render', { size: out?.size || null, filename: out?.filename, cmd: vg.lastCmd || null });
 
     // Upload buffer to Storage if needed for a public URL
     let videoUrl = out.videoUrl || out.url || null;
@@ -93,7 +93,7 @@ export default async function handler(req,res){
     });
 
     return res.status(200).json({ success: true, video: { ...out, videoUrl }, caption: copy, ...(debug? { logs } : {}) });
-  }catch(e){ return res.status(500).json({ error: e.message }); }
+  }catch(e){ return res.status(500).json({ error: e.message, where: 'meme-single', hint: 'enable debug=true for logs', stack: e?.stack }); }
 }
 
 

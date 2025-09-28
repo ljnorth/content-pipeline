@@ -29,7 +29,7 @@
     const postBtn = document.getElementById('post');
     let videoUrl = null;
     function setStatus(s, ok){ statusEl.textContent = s; statusEl.style.color = ok?'#2e7d32':'#b00020'; }
-    async function fetchJsonSafe(url, opts){ const r = await fetch(url, opts); let body=null,txt=''; try{ body=await r.json(); }catch(_){ try{ txt=await r.text(); }catch(__){ txt=''; } } if(!r.ok) throw new Error(body?.error||txt||'Request failed'); return body||{}; }
+    async function fetchJsonSafe(url, opts){ const r = await fetch(url, opts); let body=null,txt=''; try{ body=await r.json(); }catch(_){ try{ txt=await r.text(); }catch(__){ txt=''; } } if(!r.ok) throw new Error((body?.error||txt||'Request failed')+ (body?.where? ' @'+body.where : '')); return body||{}; }
     async function loadAccounts(){
       try{ const r = await fetch('/api/accounts'); const arr = await r.json(); user.innerHTML=''; (arr||[]).forEach(a=>{ const o=document.createElement('option'); o.value=a.username; o.textContent='@'+a.username; user.appendChild(o); }); }
       catch(_){ user.innerHTML='<option value="">(no accounts)</option>'; }
@@ -40,7 +40,8 @@
         const j = await fetchJsonSafe('/api/video/meme-single', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: u, allow_silent: silent.checked, debug:true }) });
         videoUrl = j.video?.videoUrl || j.video?.url; if(!videoUrl) throw new Error('no video url');
         holder.innerHTML = `<video controls style="max-width:100%;border-radius:8px"><source src="${videoUrl}" type="video/mp4"/></video>`;
-        setStatus('Preview ready', true);
+        const dbg = j.logs? ('steps: '+ j.logs.map(l=>l.step).join(' → ')) : '';
+        setStatus('Preview ready '+dbg, true);
       }catch(e){ setStatus('Error: '+e.message, false); }
     };
     postBtn.onclick = async ()=>{

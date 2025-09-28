@@ -213,6 +213,7 @@ export class VideoGenerator {
     const af = `afade=t=in:st=0:d=${fadeIn},afade=t=out:st=${fadeOutStart}:d=${fadeSec},atrim=0:${duration},asetpts=N/SR/TB`;
     const audioPart = haveAudio ? ` -i "${audPath}" -af "${af}"` : '';
     const cmd = `${base}${audioPart} -vf "${vf}" -r ${fps} -c:v libx264 -preset fast -crf 22 -pix_fmt yuv420p -t ${duration} "${outPath}"`;
+    this.lastCmd = cmd;
     this.logger.info('FFmpeg:', cmd);
     const { stderr } = await execAsync(cmd);
     if (stderr && !stderr.includes('frame=')) this.logger.warn(stderr);
