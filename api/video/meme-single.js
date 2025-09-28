@@ -9,12 +9,14 @@ export default async function handler(req,res){
     const { username, image_url=null, caption_override=null, audio_id=null, allow_silent=false, debug=false } = req.body||{};
     const logs = [];
     const log = (step, data) => { try{ logs.push({ step, data }); }catch(_){} };
+    res.setHeader('Cache-Control','no-store');
+    res.setHeader('Content-Type','application/json; charset=utf-8');
     if (!username) return res.status(400).json({ error:'username required' });
     const db = new SupabaseClient();
 
     // Load profile
     const { data: profile } = await db.client.from('account_profiles').select('*').eq('username', username).single();
-    if (!profile) return res.status(404).json({ error:'account profile not found', logs });
+    if (!profile) { log('profile_missing', { username }); return res.status(404).json({ error:'account profile not found', logs }); }
 
     // 1) Pick or validate image (anchor-driven selection)
     let imgUrl = image_url;
@@ -24,20 +26,20 @@ export default async function handler(req,res){
       const gen = new ContentGenerator();
       const post = await gen.generateSinglePost({ username }, profile, 1, { preview: true, runId: 'meme_'+Date.now() });
       const imgs = Array.isArray(post?.images) ? post.images : [];
-      if (!imgs.length) return res.status(400).json({ error:'no images available for meme', logs });
+      if (!imgs.length) { log('no_images', {}); return res.status(400).json({ error:'no images available for meme', logs }); }
       // random order then pick the first that passes vision gate
       for (const i of imgs.sort(()=> Math.random()-0.5)){
         const url = i.imagePath || i.image_path; if (!url) continue;
         const pass = await isFashionNoTextImage(url);
         if (pass){ imgUrl = url; aesthetic = i.aesthetic || null; break; }
       }
-      if (!imgUrl) return res.status(400).json({ error:'no suitable image passed vision gate', logs });
+      if (!imgUrl) { log('vision_gate_failed_all', {}); return res.status(400).json({ error:'no suitable image passed vision gate', logs }); }
     }
     if (!imgUrl) return res.status(400).json({ error:'image_url required', logs });
     // If user supplied an image_url, still gate it
     if (image_url){
       const ok = await isFashionNoTextImage(imgUrl);
-      if (!ok) return res.status(400).json({ error:'image rejected by vision gate (not clothing or has text)', logs });
+      if (!ok) { log('vision_gate_reject_supplied', { image_url }); return res.status(400).json({ error:'image rejected by vision gate (not clothing or has text)', logs }); }
     }
     log('image_selected', { imgUrl, aesthetic });
 

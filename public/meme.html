@@ -32,7 +32,20 @@
     let videoUrl = null;
     function setStatus(s, ok){ statusEl.textContent = s; statusEl.style.color = ok?'#2e7d32':'#b00020'; }
     function appendLog(step, data){ try{ const line = (typeof data==='string')? data : JSON.stringify(data); logbox.textContent += `\n${step}: ${line}`; logbox.scrollTop = logbox.scrollHeight; }catch(_){} }
-    async function fetchJsonSafe(url, opts){ const r = await fetch(url, opts); let body=null,txt=''; try{ body=await r.json(); }catch(_){ try{ txt=await r.text(); }catch(__){ txt=''; } } if(!r.ok){ console.error('RAW', txt||body); throw new Error((body?.error||txt||'Request failed')+ (body?.where? ' @'+body.where : '')); } return body||{}; }
+    async function fetchJsonSafe(url, opts){
+      const r = await fetch(url, opts);
+      let body=null, txt='';
+      try{ body = await r.clone().json(); }catch(_){ try{ txt = await r.clone().text(); }catch(__){ txt=''; } }
+      if(!r.ok){
+        const rid = r.headers.get('x-vercel-id') || r.headers.get('x-request-id') || '';
+        const statusLine = `HTTP ${r.status} ${r.statusText}`;
+        const snippet = (txt||'').slice(0,240).replace(/\s+/g,' ').trim();
+        const where = body?.where ? ` @${body.where}` : '';
+        console.error('RAW_RESPONSE', { status:r.status, statusText:r.statusText, headers:Object.fromEntries(r.headers.entries()), body, text:txt });
+        throw new Error(`${statusLine}${where}: ${(body?.error||body?.message||snippet||'Request failed')}${rid? ' #'+rid : ''}`);
+      }
+      return body||{};
+    }
     async function loadAccounts(){
       try{ const r = await fetch('/api/accounts'); const arr = await r.json(); user.innerHTML=''; (arr||[]).forEach(a=>{ const o=document.createElement('option'); o.value=a.username; o.textContent='@'+a.username; user.appendChild(o); }); }
       catch(_){ user.innerHTML='<option value="">(no accounts)</option>'; }
@@ -46,7 +59,7 @@
         holder.innerHTML = `<video controls style="max-width:100%;border-radius:8px"><source src="${videoUrl}" type="video/mp4"/></video>`;
         const dbg = j.logs? ('steps: '+ j.logs.map(l=>l.step).join(' → ')) : '';
         setStatus('Preview ready '+dbg, true);
-      }catch(e){ appendLog('error', e.message); setStatus('Error: '+e.message, false); }
+      }catch(e){ appendLog('error', e.message); setStatus((''+e.message).startsWith('HTTP')? e.message : ('Error: '+e.message), false); }
     };
     postBtn.onclick = async ()=>{
       try{ if(!videoUrl) return setStatus('Generate preview first', false); const u = user.value.replace('@','').trim(); if(!u) return setStatus('Select @username', false);
