@@ -97,6 +97,22 @@
           </div>
         </div>
       </div>
+
+      <!-- Meme Video modal -->
+      <div id="memeModal" class="modal-overlay">
+        <div class="modal">
+          <header><h3>Meme Video</h3><button id="memeClose" class="btn btn-outline">Close</button></header>
+          <div class="body">
+            <div id="memePreviewHolder" style="width:100%;display:flex;justify-content:center;align-items:center;min-height:320px;background:#111;border-radius:8px"></div>
+            <textarea id="memeCaption" placeholder="Caption (optional override)" style="width:100%;height:80px;margin-top:8px"></textarea>
+            <label class="muted" style="display:block;margin-top:6px"><input type="checkbox" id="memeSilent2"/> Silent (no audio)</label>
+          </div>
+          <div class="footer">
+            <button id="btnMemeGen" class="btn btn-outline">Generate Preview</button>
+            <button id="btnMemePost" class="btn btn-primary">Post to Instagram</button>
+          </div>
+        </div>
+      </div>
   <div id="inspoModal" class="modal-overlay">
     <div class="modal">
       <header><h3>Select Inspo Accounts</h3><button id="inspoClose" class="btn btn-outline">Close</button></header>
@@ -197,6 +213,7 @@
           '<td><input type="checkbox" '+(cs.autogenEnabled?'checked':'')+' data-u="'+a.username+'" class="toggle"/></td>'+
           '<td>'+
             '<button class="icon-btn preview-btn" title="Preview" data-prev="'+a.username+'">👁</button> '+
+            '<button class="icon-btn meme-btn" title="Meme Video" data-meme="'+a.username+'">🎬</button> '+
             '<button class="icon-btn gen" title="Generate" data-u="'+a.username+'">⚡</button> '+
             '<button class="icon-btn edit" title="Edit" data-u="'+a.username+'">✏️</button> '+
             '<button class="icon-btn inspo-edit" title="Inspo" data-u="'+a.username+'">✨</button> '+
@@ -220,6 +237,12 @@
         btn.onclick = async () => {
           const u = btn.dataset.prev;
           await openPostModal(u);
+        };
+      });
+      document.querySelectorAll('button.meme-btn').forEach(btn => {
+        btn.onclick = async () => {
+          const u = btn.dataset.meme;
+          await openMemeModal(u);
         };
       });
       document.querySelectorAll('button.gen').forEach(btn => {
@@ -368,6 +391,44 @@
       await rerollOnce();
       postModal.classList.add('open');
     }
+    // --- Meme modal logic ---
+    const memeModal = document.getElementById('memeModal');
+    const memeClose = document.getElementById('memeClose');
+    const memeHolder = document.getElementById('memePreviewHolder');
+    const memeCaption = document.getElementById('memeCaption');
+    const btnMemeGen = document.getElementById('btnMemeGen');
+    const btnMemePost = document.getElementById('btnMemePost');
+    let memeUser = null; let memeVideoUrl = null; let memeImage = null;
+    async function openMemeModal(username){
+      memeUser = (username||'').replace('@',''); memeVideoUrl=null; memeImage=null;
+      memeHolder.innerHTML = '<div class="muted">Pick an image by opening the preview first, then click Meme Video. Using the first preview image by default.</div>';
+      memeCaption.value='';
+      // Prefer currently previewed image; otherwise fetch preview once
+      if (!currentImages.length){ await rerollOnce().catch(()=>{}); }
+      memeImage = currentImages[0] || null;
+      memeModal.classList.add('open');
+    }
+    memeClose.onclick = ()=> memeModal.classList.remove('open');
+    btnMemeGen.onclick = async () => {
+      try{
+        if (!memeUser) return setStatus('Pick account first', 'err');
+        const silent = document.getElementById('memeSilent2')?.checked;
+        const r = await fetch('/api/video/meme-single', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: memeUser, image_url: memeImage, allow_silent: !!silent, caption_override: memeCaption.value || undefined }) });
+        const j = await r.json(); if (!r.ok || j.success!==true) throw new Error(j.error||'meme gen failed');
+        memeVideoUrl = j.video?.videoUrl || j.video?.url;
+        memeHolder.innerHTML = `<video controls style="max-width:100%;border-radius:8px"><source src="${memeVideoUrl}" type="video/mp4"/></video>`;
+        setStatus('Meme preview ready', 'ok');
+      }catch(e){ setStatus('Meme generate failed: '+e.message, 'err'); }
+    };
+    btnMemePost.onclick = async () => {
+      try{
+        if (!memeUser) return setStatus('Pick account first', 'err');
+        if (!memeVideoUrl) return setStatus('Generate the meme first', 'err');
+        const res = await fetch('/api/instagram/post-now', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: memeUser, images: [memeVideoUrl], caption: memeCaption.value }) });
+        const out = await res.json(); if (!res.ok || out.success!==true) throw new Error(out.error||'post failed');
+        setStatus('Meme posted to Instagram', 'ok'); memeModal.classList.remove('open');
+      }catch(e){ setStatus('Post failed: '+e.message, 'err'); }
+    };
     async function rerollOnce(){
       if (!currentUserForPost) return;
       const runId = 'ui_' + Date.now();
