@@ -24,6 +24,19 @@ export async function generateMemeCopy({ username, profile, aesthetic, useCalend
   const useCalendar = (events.length>0) && (Math.random() < useCalendarChance);
   const hook = useCalendar ? (events[0]) : null;
   const nowIso = new Date().toISOString();
+  // Fallback copy builder (no network or parsing issues)
+  function fallbackCopy(){
+    const theme = (aesthetic||'').toLowerCase();
+    const seasonal = season === 'fall' ? 'fall fits' : season === 'winter' ? 'winter looks' : season === 'spring' ? 'spring outfits' : 'summer outfits';
+    const h = hook || '';
+    let text = theme ? `${seasonal} in ${theme}` : seasonal;
+    if (audienceKind==='teen' && (hook==='back_to_school')) text = 'back to school fits';
+    if (hook==='holiday') text = 'holiday wishlist vibes';
+    if (hook==='new_year_coming') text = 'new year, new fits';
+    return { text: text.slice(0,60), calendar_used: Boolean(hook) };
+  }
+
+  if (!process.env.OPENAI_API_KEY) return fallbackCopy();
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const prompt = `You write short meme headers for vertical fashion videos.
 Constraints:
@@ -33,12 +46,24 @@ Constraints:
 - Now: ${nowIso} | Season: ${season} | Event: ${hook||'none'}
 Write something relatable for this account. If Event is 'none', ignore calendar. If not, weave it lightly.
 Return JSON: {"text":"...","calendar_used":${useCalendar}}`;
-  const r = await openai.chat.completions.create({
-    model:'gpt-4o-mini', messages:[{role:'user', content:prompt}], response_format:{type:'json_object'}, max_tokens:80, temperature:0.6
-  });
-  const out = JSON.parse(r.choices?.[0]?.message?.content || '{}');
-  if (!out.text || out.text.length>60) throw new Error('meme copy invalid');
-  return out;
+  try {
+    const r = await openai.chat.completions.create({
+      model:'gpt-4o-mini', messages:[{role:'user', content:prompt}], response_format:{type:'json_object'}, max_tokens:80, temperature:0.6
+    });
+    let txt = r.choices?.[0]?.message?.content || '';
+    let out;
+    try { out = JSON.parse(txt); }
+    catch(_){
+      // try strip code fences
+      txt = txt.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
+      try { out = JSON.parse(txt); } catch(e2){ out = null; }
+    }
+    if (!out || !out.text) return fallbackCopy();
+    if (out.text.length > 60) out.text = out.text.slice(0,60);
+    return out;
+  } catch(_) {
+    return fallbackCopy();
+  }
 }
 
 
