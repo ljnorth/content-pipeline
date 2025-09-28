@@ -93,7 +93,7 @@ export default async function handler(req,res){
     });
 
     return res.status(200).json({ success: true, video: { ...out, videoUrl }, caption: copy, ...(debug? { logs } : {}) });
-  }catch(e){ return res.status(500).json({ error: e.message, where: 'meme-single', hint: 'enable debug=true for logs', stack: e?.stack }); }
+  }catch(e){ return res.status(500).json({ error: e.message, where: 'meme-single', hint: 'enable debug=true for logs', stack: e?.stack, logs: (typeof logs!== 'undefined'? logs: undefined) }); }
 }
 
 
