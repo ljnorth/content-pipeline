@@ -4,6 +4,7 @@ import path from 'path';
 import os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import ffmpegStatic from 'ffmpeg-static';
 
 const execAsync = promisify(exec);
 
@@ -13,6 +14,7 @@ export class VideoGenerator {
     const root = process.env.TEMP_DIR || os.tmpdir() || 'tmp';
     this.tempDir = path.resolve(root, 'content-pipeline');
     try { fs.ensureDirSync(this.tempDir); } catch(_) { /* ignore */ }
+    this.ffmpegBin = process.env.FFMPEG_PATH || ffmpegStatic || 'ffmpeg';
   }
 
   /**
@@ -156,7 +158,7 @@ export class VideoGenerator {
     fs.writeFileSync(inputListPath, inputList);
     
     // Base FFmpeg command with absolute paths
-    let command = `ffmpeg -y -f concat -safe 0 -i "${inputListPath}"`;
+    let command = `${this.ffmpegBin} -y -f concat -safe 0 -i "${inputListPath}"`;
     
     // Add video filters
     const filters = [
@@ -207,7 +209,7 @@ export class VideoGenerator {
       wmEsc?`drawtext=fontfile='${path.resolve(fontFile)}':text='${wmEsc}':x=w-text_w-40:y=h-text_h-40:fontsize=30:fontcolor=white:shadowx=2:shadowy=2`:null
     ].filter(Boolean).join(',');
 
-    const base = `ffmpeg -y -loop 1 -t ${duration} -i "${imgPath}"`;
+    const base = `${this.ffmpegBin} -y -loop 1 -t ${duration} -i "${imgPath}"`;
     const af = `afade=t=in:st=0:d=${fadeIn},afade=t=out:st=${fadeOutStart}:d=${fadeSec},atrim=0:${duration},asetpts=N/SR/TB`;
     const audioPart = haveAudio ? ` -i "${audPath}" -af "${af}"` : '';
     const cmd = `${base}${audioPart} -vf "${vf}" -r ${fps} -c:v libx264 -preset fast -crf 22 -pix_fmt yuv420p -t ${duration} "${outPath}"`;
