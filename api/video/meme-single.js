@@ -72,7 +72,7 @@ export default async function handler(req,res){
       fontFile: process.env.MEME_FONT_FILE || 'public/assets/Inter-Bold.ttf',
       watermark: username.startsWith('@') ? username : '@'+username
     });
-    log('render', { size: out?.size || null, filename: out?.filename, cmd: vg.lastCmd || null });
+    log('render', { size: out?.size || null, filename: out?.filename, cmd: vg.lastCmd || null, ffmpeg_stderr: vg.lastStderr || null });
 
     // Upload buffer to Storage if needed for a public URL
     let videoUrl = out.videoUrl || out.url || null;

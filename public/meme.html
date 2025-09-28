@@ -18,6 +18,7 @@
         <div id="status" class="muted"></div>
       </div>
       <div id="holder" style="width:100%;display:flex;justify-content:center;align-items:center;min-height:360px;background:#111;border-radius:8px;margin-top:8px"></div>
+      <details style="margin-top:8px"><summary>Debug logs</summary><pre id="logbox" style="max-height:220px;overflow:auto;background:#0b0b0b;color:#ddd;padding:8px;border-radius:6px"></pre></details>
     </div>
   </main>
   <script type="module">
@@ -27,8 +28,10 @@
     const silent = document.getElementById('silent');
     const genBtn = document.getElementById('gen');
     const postBtn = document.getElementById('post');
+    const logbox = document.getElementById('logbox');
     let videoUrl = null;
     function setStatus(s, ok){ statusEl.textContent = s; statusEl.style.color = ok?'#2e7d32':'#b00020'; }
+    function appendLog(step, data){ try{ const line = (typeof data==='string')? data : JSON.stringify(data); logbox.textContent += `\n${step}: ${line}`; logbox.scrollTop = logbox.scrollHeight; }catch(_){} }
     async function fetchJsonSafe(url, opts){ const r = await fetch(url, opts); let body=null,txt=''; try{ body=await r.json(); }catch(_){ try{ txt=await r.text(); }catch(__){ txt=''; } } if(!r.ok){ console.error('RAW', txt||body); throw new Error((body?.error||txt||'Request failed')+ (body?.where? ' @'+body.where : '')); } return body||{}; }
     async function loadAccounts(){
       try{ const r = await fetch('/api/accounts'); const arr = await r.json(); user.innerHTML=''; (arr||[]).forEach(a=>{ const o=document.createElement('option'); o.value=a.username; o.textContent='@'+a.username; user.appendChild(o); }); }
@@ -36,14 +39,14 @@
     }
     await loadAccounts();
     genBtn.onclick = async ()=>{
-      try{ setStatus('Generating…'); holder.innerHTML=''; videoUrl=null; const u = user.value.replace('@','').trim(); if(!u) return setStatus('Select @username', false);
+      try{ setStatus('Generating…'); holder.innerHTML=''; videoUrl=null; logbox.textContent=''; const u = user.value.replace('@','').trim(); if(!u) return setStatus('Select @username', false);
         const j = await fetchJsonSafe('/api/video/meme-single', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: u, allow_silent: silent.checked, debug:true }) });
-        if (Array.isArray(j.logs)) console.log('meme logs', j.logs);
+        if (Array.isArray(j.logs)) { j.logs.forEach(l=> appendLog(l.step, l.data)); }
         videoUrl = j.video?.videoUrl || j.video?.url; if(!videoUrl) throw new Error('no video url');
         holder.innerHTML = `<video controls style="max-width:100%;border-radius:8px"><source src="${videoUrl}" type="video/mp4"/></video>`;
         const dbg = j.logs? ('steps: '+ j.logs.map(l=>l.step).join(' → ')) : '';
         setStatus('Preview ready '+dbg, true);
-      }catch(e){ setStatus('Error: '+e.message, false); }
+      }catch(e){ appendLog('error', e.message); setStatus('Error: '+e.message, false); }
     };
     postBtn.onclick = async ()=>{
       try{ if(!videoUrl) return setStatus('Generate preview first', false); const u = user.value.replace('@','').trim(); if(!u) return setStatus('Select @username', false);

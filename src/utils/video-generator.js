@@ -15,6 +15,9 @@ export class VideoGenerator {
     this.tempDir = path.resolve(root, 'content-pipeline');
     try { fs.ensureDirSync(this.tempDir); } catch(_) { /* ignore */ }
     this.ffmpegBin = process.env.FFMPEG_PATH || ffmpegStatic || 'ffmpeg';
+    this.lastCmd = null;
+    this.lastStdout = null;
+    this.lastStderr = null;
   }
 
   /**
@@ -215,8 +218,16 @@ export class VideoGenerator {
     const cmd = `${base}${audioPart} -vf "${vf}" -r ${fps} -c:v libx264 -preset fast -crf 22 -pix_fmt yuv420p -t ${duration} "${outPath}"`;
     this.lastCmd = cmd;
     this.logger.info('FFmpeg:', cmd);
-    const { stderr } = await execAsync(cmd);
-    if (stderr && !stderr.includes('frame=')) this.logger.warn(stderr);
+    try {
+      const { stdout, stderr } = await execAsync(cmd);
+      this.lastStdout = stdout || '';
+      this.lastStderr = stderr || '';
+      if (stderr && !stderr.includes('frame=')) this.logger.warn(stderr);
+    } catch (e) {
+      this.lastStdout = e?.stdout || '';
+      this.lastStderr = e?.stderr || '';
+      throw new Error(`ffmpeg failed: ${e?.message || 'unknown error'}`);
+    }
     if (!await fs.pathExists(outPath)) throw new Error('ffmpeg failed to create output');
     const buf = await fs.readFile(outPath);
     return { buffer: buf, size: buf.length, filename: `meme_${Date.now()}.mp4`, duration, dimensions: { width, height }, videoUrl: null };
