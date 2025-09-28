@@ -6,7 +6,7 @@ import { isFashionNoTextImage } from '../../src/utils/vision.js';
 export default async function handler(req,res){
   try{
     if (req.method !== 'POST') { res.setHeader('Allow',['POST']); return res.status(405).json({ error:'Method not allowed' }); }
-    const { username, image_url=null, caption_override=null, audio_id=null } = req.body||{};
+    const { username, image_url=null, caption_override=null, audio_id=null, allow_silent=false } = req.body||{};
     if (!username) return res.status(400).json({ error:'username required' });
     const db = new SupabaseClient();
 
@@ -43,8 +43,7 @@ export default async function handler(req,res){
       const pref = ['both', g];
       const { data } = await db.client.from('meme_audio').select('*').in('gender', pref).limit(1000);
       const pool = (data||[]).filter(x => (x.duration_sec||8) >= 8);
-      if (!pool.length) return res.status(400).json({ error:'no meme audio available' });
-      audio = pool[Math.floor(Math.random()*pool.length)];
+      if (pool.length) audio = pool[Math.floor(Math.random()*pool.length)];
     }
 
     // 4) Compose video
@@ -52,7 +51,8 @@ export default async function handler(req,res){
     const out = await vg.createMemeClipSingleImage({
       imageUrl: imgUrl,
       caption: copy,
-      audioUrl: audio.url,
+      audioUrl: audio?.url || null,
+      allowSilent: Boolean(allow_silent),
       width: 1080, height: 1920, fps: 30,
       duration: 8, fadeSec: 2,
       fontFile: process.env.MEME_FONT_FILE || 'public/assets/Inter-Bold.ttf',
