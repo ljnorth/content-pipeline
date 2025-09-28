@@ -1,6 +1,7 @@
 import { Logger } from './logger.js';
 import fs from 'fs-extra';
 import path from 'path';
+import os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
@@ -9,7 +10,9 @@ const execAsync = promisify(exec);
 export class VideoGenerator {
   constructor() {
     this.logger = new Logger();
-    this.tempDir = process.env.TEMP_DIR || 'temp';
+    const root = process.env.TEMP_DIR || os.tmpdir() || 'tmp';
+    this.tempDir = path.resolve(root, 'content-pipeline');
+    try { fs.ensureDirSync(this.tempDir); } catch(_) { /* ignore */ }
   }
 
   /**
