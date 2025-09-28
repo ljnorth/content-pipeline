@@ -11,7 +11,7 @@
   <main class="section">
     <div class="card white">
       <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">
-        <input id="user" placeholder="@username" style="min-width:220px"/>
+        <select id="user" style="min-width:240px"></select>
         <label class="muted"><input type="checkbox" id="silent"/> Silent</label>
         <button id="gen" class="btn btn-primary">Generate Preview</button>
         <button id="post" class="btn btn-outline">Post to Instagram</button>
@@ -30,8 +30,13 @@
     let videoUrl = null;
     function setStatus(s, ok){ statusEl.textContent = s; statusEl.style.color = ok?'#2e7d32':'#b00020'; }
     async function fetchJsonSafe(url, opts){ const r = await fetch(url, opts); let body=null,txt=''; try{ body=await r.json(); }catch(_){ try{ txt=await r.text(); }catch(__){ txt=''; } } if(!r.ok) throw new Error(body?.error||txt||'Request failed'); return body||{}; }
+    async function loadAccounts(){
+      try{ const r = await fetch('/api/accounts'); const arr = await r.json(); user.innerHTML=''; (arr||[]).forEach(a=>{ const o=document.createElement('option'); o.value=a.username; o.textContent='@'+a.username; user.appendChild(o); }); }
+      catch(_){ user.innerHTML='<option value="">(no accounts)</option>'; }
+    }
+    await loadAccounts();
     genBtn.onclick = async ()=>{
-      try{ setStatus('Generating…'); holder.innerHTML=''; videoUrl=null; const u = user.value.replace('@','').trim(); if(!u) return setStatus('Enter @username', false);
+      try{ setStatus('Generating…'); holder.innerHTML=''; videoUrl=null; const u = user.value.replace('@','').trim(); if(!u) return setStatus('Select @username', false);
         const j = await fetchJsonSafe('/api/video/meme-single', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: u, allow_silent: silent.checked, debug:true }) });
         videoUrl = j.video?.videoUrl || j.video?.url; if(!videoUrl) throw new Error('no video url');
         holder.innerHTML = `<video controls style="max-width:100%;border-radius:8px"><source src="${videoUrl}" type="video/mp4"/></video>`;
@@ -39,7 +44,7 @@
       }catch(e){ setStatus('Error: '+e.message, false); }
     };
     postBtn.onclick = async ()=>{
-      try{ if(!videoUrl) return setStatus('Generate preview first', false); const u = user.value.replace('@','').trim(); if(!u) return setStatus('Enter @username', false);
+      try{ if(!videoUrl) return setStatus('Generate preview first', false); const u = user.value.replace('@','').trim(); if(!u) return setStatus('Select @username', false);
         const out = await fetchJsonSafe('/api/instagram/post-now', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: u, images:[videoUrl], caption:'' }) });
         setStatus('Posted', true);
       }catch(e){ setStatus('Post failed: '+e.message, false); }
