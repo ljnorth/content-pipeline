@@ -87,8 +87,9 @@
         <div class="modal">
           <header><h3>Preview & Post to Instagram</h3><button id="postClose" class="btn btn-outline">Close</button></header>
           <div class="body">
-            <div id="postPreviewGrid" class="grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); grid-auto-rows:120px; gap:8px"></div>
+      <div id="postPreviewGrid" class="grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); grid-auto-rows:120px; gap:8px"></div>
             <textarea id="postCaption" placeholder="Caption" style="width:100%;height:80px;margin-top:8px"></textarea>
+            <label class="muted" style="display:block;margin-top:6px"><input type="checkbox" id="memeSilent"/> Silent (no audio)</label>
           </div>
           <div class="footer">
             <button id="btnReroll" class="btn btn-outline">Reroll</button>
@@ -390,7 +391,12 @@
       try{
         if (!currentUserForPost) return;
         if (!currentImages.length) throw new Error('No images to post');
-        const res = await fetch('/api/instagram/post-now', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: currentUserForPost, images: currentImages, caption: postCaption.value }) });
+        const silent = document.getElementById('memeSilent')?.checked;
+        // generate meme video first (single image clip), then optionally post
+        const r1 = await fetch('/api/video/meme-single', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: currentUserForPost, image_url: currentImages[0], allow_silent: !!silent }) });
+        const j1 = await r1.json(); if (!r1.ok || j1.success!==true) throw new Error(j1.error || 'meme gen failed');
+        const videoUrl = j1.video?.videoUrl || j1.video?.url;
+        const res = await fetch('/api/instagram/post-now', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: currentUserForPost, images: [videoUrl], caption: postCaption.value }) });
         const out = await res.json();
         if (!res.ok || out.success !== true) throw new Error(out.error || 'Post failed');
         setStatus('Posted to Instagram (via Post for Me).', 'ok');

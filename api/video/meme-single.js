@@ -59,13 +59,24 @@ export default async function handler(req,res){
       watermark: username.startsWith('@') ? username : '@'+username
     });
 
+    // Upload buffer to Storage if needed for a public URL
+    let videoUrl = out.videoUrl || out.url || null;
+    try {
+      if (!videoUrl && out.buffer) {
+        const { SupabaseStorage } = await import('../../src/utils/supabase-storage.js');
+        const store = new SupabaseStorage();
+        const up = await store.uploadBuffer(out.buffer, String(username).replace('@',''), 'videos/meme', out.filename || `meme_${Date.now()}.mp4`, 'character-outputs', 'video/mp4');
+        videoUrl = up.publicUrl;
+      }
+    } catch(_) {}
+
     // 5) Save record
     await db.client.from('generated_videos').insert({
-      username, kind: 'meme_single', image_id: null, audio_id: audio.id, template_id: null,
-      video_url: out.videoUrl || out.url || null, duration_sec: 8, copy_text: copy
+      username, kind: 'meme_single', image_id: null, audio_id: audio?.id || null, template_id: null,
+      video_url: videoUrl, duration_sec: 8, copy_text: copy
     });
 
-    return res.status(200).json({ success: true, video: out, caption: copy });
+    return res.status(200).json({ success: true, video: { ...out, videoUrl }, caption: copy });
   }catch(e){ return res.status(500).json({ error: e.message }); }
 }
 
