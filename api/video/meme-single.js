@@ -21,14 +21,22 @@ export default async function handler(req,res){
       const { ContentGenerator } = await import('../../src/automation/content-generator.js');
       const gen = new ContentGenerator();
       const post = await gen.generateSinglePost({ username }, profile, 1, { preview: true, runId: 'meme_'+Date.now() });
-      const picked = (post.images||[])[0];
-      if (!picked) return res.status(400).json({ error:'no image selected' });
-      imgUrl = picked.imagePath || picked.image_path;
-      aesthetic = picked.aesthetic || null;
+      const imgs = Array.isArray(post?.images) ? post.images : [];
+      if (!imgs.length) return res.status(400).json({ error:'no images available for meme' });
+      // random order then pick the first that passes vision gate
+      for (const i of imgs.sort(()=> Math.random()-0.5)){
+        const url = i.imagePath || i.image_path; if (!url) continue;
+        const pass = await isFashionNoTextImage(url);
+        if (pass){ imgUrl = url; aesthetic = i.aesthetic || null; break; }
+      }
+      if (!imgUrl) return res.status(400).json({ error:'no suitable image passed vision gate' });
     }
     if (!imgUrl) return res.status(400).json({ error:'image_url required' });
-    const ok = await isFashionNoTextImage(imgUrl);
-    if (!ok) return res.status(400).json({ error:'image rejected by vision gate (not clothing or has text)' });
+    // If user supplied an image_url, still gate it
+    if (image_url){
+      const ok = await isFashionNoTextImage(imgUrl);
+      if (!ok) return res.status(400).json({ error:'image rejected by vision gate (not clothing or has text)' });
+    }
 
     // 2) Generate meme copy
     const copy = caption_override || (await generateMemeCopy({ username, profile, aesthetic })).text;
