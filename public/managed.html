@@ -415,12 +415,20 @@
       }catch(e){ memeHolder.innerHTML = '<div class="muted">Failed: '+e.message+'</div>'; setStatus('Meme generate failed: '+e.message, 'err'); }
     }
     memeClose.onclick = ()=> memeModal.classList.remove('open');
+    async function fetchJsonSafe(url, opts){
+      const r = await fetch(url, opts);
+      let body = null; let text = '';
+      try { body = await r.json(); }
+      catch(_){ try { text = await r.text(); } catch(__) { text=''; } }
+      if (!r.ok) throw new Error(body?.error || text || 'Request failed');
+      return body ?? {};
+    }
+
     btnMemeGen.onclick = async () => {
       try{
         if (!memeUser) return setStatus('Pick account first', 'err');
         const silent = document.getElementById('memeSilent2')?.checked;
-        const r = await fetch('/api/video/meme-single', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: memeUser, image_url: memeImage, allow_silent: !!silent, caption_override: memeCaption.value || undefined }) });
-        const j = await r.json(); if (!r.ok || j.success!==true) throw new Error(j.error||'meme gen failed');
+        const j = await fetchJsonSafe('/api/video/meme-single', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: memeUser, image_url: memeImage, allow_silent: !!silent, caption_override: memeCaption.value || undefined }) });
         memeVideoUrl = j.video?.videoUrl || j.video?.url;
         memeHolder.innerHTML = `<video controls style="max-width:100%;border-radius:8px"><source src="${memeVideoUrl}" type="video/mp4"/></video>`;
         setStatus('Meme preview ready', 'ok');
@@ -430,8 +438,7 @@
       try{
         if (!memeUser) return setStatus('Pick account first', 'err');
         if (!memeVideoUrl) return setStatus('Generate the meme first', 'err');
-        const res = await fetch('/api/instagram/post-now', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: memeUser, images: [memeVideoUrl], caption: memeCaption.value }) });
-        const out = await res.json(); if (!res.ok || out.success!==true) throw new Error(out.error||'post failed');
+        const out = await fetchJsonSafe('/api/instagram/post-now', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: memeUser, images: [memeVideoUrl], caption: memeCaption.value }) });
         setStatus('Meme posted to Instagram', 'ok'); memeModal.classList.remove('open');
       }catch(e){ setStatus('Post failed: '+e.message, 'err'); }
     };

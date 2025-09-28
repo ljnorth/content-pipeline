@@ -39,7 +39,9 @@ export default async function handler(req,res){
     }
 
     // 2) Generate meme copy
-    const copy = caption_override || (await generateMemeCopy({ username, profile, aesthetic })).text;
+    let copy;
+    try { copy = caption_override || (await generateMemeCopy({ username, profile, aesthetic })).text; }
+    catch(_) { copy = caption_override || 'fall outfit inspo'; }
 
     // 3) Pick audio
     let audio = null;
