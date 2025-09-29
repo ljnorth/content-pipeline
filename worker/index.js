@@ -324,15 +324,15 @@ async function processJob(job) {
       await setJob(job_id, { status:'running', step:'meme_single', started_at: new Date().toISOString() });
       const uname = normalizeUsername(job.username);
       // Strict path: always generate a preview post using existing generator infra
-      const prof = await getProfile(uname, job_id);
       const { ContentGenerator } = await import('../src/automation/content-generator.js');
       const gen = new ContentGenerator();
-      const post = await gen.generateSinglePost({ username: uname }, prof, 1, { preview: true, runId: 'meme_'+Date.now() });
+      const strategy = await gen.getAccountStrategy(uname);
+      const post = await gen.generateSinglePost({ username: uname }, strategy, 1, { preview: true, runId: 'meme_'+Date.now() });
       const imgs = Array.isArray(post?.images) ? post.images : [];
       let candidates = imgs.map(i => ({ url: i.imagePath || i.image_path, aesthetic: i.aesthetic || null }))
                         .filter(c => !!c.url)
                         .sort(()=> Math.random()-0.5);
-      await log(job_id, 'info', 'meme_candidates_generated', { count: candidates.length });
+      await log(job_id, 'info', 'meme_candidates_generated', { count: candidates.length, anchorErr: post?.anchorDebug?.error || null });
       if (!candidates.length) throw new Error('no images available for meme');
       let imgUrl = null; let aesthetic = null; let checks = 0;
       for (const c of candidates){
