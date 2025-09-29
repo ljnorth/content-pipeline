@@ -11,6 +11,9 @@ import { GeminiClient } from '../src/integrations/gemini.js';
 import { HiggsfieldClient } from '../src/integrations/higgsfield.js';
 import { ReplicateClient } from '../src/integrations/replicate.js';
 import { SupabaseStorage } from '../src/utils/supabase-storage.js';
+import { VideoGenerator } from '../src/utils/video-generator.js';
+import { isFashionNoTextImage } from '../src/utils/vision.js';
+import { generateMemeCopy } from '../src/automation/meme.js';
 
 dotenv.config();
 
@@ -314,6 +317,75 @@ async function processJob(job) {
       if (v) await addAsset(job_id, 'video', v);
       await setJob(job_id, { status:'completed', step:'done', finished_at: new Date().toISOString() });
       await log(job_id, 'info', 'video', { url: v||null });
+      return;
+    }
+
+    if (action === 'meme_single'){
+      await setJob(job_id, { status:'running', step:'meme_single', started_at: new Date().toISOString() });
+      const uname = normalizeUsername(job.username);
+      // pick recent images for the account
+      const { data: recents, error: recErr } = await supabase
+        .from('images')
+        .select('image_path,imagePath,aesthetic,created_at')
+        .eq('username', uname)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (recErr) throw new Error('failed to fetch candidate images: '+recErr.message);
+      const candidates = (recents||[])
+        .map(i => ({ url: i.image_path || i.imagePath, aesthetic: i.aesthetic || null }))
+        .filter(c => !!c.url)
+        .sort(()=> Math.random()-0.5);
+      await log(job_id, 'info', 'meme_candidates', { count: candidates.length });
+      if (!candidates.length) throw new Error('no images available for meme');
+      let imgUrl = null; let aesthetic = null; let checks = 0;
+      for (const c of candidates){
+        if (checks >= 8) break;
+        checks += 1;
+        const pass = await isFashionNoTextImage(c.url);
+        await log(job_id, 'info', 'vision_check', { url: c.url, pass });
+        if (pass){ imgUrl = c.url; aesthetic = c.aesthetic || null; break; }
+      }
+      if (!imgUrl) throw new Error('no suitable image passed vision gate');
+
+      // caption
+      let copy = 'fall outfit inspo';
+      try { copy = (await generateMemeCopy({ username: uname, profile: {}, aesthetic })).text || copy; } catch(_){ }
+      await log(job_id, 'info', 'meme_copy', { copy });
+
+      // audio
+      let audioUrl = null; let audioId = null;
+      try {
+        const { data: prof } = await supabase.from('account_profiles').select('target_audience').eq('username', uname).single();
+        const g = (['male','female'].includes(prof?.target_audience?.gender)) ? prof.target_audience.gender : 'both';
+        const pref = ['both', g];
+        const { data } = await supabase.from('meme_audio').select('*').in('gender', pref).limit(1000);
+        const pool = (data||[]).filter(x => (x.duration_sec||8) >= 8);
+        if (pool.length){ const pick = pool[Math.floor(Math.random()*pool.length)]; audioUrl = pick.url; audioId = pick.id; }
+      } catch(_){ }
+      await log(job_id, 'info', 'meme_audio', { audioUrl: !!audioUrl, audioId });
+
+      const vg = new VideoGenerator();
+      const out = await vg.createMemeClipSingleImage({
+        imageUrl: imgUrl,
+        caption: copy,
+        audioUrl: audioUrl || null,
+        allowSilent: Boolean(job.payload?.allow_silent),
+        width: 1080, height: 1920, fps: 30,
+        duration: 8, fadeSec: 2,
+        fontFile: process.env.MEME_FONT_FILE || 'public/assets/Inter-Bold.ttf',
+        watermark: '@'+uname
+      });
+      await log(job_id, 'info', 'meme_render', { cmd: vg.lastCmd || null, stderr: vg.lastStderr || null, size: out?.size || null });
+
+      let videoUrl = null;
+      if (out?.buffer) {
+        const up = await storage.uploadBuffer(out.buffer, uname, 'videos/meme', out.filename || `meme_${Date.now()}.mp4`, storage.outputsBucket, 'video/mp4');
+        videoUrl = up.publicUrl;
+      }
+      if (!videoUrl) throw new Error('failed to upload meme video');
+      await addAsset(job_id, 'video', videoUrl);
+      await setJob(job_id, { status:'completed', step:'done', finished_at: new Date().toISOString() });
+      await log(job_id, 'info', 'meme_single_done', { url: videoUrl });
       return;
     }
 
