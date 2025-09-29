@@ -52,13 +52,13 @@ export default async function handler(req,res){
     if (!imgUrl){
       const { data: recents, error: recErr } = await db.client
         .from('images')
-        .select('image_path,imagePath,aesthetic,created_at')
+        .select('image_path,aesthetic,created_at')
         .eq('username', username)
         .order('created_at', { ascending: false })
         .limit(50);
       if (recErr) { log('images_fetch_error', { message: recErr.message }); return res.status(500).json({ error:'failed to fetch candidate images', logs }); }
       const candidates = (recents||[])
-        .map(i => ({ url: i.image_path || i.imagePath, aesthetic: i.aesthetic || null }))
+        .map(i => ({ url: i.image_path, aesthetic: i.aesthetic || null }))
         .filter(c => !!c.url)
         .sort(()=> Math.random()-0.5);
       log('image_candidates', { count: candidates.length });

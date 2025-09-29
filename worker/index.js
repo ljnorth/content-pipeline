@@ -326,13 +326,13 @@ async function processJob(job) {
       // pick recent images for the account
       const { data: recents, error: recErr } = await supabase
         .from('images')
-        .select('image_path,imagePath,aesthetic,created_at')
+        .select('image_path,aesthetic,created_at')
         .eq('username', uname)
         .order('created_at', { ascending: false })
         .limit(50);
       if (recErr) throw new Error('failed to fetch candidate images: '+recErr.message);
       const candidates = (recents||[])
-        .map(i => ({ url: i.image_path || i.imagePath, aesthetic: i.aesthetic || null }))
+        .map(i => ({ url: i.image_path, aesthetic: i.aesthetic || null }))
         .filter(c => !!c.url)
         .sort(()=> Math.random()-0.5);
       await log(job_id, 'info', 'meme_candidates', { count: candidates.length });
