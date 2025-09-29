@@ -375,7 +375,9 @@ async function processJob(job) {
       await log(job_id, 'info', 'meme_audio', { audioUrl: !!audioUrl, audioId, allowSilent: willSilent });
 
       const vg = new VideoGenerator();
-      const out = await vg.createMemeClipSingleImage({
+      let out;
+      try {
+        out = await vg.createMemeClipSingleImage({
         imageUrl: imgUrl,
         caption: copy,
         audioUrl: audioUrl || null,
@@ -384,7 +386,11 @@ async function processJob(job) {
         duration: 8, fadeSec: 2,
         fontFile: process.env.MEME_FONT_FILE || 'public/assets/Inter-Bold.ttf',
         watermark: '@'+uname
-      });
+        });
+      } catch (renderErr) {
+        await log(job_id, 'error', 'meme_render_failed', { error: renderErr?.message || String(renderErr), cmd: vg.lastCmd || null, stderr: vg.lastStderr || null });
+        throw renderErr;
+      }
       await log(job_id, 'info', 'meme_render', { cmd: vg.lastCmd || null, stderr: vg.lastStderr || null, size: out?.size || null });
 
       let videoUrl = null;
@@ -549,9 +555,13 @@ async function processJob(job) {
       await log(job_id, 'info', 'completed', { moodboards: moodboards.length, stills: stills.length, videos: 0 });
     }
   } catch (e) {
-    const retries = (job.retries || 0) + 1; const retryable = retries < 3;
-    await log(job_id, 'error', 'pipeline failed', { error: e.message, stack: e.stack });
-    await setJob(job_id, retryable ? { status: 'queued', retries } : { status: 'failed', error: e.message });
+    try {
+      const retries = (job.retries || 0) + 1; const retryable = retries < 3;
+      await log(job_id, 'error', 'pipeline failed', { error: e?.message || String(e), stack: e?.stack || null, raw: e });
+      await setJob(job_id, retryable ? { status: 'queued', retries } : { status: 'failed', error: e?.message || String(e) });
+    } catch (inner) {
+      console.error('[worker] processJob catch failed', inner?.message || inner);
+    }
   }
 }
 
