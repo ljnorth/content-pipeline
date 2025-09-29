@@ -856,26 +856,37 @@ Be authentic, fun, and keep it very simple for TikTok teens.`;
    * Get account strategy from database
    */
   async getAccountStrategy(username) {
-    const { data: profile, error } = await this.db.client
-      .from('account_profiles')
-      .select('*')
-      .eq('username', username)
-      .single();
-
-    if (error) {
-      throw new Error(`Database error fetching account strategy for ${username}: ${error.message}`);
+    // Accept both username and @username; also attempt case-insensitive fallback
+    try {
+      let q = this.db.client
+        .from('account_profiles')
+        .select('*')
+        .eq('username', username)
+        .maybeSingle();
+      let { data: profile, error } = await q;
+      if ((!profile || error) && username && !String(username).startsWith('@')) {
+        const alt = await this.db.client
+          .from('account_profiles')
+          .select('*')
+          .eq('username', '@' + username)
+          .maybeSingle();
+        profile = alt.data || profile; error = null; // ignore alt error if data present
+      }
+      if (!profile && username) {
+        const like = await this.db.client
+          .from('account_profiles')
+          .select('*')
+          .ilike('username', username)
+          .limit(1);
+        if (Array.isArray(like.data) && like.data.length) profile = like.data[0];
+      }
+      if (!profile) {
+        throw new Error(`No account profile found for ${username}. This indicates either:\n1. The account profile hasn't been created yet\n2. The account username is incorrect\n3. The account profile was deleted\n\nPlease create an account profile for ${username} through the web interface or API.`);
+      }
+      return profile;
+    } catch (e) {
+      throw new Error(`Database error fetching account strategy for ${username}: ${e.message}`);
     }
-
-    if (!profile) {
-      throw new Error(`No account profile found for ${username}. This indicates either:
-1. The account profile hasn't been created yet
-2. The account username is incorrect
-3. The account profile was deleted
-
-Please create an account profile for ${username} through the web interface or API.`);
-    }
-
-    return profile;
   }
 
   /**

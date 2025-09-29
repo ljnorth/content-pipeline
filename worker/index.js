@@ -359,14 +359,15 @@ async function processJob(job) {
         const pool = (data||[]).filter(x => (x.duration_sec||8) >= 8);
         if (pool.length){ const pick = pool[Math.floor(Math.random()*pool.length)]; audioUrl = pick.url; audioId = pick.id; }
       } catch(_){ }
-      await log(job_id, 'info', 'meme_audio', { audioUrl: !!audioUrl, audioId });
+      const willSilent = !audioUrl ? true : Boolean(job.payload?.allow_silent);
+      await log(job_id, 'info', 'meme_audio', { audioUrl: !!audioUrl, audioId, allowSilent: willSilent });
 
       const vg = new VideoGenerator();
       const out = await vg.createMemeClipSingleImage({
         imageUrl: imgUrl,
         caption: copy,
         audioUrl: audioUrl || null,
-        allowSilent: Boolean(job.payload?.allow_silent),
+        allowSilent: willSilent,
         width: 1080, height: 1920, fps: 30,
         duration: 8, fadeSec: 2,
         fontFile: process.env.MEME_FONT_FILE || 'public/assets/Inter-Bold.ttf',
