@@ -20,7 +20,7 @@ export default async function handler(req,res){
         // visibility for worker: write a log row immediately
         try { await db.client.from('job_logs').insert({ job_id: null, level:'info', message:'meme_single enqueued', data: { username } }); } catch(_){ }
         const { data, error } = await db.client.from('jobs').insert({ username, payload, status: 'queued' }).select('id').single();
-        if (error) return res.status(500).json({ error: error.message, logs });
+        if (error) return res.status(500).json({ error: error.message, logs, hint: 'check SUPABASE_URL and SUPABASE_SERVICE_ROLE(_KEY) envs' });
         return res.status(202).json({ enqueued: true, job_id: data.id });
       } catch (e) {
         return res.status(500).json({ error: e.message, where: 'meme-single-enqueue', logs });
