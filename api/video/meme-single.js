@@ -1,7 +1,4 @@
-import { SupabaseClient } from '../../src/database/supabase-client.js';
-import { generateMemeCopy } from '../../src/automation/meme.js';
-import { VideoGenerator } from '../../src/utils/video-generator.js';
-import { isFashionNoTextImage } from '../../src/utils/vision.js';
+// dynamic imports inside handler to avoid top-level crashes in restricted runtimes
 
 export default async function handler(req,res){
   try{
@@ -11,7 +8,21 @@ export default async function handler(req,res){
     const log = (step, data) => { try{ logs.push({ step, data }); }catch(_){} };
     res.setHeader('Cache-Control','no-store');
     res.setHeader('Content-Type','application/json; charset=utf-8');
+    log('init', { node: process.version, platform: process.platform, arch: process.arch, ffmpegPathEnv: process.env.FFMPEG_PATH||null, tempDirEnv: process.env.TEMP_DIR||null });
     if (!username) return res.status(400).json({ error:'username required' });
+    // Load modules dynamically to catch unsupported-runtime errors
+    let SupabaseClient, generateMemeCopy, VideoGenerator, isFashionNoTextImage;
+    try {
+      ({ SupabaseClient } = await import('../../src/database/supabase-client.js'));
+      ({ generateMemeCopy } = await import('../../src/automation/meme.js'));
+      ({ VideoGenerator } = await import('../../src/utils/video-generator.js'));
+      ({ isFashionNoTextImage } = await import('../../src/utils/vision.js'));
+      log('imports_loaded', { ok: true });
+    } catch (impErr) {
+      log('imports_failed', { message: impErr?.message||String(impErr) });
+      return res.status(500).json({ error: `module load failed: ${impErr?.message||'unknown'}`, where: 'meme-single', logs });
+    }
+
     const db = new SupabaseClient();
 
     // Load profile
@@ -85,7 +96,7 @@ export default async function handler(req,res){
         const up = await store.uploadBuffer(out.buffer, String(username).replace('@',''), 'videos/meme', out.filename || `meme_${Date.now()}.mp4`, 'character-outputs', 'video/mp4');
         videoUrl = up.publicUrl;
       }
-    } catch(_) {}
+    } catch(uploadErr) { log('upload_failed', { message: uploadErr?.message||String(uploadErr) }); }
     log('upload', { videoUrl: videoUrl || null });
 
     // 5) Save record
@@ -95,7 +106,7 @@ export default async function handler(req,res){
     });
 
     return res.status(200).json({ success: true, video: { ...out, videoUrl }, caption: copy, ...(debug? { logs } : {}) });
-  }catch(e){ return res.status(500).json({ error: e.message, where: 'meme-single', hint: 'enable debug=true for logs', stack: e?.stack, logs: (typeof logs!== 'undefined'? logs: undefined) }); }
+  }catch(e){ return res.status(500).json({ error: e.message, where: 'meme-single', hint: 'enable debug=true for logs', stack: e?.stack, logs }); }
 }
 
 
