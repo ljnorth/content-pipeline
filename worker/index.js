@@ -17,6 +17,18 @@ import { generateMemeCopy } from '../src/automation/meme.js';
 
 dotenv.config();
 
+// Global crash guards for better diagnostics in Render logs
+process.on('unhandledRejection', (reason) => {
+  try {
+    console.error('[worker] unhandledRejection', (reason && reason.stack) || (reason && reason.message) || reason);
+  } catch(_) { console.error('[worker] unhandledRejection <non-printable>'); }
+});
+process.on('uncaughtException', (err) => {
+  try {
+    console.error('[worker] uncaughtException', (err && err.stack) || (err && err.message) || err);
+  } catch(_) { console.error('[worker] uncaughtException <non-printable>'); }
+});
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -544,14 +556,21 @@ async function processJob(job) {
 }
 
 async function poll() {
-  const { data: rows, error } = await supabase.from('jobs').select('*').eq('status', 'queued').order('created_at', { ascending: true }).limit(3);
-  if (error) {
-    console.error('[worker] poll error', error.message);
-  } else {
+  try {
+    const { data: rows, error } = await supabase.from('jobs').select('*').eq('status', 'queued').order('created_at', { ascending: true }).limit(3);
+    if (error) {
+      console.error('[worker] poll error', error.message);
+      return;
+    }
     const count = Array.isArray(rows) ? rows.length : 0;
     if (count > 0) console.log('[worker] queued jobs', count);
+    for (const r of rows || []) {
+      try { await processJob(r); }
+      catch(e){ console.error('[worker] processJob error', e?.message || e); }
+    }
+  } catch (e) {
+    console.error('[worker] poll fatal', e?.message || e);
   }
-  for (const r of rows || []) await processJob(r);
 }
 
 async function main() {
