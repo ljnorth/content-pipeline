@@ -323,35 +323,16 @@ async function processJob(job) {
     if (action === 'meme_single'){
       await setJob(job_id, { status:'running', step:'meme_single', started_at: new Date().toISOString() });
       const uname = normalizeUsername(job.username);
-      // pick recent images for the account
-      const { data: recents, error: recErr } = await supabase
-        .from('images')
-        .select('image_path,aesthetic,created_at,username')
-        .in('username', [uname, '@'+uname])
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (recErr) throw new Error('failed to fetch candidate images: '+recErr.message);
-      let candidates = (recents||[])
-        .map(i => ({ url: i.image_path, aesthetic: i.aesthetic || null }))
-        .filter(c => !!c.url)
-        .sort(()=> Math.random()-0.5);
-      await log(job_id, 'info', 'meme_candidates', { count: candidates.length });
-      // Fallback: generate one post via existing content generator infra
-      if (!candidates.length) {
-        try {
-          const prof = await getProfile(uname, job_id);
-          const { ContentGenerator } = await import('../src/automation/content-generator.js');
-          const gen = new ContentGenerator();
-          const post = await gen.generateSinglePost({ username: uname }, prof, 1, { preview: true, runId: 'meme_'+Date.now() });
-          const imgs = Array.isArray(post?.images) ? post.images : [];
-          candidates = imgs.map(i => ({ url: i.imagePath || i.image_path, aesthetic: i.aesthetic || null }))
-                          .filter(c => !!c.url)
-                          .sort(()=> Math.random()-0.5);
-          await log(job_id, 'info', 'meme_candidates_fallback_generated', { count: candidates.length });
-        } catch (e) {
-          await log(job_id, 'error', 'fallback_generate_failed', { error: e.message });
-        }
-      }
+      // Strict path: always generate a preview post using existing generator infra
+      const prof = await getProfile(uname, job_id);
+      const { ContentGenerator } = await import('../src/automation/content-generator.js');
+      const gen = new ContentGenerator();
+      const post = await gen.generateSinglePost({ username: uname }, prof, 1, { preview: true, runId: 'meme_'+Date.now() });
+      const imgs = Array.isArray(post?.images) ? post.images : [];
+      let candidates = imgs.map(i => ({ url: i.imagePath || i.image_path, aesthetic: i.aesthetic || null }))
+                        .filter(c => !!c.url)
+                        .sort(()=> Math.random()-0.5);
+      await log(job_id, 'info', 'meme_candidates_generated', { count: candidates.length });
       if (!candidates.length) throw new Error('no images available for meme');
       let imgUrl = null; let aesthetic = null; let checks = 0;
       for (const c of candidates){
