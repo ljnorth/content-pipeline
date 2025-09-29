@@ -19,6 +19,7 @@
       </div>
       <div id="holder" style="width:100%;display:flex;justify-content:center;align-items:center;min-height:360px;background:#111;border-radius:8px;margin-top:8px"></div>
       <details style="margin-top:8px"><summary>Debug logs</summary><pre id="logbox" style="max-height:220px;overflow:auto;background:#0b0b0b;color:#ddd;padding:8px;border-radius:6px"></pre></details>
+      <div class="muted" id="jobid"></div>
     </div>
   </main>
   <script type="module">
@@ -29,6 +30,7 @@
     const genBtn = document.getElementById('gen');
     const postBtn = document.getElementById('post');
     const logbox = document.getElementById('logbox');
+    const jobIdEl = document.getElementById('jobid');
     let videoUrl = null;
     function setStatus(s, ok){ statusEl.textContent = s; statusEl.style.color = ok?'#2e7d32':'#b00020'; }
     function appendLog(step, data){ try{ const line = (typeof data==='string')? data : JSON.stringify(data); logbox.textContent += `\n${step}: ${line}`; logbox.scrollTop = logbox.scrollHeight; }catch(_){} }
@@ -55,7 +57,7 @@
       try{ setStatus('Generating…'); holder.innerHTML=''; videoUrl=null; logbox.textContent=''; const u = user.value.replace('@','').trim(); if(!u) return setStatus('Select @username', false);
         const j = await fetchJsonSafe('/api/video/meme-single', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: u, allow_silent: silent.checked, debug:true, mode:'render' }) });
         if (j.enqueued && j.job_id){
-          appendLog('enqueued', j.job_id);
+          appendLog('enqueued', j.job_id); jobIdEl.textContent = 'job_id: '+j.job_id;
           setStatus('Queued on Render. Polling…', true);
           const poll = async () => {
             const s = await fetchJsonSafe(`/api/jobs/status?job_id=${encodeURIComponent(j.job_id)}&include_logs=true`);
