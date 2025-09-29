@@ -395,8 +395,13 @@ async function processJob(job) {
 
       let videoUrl = null;
       if (out?.buffer) {
-        const up = await storage.uploadBuffer(out.buffer, uname, 'videos/meme', out.filename || `meme_${Date.now()}.mp4`, storage.outputsBucket, 'video/mp4');
-        videoUrl = up.publicUrl;
+        try {
+          const up = await storage.uploadBuffer(out.buffer, uname, 'videos/meme', out.filename || `meme_${Date.now()}.mp4`, storage.outputsBucket, 'video/mp4');
+          videoUrl = up.publicUrl;
+        } catch (upErr) {
+          await log(job_id, 'error', 'upload_failed', { error: upErr?.message || String(upErr) });
+          throw upErr;
+        }
       }
       if (!videoUrl) throw new Error('failed to upload meme video');
       await addAsset(job_id, 'video', videoUrl);

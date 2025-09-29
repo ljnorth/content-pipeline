@@ -226,9 +226,10 @@ export class VideoGenerator {
     const audioPart = haveAudio ? ` -i "${audPath}" -af "${af}"` : '';
     const cmd = `${base}${audioPart} -vf "${vf}" -r ${fps} -c:v libx264 -preset fast -crf 22 -pix_fmt yuv420p -t ${duration} "${outPath}"`;
     this.lastCmd = cmd;
-    this.logger.info('FFmpeg:', cmd);
+    this.logger.info('FFmpeg start', { cmd });
     try {
-      const { stdout, stderr } = await execAsync(cmd);
+      const timeoutMs = Number(process.env.FFMPEG_TIMEOUT_MS || 90000);
+      const { stdout, stderr } = await execAsync(cmd, { timeout: timeoutMs, maxBuffer: 20*1024*1024 });
       this.lastStdout = stdout || '';
       this.lastStderr = stderr || '';
       if (stderr && !stderr.includes('frame=')) this.logger.warn(stderr);
