@@ -17,6 +17,8 @@ export default async function handler(req,res){
         const { SupabaseClient } = await import('../../src/database/supabase-client.js');
         const db = new SupabaseClient();
         const payload = { action: 'meme_single', allow_silent: Boolean(allow_silent), image_url: image_url||null, caption_override: caption_override||null, audio_id: audio_id||null };
+        // visibility for worker: write a log row immediately
+        try { await db.client.from('job_logs').insert({ job_id: null, level:'info', message:'meme_single enqueued', data: { username } }); } catch(_){ }
         const { data, error } = await db.client.from('jobs').insert({ username, payload, status: 'queued' }).select('id').single();
         if (error) return res.status(500).json({ error: error.message, logs });
         return res.status(202).json({ enqueued: true, job_id: data.id });

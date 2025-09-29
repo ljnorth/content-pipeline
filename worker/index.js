@@ -546,13 +546,25 @@ async function processJob(job) {
 }
 
 async function poll() {
-  const { data: rows } = await supabase.from('jobs').select('*').eq('status', 'queued').order('created_at', { ascending: true }).limit(3);
+  const { data: rows, error } = await supabase.from('jobs').select('*').eq('status', 'queued').order('created_at', { ascending: true }).limit(3);
+  if (error) {
+    console.error('[worker] poll error', error.message);
+  } else {
+    const count = Array.isArray(rows) ? rows.length : 0;
+    if (count > 0) console.log('[worker] queued jobs', count);
+  }
   for (const r of rows || []) await processJob(r);
 }
 
 async function main() {
   if (!process.env.VERCEL_BASE) console.warn('VERCEL_BASE not set - generator-based moodboards API call may fail');
-  while (true) { await poll(); await new Promise(r => setTimeout(r, 1500)); }
+  let lastBeat = Date.now();
+  while (true) {
+    await poll();
+    const now = Date.now();
+    if (now - lastBeat > 15000) { console.log('[worker] heartbeat ok', { supabaseUrl: SUPABASE_URL }); lastBeat = now; }
+    await new Promise(r => setTimeout(r, 1500));
+  }
 }
 
 main().catch(err => { console.error(err); process.exit(1); });
